@@ -758,6 +758,7 @@ function renderDashboard() {
     const hasPos = stock.avg_cost > 0;
     return `
     <div class="card" data-ticker="${ticker}" onclick="openDetail(this.dataset.ticker)">
+      <button class="btn btn-sm" onclick="event.stopPropagation();confirmDeleteStock('${ticker}')" style="position:absolute;top:10px;right:10px;padding:3px 8px;font-size:11px;background:transparent;color:var(--tx3);border:1px solid var(--border);border-radius:6px;opacity:0;transition:opacity .15s" onmouseenter="this.style.opacity=1;this.style.color='var(--red)';this.style.borderColor='var(--red)'" onmouseleave="this.style.opacity=0;this.style.color='var(--tx3)';this.style.borderColor='var(--border)'">✕</button>
       <div class="card-top">
         <div>
           <div class="card-ticker">${ticker}</div>
@@ -1125,6 +1126,27 @@ async function saveNewStock() {
   toast(`✅ เพิ่ม ${ticker} แล้ว — กำลังบันทึก…`);
 
   // Save both files to Drive
+  await saveRegistry();
+  if (!S.offline && S.accessToken && S.kbFileId) {
+    try { await drivePatch(S.kbFileId, S.kb); } catch(e) {}
+  }
+}
+
+function confirmDeleteStock(ticker) {
+  if (!confirm(`ลบ ${ticker} ออกจาก portfolio?\n\nข้อมูลทั้งหมดของ ${ticker} จะถูกลบออก`)) return;
+  deleteStock(ticker);
+}
+
+async function deleteStock(ticker) {
+  S.registry.stocks = S.registry.stocks.filter(s => s.ticker !== ticker);
+  if (S.kb) {
+    delete S.kb.score_history?.[ticker];
+    delete S.kb.catalyst_log?.[ticker];
+    delete S.kb.guidance_tracker?.[ticker];
+    S.kb.evidence_clips = (S.kb.evidence_clips || []).filter(e => e.ticker !== ticker);
+  }
+  renderDashboard();
+  toast(`🗑️ ลบ ${ticker} แล้ว — กำลังบันทึก…`);
   await saveRegistry();
   if (!S.offline && S.accessToken && S.kbFileId) {
     try { await drivePatch(S.kbFileId, S.kb); } catch(e) {}
