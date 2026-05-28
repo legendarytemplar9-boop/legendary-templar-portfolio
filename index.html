@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Legendary Templar · Portfolio</title>
+<style>
+:root{
+  --bg:#070809;--bg2:#0e1012;--bg3:#161a1d;
+  --border:#232a30;--border2:#2e3840;
+  --c1:#00e5cc;--c1d:rgba(0,229,204,.1);
+  --green:#51cf66;--greend:rgba(81,207,102,.12);
+  --yellow:#ffb800;--yellowd:rgba(255,184,0,.12);
+  --orange:#ff9500;--oranged:rgba(255,149,0,.12);
+  --red:#ff6b6b;--redd:rgba(255,107,107,.12);
+  --tx:#f0f4f8;--tx2:#8899aa;--tx3:#445566;
+  --fn:-apple-system,BlinkMacSystemFont,'SF Pro Display','Helvetica Neue',sans-serif;
+  --mo:'SF Mono','Courier New',monospace;
+  --r:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:var(--fn);min-height:100vh;font-size:14px}
+a{color:var(--c1);text-decoration:none}
+
+/* NAV */
+.nav{position:sticky;top:0;z-index:100;background:rgba(7,8,9,.95);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);display:flex;align-items:center;
+  justify-content:space-between;padding:0 20px;height:56px}
+.nav-left{display:flex;align-items:center;gap:10px}
+.nav-logo{font-size:15px;font-weight:800;letter-spacing:-.3px}
+.nav-tag{font-size:10px;background:var(--c1d);color:var(--c1);padding:2px 7px;border-radius:20px;border:1px solid rgba(0,229,204,.2)}
+.nav-right{display:flex;align-items:center;gap:8px}
+.sync-ts{font-size:11px;color:var(--tx3)}
+
+/* SETUP */
+.setup-wrap{display:flex;align-items:center;justify-content:center;min-height:calc(100vh - 56px);padding:24px}
+.setup-card{max-width:460px;width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:32px}
+.setup-title{font-size:22px;font-weight:800;margin-bottom:6px}
+.setup-sub{color:var(--tx2);line-height:1.6;margin-bottom:24px;font-size:13px}
+.setup-steps{margin-bottom:22px}
+.stp{display:flex;gap:12px;margin-bottom:10px;font-size:13px;align-items:flex-start}
+.stp-n{width:20px;height:20px;border-radius:50%;background:var(--c1d);color:var(--c1);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;margin-top:2px}
+.stp-t{color:var(--tx2);line-height:1.5}
+.stp-t code{background:var(--bg3);padding:1px 5px;border-radius:4px;font-family:var(--mo);font-size:11px;color:var(--tx)}
+hr.div{border:none;height:1px;background:var(--border);margin:20px 0}
+.form-group{margin-bottom:14px}
+.form-label{font-size:12px;color:var(--tx2);margin-bottom:5px;display:block;font-weight:500}
+.form-input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--tx);font-family:var(--fn);font-size:14px;outline:none;transition:border-color .15s}
+.form-input:focus{border-color:var(--c1)}
+
+/* MAIN */
+.main{padding:20px;max-width:1200px;margin:0 auto;width:100%}
+
+/* ALERTS */
+.alerts-wrap{margin-bottom:20px}
+.alert-item{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:8px;margin-bottom:8px;font-size:13px;background:var(--redd);border:1px solid rgba(255,107,107,.25)}
+.alert-item.warn{background:var(--yellowd);border-color:rgba(255,184,0,.25)}
+.alert-ic{font-size:16px;flex-shrink:0;margin-top:1px}
+.alert-body .at{font-weight:700;color:var(--red)}
+.alert-item.warn .alert-body .at{color:var(--yellow)}
+.alert-body .ad{color:var(--tx2);font-size:12px;margin-top:2px}
+
+/* GRID */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px}
+
+/* CARD */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px;cursor:pointer;transition:border-color .15s,box-shadow .15s;position:relative}
+.card:hover{border-color:var(--border2);box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.card-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.card-ticker{font-size:20px;font-weight:800;letter-spacing:-.5px}
+.card-company{font-size:11px;color:var(--tx2);margin-top:2px}
+.card-sector{font-size:10px;color:var(--tx3);margin-top:1px}
+.card-right{text-align:right}
+.c-emoji{font-size:22px;line-height:1}
+.c-score{font-size:30px;font-weight:900;letter-spacing:-1px;line-height:1;margin-top:2px}
+.c-score.g{color:var(--green)}.c-score.y{color:var(--yellow)}.c-score.o{color:var(--orange)}.c-score.r{color:var(--red)}
+
+/* SPARKLINE */
+.spark-wrap{height:44px;margin:8px 0}
+.spark-wrap canvas{width:100%!important;height:44px!important}
+.no-spark{height:44px;display:flex;align-items:center;justify-content:center;color:var(--tx3);font-size:11px}
+
+/* CHIPS */
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.chip{padding:2px 8px;border-radius:20px;font-size:11px;background:var(--bg3);border:1px solid var(--border);color:var(--tx2)}
+.chip.up{color:var(--green);border-color:var(--greend);background:var(--greend)}
+.chip.down{color:var(--red);border-color:var(--redd);background:var(--redd)}
+.chip.flat{color:var(--tx2)}
+.chip.yellow{color:var(--yellow);border-color:var(--yellowd);background:var(--yellowd)}
+.chip.green{color:var(--green);border-color:var(--greend);background:var(--greend)}
+
+/* CARD NOTES */
+.c-notes{font-size:12px;color:var(--tx2);line-height:1.5;margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+/* CAT TAGS */
+.cat-strip{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}
+.ct{font-size:10px;padding:2px 6px;border-radius:4px;background:var(--bg3);border:1px solid var(--border);color:var(--tx3)}
+.ct.ip{color:var(--yellow);border-color:var(--yellowd);background:var(--yellowd)}
+.ct.done{color:var(--green);border-color:var(--greend);background:var(--greend)}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-family:var(--fn);font-weight:600;transition:opacity .15s;white-space:nowrap}
+.btn:hover{opacity:.82}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-p{background:var(--c1);color:#000}
+.btn-s{background:var(--bg3);color:var(--tx);border:1px solid var(--border)}
+.btn-g{background:transparent;color:var(--tx2);border:1px solid var(--border)}
+.btn-google{background:#fff;color:#333;font-size:14px;padding:10px 22px;border-radius:10px;border:1px solid #ddd}
+.btn-sm{padding:4px 10px;font-size:11px;border-radius:6px}
+
+/* MODAL */
+.mbg{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:500;display:flex;align-items:flex-end;justify-content:center}
+.mbg.hidden{display:none}
+.mbg.center{align-items:center}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:16px 16px 0 0;width:100%;max-width:580px;max-height:92vh;overflow:hidden;display:flex;flex-direction:column}
+.mbg.center .modal{border-radius:16px;max-height:86vh}
+.mh{width:40px;height:4px;background:var(--border2);border-radius:2px;margin:8px auto}
+.mt{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 10px;border-bottom:1px solid var(--border)}
+.mt-t{font-size:15px;font-weight:700}
+.mt-sub{font-size:11px;color:var(--tx2);margin-top:1px}
+.mb{overflow-y:auto;padding:16px;flex:1;-webkit-overflow-scrolling:touch}
+.mf{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+
+/* DETAIL SECTIONS */
+.score-hero{display:flex;align-items:flex-end;gap:10px;margin-bottom:14px}
+.score-num{font-size:52px;font-weight:900;letter-spacing:-2px;line-height:1}
+.score-meta{padding-bottom:4px}
+.score-trend{font-size:14px;font-weight:700}
+.score-date{font-size:11px;color:var(--tx3);margin-top:2px}
+.sec-title{font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.hist-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px}
+.hist-row:last-child{border-bottom:none}
+.h-date{color:var(--tx3);font-family:var(--mo);min-width:82px;font-size:10px}
+.h-score{font-weight:700;min-width:28px}
+.h-delta{min-width:38px;font-size:11px}
+.h-reason{color:var(--tx2);flex:1;line-height:1.4}
+.guide-row{padding:8px 0;border-bottom:1px solid var(--border);font-size:12px}
+.guide-row:last-child{border-bottom:none}
+.g-qtr{font-size:10px;color:var(--tx3);font-family:var(--mo)}
+.g-text{color:var(--tx);margin:3px 0;line-height:1.5}
+.g-src{font-size:10px;color:var(--tx3);margin-top:2px}
+.g-verdict{display:inline-flex;padding:1px 7px;border-radius:4px;font-size:10px;font-weight:700;margin-top:3px}
+.vp{background:var(--bg3);color:var(--tx2)}
+.von{background:var(--greend);color:var(--green)}
+.vex{background:var(--greend);color:var(--green)}
+.vip{background:var(--yellowd);color:var(--yellow)}
+.vms{background:var(--redd);color:var(--red)}
+.cred-bar-wrap{margin:6px 0}
+.cred-bar{height:5px;background:var(--bg3);border-radius:3px;overflow:hidden}
+.cred-fill{height:100%;border-radius:3px;background:var(--green);transition:width .4s}
+.ev-item{padding:8px 0;border-bottom:1px solid var(--border);font-size:12px}
+.ev-item:last-child{border-bottom:none}
+.ev-meta{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.ev-type{font-size:10px;padding:1px 6px;border-radius:4px}
+.ev-sp{background:var(--greend);color:var(--green)}
+.ev-ct{background:var(--redd);color:var(--red)}
+.ev-nu{background:var(--bg3);color:var(--tx2)}
+.ev-clip{color:var(--tx);line-height:1.5;font-style:italic}
+.ev-src{color:var(--tx3);font-size:10px;margin-top:2px}
+
+/* SCORE SLIDER */
+.slider-wrap{position:relative;margin:6px 0}
+input[type=range]{width:100%;accent-color:var(--c1);height:4px}
+.score-preview-big{font-size:36px;font-weight:900;text-align:center;padding:8px 0}
+textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
+
+/* LOADING */
+.loading{position:fixed;inset:0;background:rgba(7,8,9,.92);z-index:999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.loading.hidden{display:none}
+.spin{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--c1);border-radius:50%;animation:sp .65s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.load-msg{color:var(--tx2);font-size:13px}
+
+/* TOAST */
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border2);color:var(--tx);padding:9px 20px;border-radius:24px;font-size:13px;z-index:9999;pointer-events:none;animation:tin .2s ease;white-space:nowrap}
+@keyframes tin{from{opacity:0;transform:translateX(-50%) translateY(6px)}}
+
+/* MISC */
+.hidden{display:none!important}
+.dimmed{color:var(--tx2)}
+.mono{font-family:var(--mo)}
+.dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:4px}
+.dot-g{background:var(--green)}.dot-y{background:var(--yellow)}.dot-o{background:var(--orange)}.dot-r{background:var(--red)}
+.empty-state{text-align:center;padding:32px 16px;color:var(--tx2);font-size:13px}
+@media(max-width:480px){.grid{grid-template-columns:1fr}.main{padding:12px}}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div class="loading hidden" id="loading">
+  <div class="spin"></div>
+  <div class="load-msg" id="loadMsg">กำลังโหลด…</div>
+</div>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-left">
+    <span style="font-size:18px">⚔️</span>
+    <div>
+      <div class="nav-logo">Legendary Templar</div>
+    </div>
+    <span class="nav-tag">Portfolio</span>
+  </div>
+  <div class="nav-right" id="navRight">
+    <span class="sync-ts hidden" id="syncTs"></span>
+    <button class="btn btn-s btn-sm hidden" id="btnSync" onclick="syncData()">⟳ Sync</button>
+    <button class="btn btn-g btn-sm hidden" id="btnSignOut" onclick="signOut()">Sign Out</button>
+  </div>
+</nav>
+
+<!-- SETUP SCREEN -->
+<div class="setup-wrap" id="setupWrap">
+  <div class="setup-card">
+    <div style="font-size:32px;margin-bottom:12px">⚔️</div>
+    <div class="setup-title">Legendary Templar Portfolio</div>
+    <div class="setup-sub">Dashboard เชื่อมต่อ Google Drive — อ่าน/เขียน <code>stock_registry.json</code> และ <code>thesis_knowledge_base.json</code> โดยตรง</div>
+
+    <div class="setup-steps">
+      <div class="stp"><div class="stp-n">1</div><div class="stp-t">ไปที่ <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a> → สร้าง Project ใหม่</div></div>
+      <div class="stp"><div class="stp-n">2</div><div class="stp-t">เปิด <strong>APIs & Services → Enable</strong> → ค้นหา <code>Google Drive API</code> → Enable</div></div>
+      <div class="stp"><div class="stp-n">3</div><div class="stp-t"><strong>Credentials → Create → OAuth 2.0 Client ID</strong> → Application type: <code>Web application</code></div></div>
+      <div class="stp"><div class="stp-n">4</div><div class="stp-t">Authorized JavaScript origins: ใส่ URL ของ GitHub Pages เช่น <code>https://username.github.io</code> (และ <code>http://localhost</code> สำหรับ test)</div></div>
+      <div class="stp"><div class="stp-n">5</div><div class="stp-t">Copy Client ID มาใส่ด้านล่าง</div></div>
+    </div>
+
+    <hr class="div">
+    <div class="form-group">
+      <label class="form-label">Google OAuth Client ID</label>
+      <input class="form-input mono" id="inputClientId" placeholder="xxxxxxxxxx.apps.googleusercontent.com" type="text">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Drive Folder ID (ที่เก็บ JSON files)</label>
+      <input class="form-input mono" id="inputFolderId" placeholder="11Yd13tCrYF8haYmnEU8OQEoRG63k8Ln9D" type="text" value="11Yd13tCrYF8haYmnEU8OQEoRG63k8Ln9D">
+    </div>
+    <button class="btn btn-p" style="width:100%;justify-content:center" onclick="saveSetup()">บันทึกและเชื่อมต่อ →</button>
+    <div style="text-align:center;margin-top:12px">
+      <button class="btn btn-g btn-sm" onclick="useOffline()">ใช้ข้อมูล Offline (ไม่เชื่อมต่อ Drive)</button>
+    </div>
+  </div>
+</div>
+
+<!-- SIGNED IN VIEW -->
+<div class="hidden" id="signInWrap" style="display:flex;align-items:center;justify-content:center;min-height:calc(100vh - 56px)">
+  <div style="text-align:center">
+    <div style="font-size:48px;margin-bottom:16px">⚔️</div>
+    <div style="font-size:20px;font-weight:700;margin-bottom:8px">เชื่อมต่อ Google Drive</div>
+    <div style="color:var(--tx2);margin-bottom:24px;font-size:13px">อนุญาตให้ app อ่าน/เขียน portfolio files ใน Drive</div>
+    <button class="btn btn-google" onclick="startAuth()">
+      <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      Sign in with Google
+    </button>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="main hidden" id="dashboard">
+  <!-- ALERTS -->
+  <div class="alerts-wrap" id="alertsWrap"></div>
+  <!-- GRID -->
+  <div class="grid" id="stockGrid"></div>
+  <!-- PORTFOLIO SUMMARY -->
+  <div style="margin-top:24px;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r)">
+    <div style="font-size:12px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Portfolio Summary</div>
+    <div id="portfolioSummary"></div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="mbg hidden" id="detailModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">
+      <div><div class="mt-t" id="detailTitle">—</div><div class="mt-sub" id="detailSub">—</div></div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-s btn-sm" id="btnEditFromDetail" data-ticker="" onclick="openEditFromDetail(this.dataset.ticker)">✏️ Edit</button>
+        <button class="btn btn-g btn-sm" onclick="closeM('detailModal')">✕</button>
+      </div>
+    </div>
+    <div class="mb" id="detailBody"></div>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="mbg center hidden" id="editModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">
+      <div class="mt-t" id="editTitle">Edit Score</div>
+      <button class="btn btn-g btn-sm" onclick="closeM('editModal')">✕</button>
+    </div>
+    <div class="mb" id="editBody"></div>
+    <div class="mf">
+      <button class="btn btn-g" onclick="closeM('editModal')">Cancel</button>
+      <button class="btn btn-p" onclick="saveEdit()">💾 Save to Drive</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════
+const DRIVE_API = 'https://www.googleapis.com/drive/v3';
+const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
+const SCOPES = 'https://www.googleapis.com/auth/drive';
+const LS_KEY = 'lt_portfolio_v1';
+
+// Embedded fallback data
+const FALLBACK = {
+  registry: {
+    portfolio_name:"Legendary Templar",last_updated:"2026-05-28",
+    stocks:[
+      {ticker:"BDMS",company:"Bangkok Dusit Medical",sector:"Healthcare",avg_cost:22.5,shares:1000,thesis_score:75,thesis_status:"🟢",notes:"",last_review_date:"2026-05-27",catalysts:[{event:"เปิดโรงพยาบาล EEC",expected_period:"Q3/2568",status:"pending"}],thesis_breakers:["กำไรลด YoY 3 ไตรมาสติดต่อกัน","ผู้บริหาร C-suite ลาออก 2+ คน"]},
+      {ticker:"SCB",company:"SCB X",sector:"Banking",avg_cost:105,shares:500,thesis_score:70,thesis_status:"🟡",notes:"",last_review_date:"2026-05-27",catalysts:[{event:"SCBx fintech IPO",expected_period:"TBD",status:"pending"}],thesis_breakers:["NPL >5% ติด 2 ไตรมาส","ลด dividend >30%"]},
+      {ticker:"HANA",company:"Hana Microelectronics",sector:"Technology",avg_cost:38,shares:2000,thesis_score:68,thesis_status:"🟡",notes:"รอดู AI segment ชัดเจนก่อน",last_review_date:"2026-05-27",catalysts:[{event:"AI cooling รายได้เต็ม Q",expected_period:"Q2/2568",status:"in_progress"}],thesis_breakers:["AI cooling project ล้มเลิก","margin ลดต่อเนื่อง 3 ไตรมาส"]},
+      {ticker:"CPN",company:"CPN",sector:"Retail",avg_cost:0,shares:0,thesis_score:70,thesis_status:"🟡",notes:"",last_review_date:"2026-05-27",catalysts:[],thesis_breakers:[]},
+      {ticker:"CPF",company:"CPF",sector:"Food",avg_cost:0,shares:0,thesis_score:70,thesis_status:"🟡",notes:"",last_review_date:"2026-05-27",catalysts:[],thesis_breakers:[]}
+    ],scoring_guide:{"90-100":"🟢 แข็งแกร่ง","75-89":"🟢 ดี","60-74":"🟡 ติดตาม","45-59":"🟠 เฝ้าระวัง","0-44":"🔴 พิจารณาขาย"}
+  },
+  kb: {
+    version:"1.0",portfolio:"Legendary Templar",last_updated:"2026-05-28",
+    score_history:{BDMS:[{date:"2026-05-27",score:75,delta:0,reason:"baseline"}],SCB:[{date:"2026-05-27",score:70,delta:0,reason:"baseline"}],HANA:[{date:"2026-05-27",score:68,delta:0,reason:"baseline"}],CPN:[{date:"2026-05-27",score:70,delta:0,reason:"baseline"}],CPF:[{date:"2026-05-27",score:70,delta:0,reason:"baseline"}]},
+    catalyst_log:{BDMS:[],SCB:[],HANA:[],CPN:[],CPF:[]},
+    guidance_tracker:{BDMS:[],SCB:[],HANA:[],CPN:[],CPF:[]},
+    evidence_clips:[],
+    meta:{trend_alert_weeks:3,score_drop_alert_threshold:10,urgent_score_threshold:44,credibility_miss_alert:2}
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let S = {
+  clientId: '',
+  folderId: '11Yd13tCrYF8haYmnEU8OQEoRG63k8Ln9D',
+  accessToken: null,
+  tokenExpiry: 0,
+  registry: null,
+  kb: null,
+  regFileId: null,
+  kbFileId: null,
+  lastSync: null,
+  offline: false,
+  editData: {}
+};
+
+function saveLS() {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      clientId: S.clientId,
+      folderId: S.folderId,
+      regFileId: S.regFileId,
+      kbFileId: S.kbFileId,
+      lastSync: S.lastSync
+    }));
+  } catch(e) {}
+}
+
+function loadLS() {
+  try {
+    const d = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+    if (d.clientId) S.clientId = d.clientId;
+    if (d.folderId) S.folderId = d.folderId;
+    if (d.regFileId) S.regFileId = d.regFileId;
+    if (d.kbFileId) S.kbFileId = d.kbFileId;
+    if (d.lastSync) S.lastSync = d.lastSync;
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════════════
+let gisLoaded = false;
+let tokenClient = null;
+
+function loadGIS(cb) {
+  if (gisLoaded) { cb(); return; }
+  const s = document.createElement('script');
+  s.src = 'https://accounts.google.com/gsi/client';
+  s.async = true; s.defer = true;
+  s.onload = () => { gisLoaded = true; cb(); };
+  s.onerror = () => toast('❌ ไม่สามารถโหลด Google Auth ได้');
+  document.head.appendChild(s);
+}
+
+function startAuth() {
+  if (!S.clientId) { toast('⚠️ ใส่ Client ID ก่อน'); showSetup(); return; }
+  showLoading('กำลังเชื่อมต่อ Google…');
+  loadGIS(() => {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: S.clientId,
+      scope: SCOPES,
+      callback: handleToken,
+      error_callback: (err) => { hideLoading(); toast('❌ Auth error: ' + err.type); }
+    });
+    hideLoading();
+    tokenClient.requestAccessToken({ prompt: 'consent' });
+  });
+}
+
+function handleToken(resp) {
+  if (resp.error) { toast('❌ ' + resp.error); return; }
+  S.accessToken = resp.access_token;
+  S.tokenExpiry = Date.now() + (resp.expires_in * 1000);
+  syncData();
+}
+
+function ensureToken(cb) {
+  if (S.offline) { cb(); return; }
+  if (S.accessToken && Date.now() < S.tokenExpiry - 60000) { cb(); return; }
+  if (!tokenClient) {
+    loadGIS(() => {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: S.clientId,
+        scope: SCOPES,
+        callback: (resp) => { if (resp.access_token) { S.accessToken = resp.access_token; S.tokenExpiry = Date.now() + (resp.expires_in*1000); cb(); } },
+        error_callback: () => {}
+      });
+      tokenClient.requestAccessToken({ prompt: '' });
+    });
+  } else {
+    tokenClient.requestAccessToken({ prompt: '' });
+    S.accessToken = null; // will refresh
+    setTimeout(() => { if (S.accessToken) cb(); }, 3000);
+  }
+}
+
+function signOut() {
+  if (S.accessToken) {
+    try { google.accounts.oauth2.revoke(S.accessToken, () => {}); } catch(e) {}
+  }
+  S.accessToken = null; S.registry = null; S.kb = null;
+  showSignIn();
+  toast('Signed out');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DRIVE API
+// ═══════════════════════════════════════════════════════════════
+async function driveGet(url) {
+  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + S.accessToken } });
+  if (!r.ok) throw new Error('Drive API ' + r.status);
+  return r.json();
+}
+
+async function driveGetMedia(fileId) {
+  const r = await fetch(`${DRIVE_API}/files/${fileId}?alt=media`, {
+    headers: { Authorization: 'Bearer ' + S.accessToken }
+  });
+  if (!r.ok) throw new Error('Drive read ' + r.status);
+  return r.json();
+}
+
+async function drivePatch(fileId, content) {
+  const r = await fetch(`${UPLOAD_API}/files/${fileId}?uploadType=media`, {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer ' + S.accessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify(content, null, 2)
+  });
+  if (!r.ok) throw new Error('Drive write ' + r.status);
+  return r.json();
+}
+
+async function driveCreate(name, folderId, content) {
+  // Step 1: create metadata
+  const meta = await fetch(`${DRIVE_API}/files`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + S.accessToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, parents: [folderId], mimeType: 'application/json' })
+  });
+  if (!meta.ok) throw new Error('Drive create meta ' + meta.status);
+  const file = await meta.json();
+  // Step 2: upload content
+  await drivePatch(file.id, content);
+  return file.id;
+}
+
+async function driveSearch(name, folderId) {
+  const q = encodeURIComponent(`name='${name}' and '${folderId}' in parents and trashed=false`);
+  const data = await driveGet(`${DRIVE_API}/files?q=${q}&fields=files(id,name)&pageSize=5`);
+  return data.files?.[0] || null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DATA SYNC
+// ═══════════════════════════════════════════════════════════════
+async function syncData() {
+  showLoading('กำลังโหลดจาก Google Drive…');
+  try {
+    // Find registry file
+    if (!S.regFileId) {
+      setLoadMsg('ค้นหา stock_registry.json…');
+      const rf = await driveSearch('stock_registry.json', S.folderId);
+      if (rf) { S.regFileId = rf.id; } else { toast('⚠️ ไม่พบ stock_registry.json ใน Drive'); }
+    }
+    // Find knowledge base
+    if (!S.kbFileId) {
+      setLoadMsg('ค้นหา thesis_knowledge_base.json…');
+      const kf = await driveSearch('thesis_knowledge_base.json', S.folderId);
+      if (kf) { S.kbFileId = kf.id; }
+    }
+    // Read registry
+    if (S.regFileId) {
+      setLoadMsg('อ่าน stock_registry.json…');
+      S.registry = await driveGetMedia(S.regFileId);
+    } else {
+      S.registry = FALLBACK.registry;
+    }
+    // Read knowledge base
+    if (S.kbFileId) {
+      setLoadMsg('อ่าน thesis_knowledge_base.json…');
+      S.kb = await driveGetMedia(S.kbFileId);
+    } else {
+      S.kb = FALLBACK.kb;
+    }
+    S.lastSync = new Date().toLocaleTimeString('th-TH');
+    saveLS();
+    renderDashboard();
+    toast('✅ Sync สำเร็จ ' + S.lastSync);
+  } catch(err) {
+    console.error(err);
+    hideLoading();
+    // Try with fallback
+    if (!S.registry) S.registry = FALLBACK.registry;
+    if (!S.kb) S.kb = FALLBACK.kb;
+    renderDashboard();
+    toast('⚠️ Drive error — ใช้ข้อมูล cache');
+  }
+  hideLoading();
+}
+
+async function saveRegistry() {
+  if (S.offline || !S.accessToken) { saveLS(); toast('💾 บันทึก offline'); return; }
+  try {
+    showLoading('กำลังบันทึกไป Drive…');
+    S.registry.last_updated = new Date().toISOString().split('T')[0];
+    if (S.regFileId) {
+      await drivePatch(S.regFileId, S.registry);
+    } else {
+      S.regFileId = await driveCreate('stock_registry.json', S.folderId, S.registry);
+    }
+    saveLS();
+    hideLoading();
+    toast('✅ บันทึก stock_registry.json สำเร็จ');
+  } catch(err) {
+    hideLoading();
+    toast('❌ บันทึกไม่สำเร็จ: ' + err.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ANALYSIS HELPERS
+// ═══════════════════════════════════════════════════════════════
+function scoreColor(s) {
+  if (s >= 75) return 'g';
+  if (s >= 60) return 'y';
+  if (s >= 45) return 'o';
+  return 'r';
+}
+
+function scoreEmoji(s) {
+  if (s >= 75) return '🟢';
+  if (s >= 60) return '🟡';
+  if (s >= 45) return '🟠';
+  return '🔴';
+}
+
+function getTrend(ticker) {
+  const hist = S.kb?.score_history?.[ticker] || [];
+  if (hist.length < 2) return { arrow:'→', cls:'flat', weeks: 0 };
+  const last3 = hist.slice(-4);
+  let upStreak = 0, downStreak = 0;
+  for (let i = 1; i < last3.length; i++) {
+    if (last3[i].score > last3[i-1].score) { upStreak++; downStreak = 0; }
+    else if (last3[i].score < last3[i-1].score) { downStreak++; upStreak = 0; }
+    else { upStreak = 0; downStreak = 0; }
+  }
+  if (upStreak >= 2) return { arrow:'↗', cls:'up', weeks: upStreak };
+  if (downStreak >= 2) return { arrow:'↘', cls:'down', weeks: downStreak };
+  return { arrow:'→', cls:'flat', weeks: 0 };
+}
+
+function getLatestDelta(ticker) {
+  const hist = S.kb?.score_history?.[ticker] || [];
+  if (hist.length < 2) return 0;
+  return hist[hist.length-1].delta || 0;
+}
+
+function getCredibility(ticker) {
+  const entries = S.kb?.guidance_tracker?.[ticker] || [];
+  if (entries.length < 2) return null;
+  let hits = 0, misses = 0;
+  entries.forEach(e => {
+    if (e.verdict === 'on_track' || e.verdict === 'exceeded') hits++;
+    if (e.verdict === 'missed') misses++;
+  });
+  if (hits + misses === 0) return null;
+  return { pct: Math.round(hits / (hits + misses) * 100), hits, misses };
+}
+
+function getAlerts() {
+  const alerts = [];
+  if (!S.registry || !S.kb) return alerts;
+  S.registry.stocks.forEach(stock => {
+    const ticker = stock.ticker;
+    const hist = S.kb?.score_history?.[ticker] || [];
+    // Consecutive decline 3+ weeks
+    if (hist.length >= 3) {
+      const last3 = hist.slice(-3);
+      if (last3[2].score < last3[1].score && last3[1].score < last3[0].score) {
+        const total = last3[0].score - last3[2].score;
+        alerts.push({ type:'danger', title: `📉 ${ticker} ลงต่อเนื่อง 3 สัปดาห์`, desc: `Score ลด ${total} pts (${last3[0].score} → ${last3[2].score})`, ticker });
+      }
+    }
+    // Urgent score
+    if (stock.thesis_score <= 44) {
+      alerts.push({ type:'danger', title: `🔴 ${ticker} score อยู่ในโซนวิกฤต (${stock.thesis_score})`, desc: 'Score ≤44 — พิจารณา exit', ticker });
+    }
+    // Credibility concern
+    const cred = getCredibility(ticker);
+    if (cred && cred.misses >= 2) {
+      alerts.push({ type:'warn', title: `⚠️ ${ticker} management credibility ต่ำ (${cred.pct}%)`, desc: `${cred.misses} guidance misses — track closely`, ticker });
+    }
+    // Score drop ≥10 single week
+    if (hist.length >= 1) {
+      const last = hist[hist.length-1];
+      if ((last.delta || 0) <= -10) {
+        alerts.push({ type:'warn', title: `⚠️ ${ticker} score ร่วงแรง ${last.delta} pts สัปดาห์ล่าสุด`, desc: last.reason || '', ticker });
+      }
+    }
+  });
+  return alerts;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════════
+let chartJsLoaded = false, chartJsLoading = false;
+function ensureChartJs(cb) {
+  if (chartJsLoaded) { cb(); return; }
+  if (chartJsLoading) { setTimeout(() => ensureChartJs(cb), 150); return; }
+  chartJsLoading = true;
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+  s.onload = () => { chartJsLoaded = true; chartJsLoading = false; cb(); };
+  s.onerror = () => { chartJsLoading = false; };
+  document.head.appendChild(s);
+}
+
+function renderSparkline(ticker, canvasId) {
+  const hist = S.kb?.score_history?.[ticker] || [];
+  if (hist.length < 2) return;
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const scores = hist.map(h => h.score);
+  const labels = hist.map(h => h.date?.slice(5) || '');
+  const trend = getTrend(ticker);
+  const borderColor = trend.cls === 'up' ? '#51cf66' : trend.cls === 'down' ? '#ff6b6b' : '#00e5cc';
+  ensureChartJs(() => {
+    if (canvas._chart) canvas._chart.destroy();
+    canvas._chart = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{ data: scores, borderColor, borderWidth: 2, fill: true,
+          backgroundColor: borderColor.replace(')', ', 0.08)').replace('rgb', 'rgba'),
+          pointRadius: 0, tension: 0.3 }]
+      },
+      options: {
+        responsive: false, animation: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: { x: { display: false }, y: { display: false, min: Math.max(0, Math.min(...scores)-10), max: Math.min(100, Math.max(...scores)+10) } }
+      }
+    });
+  });
+}
+
+function renderDashboard() {
+  if (!S.registry) return;
+  showDashboard();
+
+  // Alerts
+  const alerts = getAlerts();
+  const aw = document.getElementById('alertsWrap');
+  aw.innerHTML = alerts.length ? alerts.map(a => `
+    <div class="alert-item ${a.type==='warn'?'warn':''}">
+      <div class="alert-ic">${a.type==='warn'?'⚠️':'🚨'}</div>
+      <div class="alert-body"><div class="at">${a.title}</div><div class="ad">${a.desc}</div></div>
+    </div>`).join('') : '';
+
+  // Cards
+  const grid = document.getElementById('stockGrid');
+  grid.innerHTML = S.registry.stocks.map(stock => {
+    const ticker = stock.ticker;
+    const trend = getTrend(ticker);
+    const delta = getLatestDelta(ticker);
+    const deltaStr = delta > 0 ? `<span style="color:var(--green)">+${delta}</span>` : delta < 0 ? `<span style="color:var(--red)">${delta}</span>` : `<span style="color:var(--tx3)">±0</span>`;
+    const cats = (stock.catalysts || []).filter(c => c.status !== 'cancelled');
+    const cred = getCredibility(ticker);
+    const hasPos = stock.avg_cost > 0;
+    return `
+    <div class="card" data-ticker="${ticker}" onclick="openDetail(this.dataset.ticker)">
+      <div class="card-top">
+        <div>
+          <div class="card-ticker">${ticker}</div>
+          <div class="card-company">${stock.company}</div>
+          <div class="card-sector">${stock.sector || '—'}</div>
+        </div>
+        <div class="card-right">
+          <div class="c-emoji">${scoreEmoji(stock.thesis_score)}</div>
+          <div class="c-score ${scoreColor(stock.thesis_score)}">${stock.thesis_score}</div>
+        </div>
+      </div>
+      <div class="spark-wrap">
+        <canvas id="spark_${ticker}" width="280" height="44"></canvas>
+      </div>
+      <div class="chips">
+        <span class="chip ${trend.cls}">${trend.arrow} ${trend.cls === 'flat' ? 'Stable' : trend.cls === 'up' ? `Up ${trend.weeks}w` : `Down ${trend.weeks}w`}</span>
+        <span class="chip">Δ ${deltaStr}</span>
+        ${hasPos ? `<span class="chip">${stock.shares.toLocaleString()} shares</span>` : '<span class="chip dimmed">Watch only</span>'}
+        ${cred ? `<span class="chip ${cred.pct >= 70 ? 'green' : cred.pct >= 50 ? 'yellow' : 'down'}">Trust ${cred.pct}%</span>` : ''}
+      </div>
+      ${stock.notes ? `<div class="c-notes">${stock.notes}</div>` : ''}
+      ${cats.length ? `<div class="cat-strip">${cats.map(c => `<span class="ct ${c.status==='in_progress'?'ip':c.status==='completed'?'done':''}">${c.status==='in_progress'?'⚡':''}${c.event.length>20?c.event.slice(0,18)+'…':c.event}</span>`).join('')}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  // Render sparklines after DOM
+  setTimeout(() => {
+    S.registry.stocks.forEach(s => renderSparkline(s.ticker, 'spark_' + s.ticker));
+  }, 50);
+
+  // Portfolio summary
+  renderSummary();
+
+  // Sync timestamp
+  if (S.lastSync) {
+    const ts = document.getElementById('syncTs');
+    ts.textContent = 'Synced ' + S.lastSync;
+    ts.classList.remove('hidden');
+  }
+}
+
+function renderSummary() {
+  const stocks = S.registry?.stocks || [];
+  const withPos = stocks.filter(s => s.avg_cost > 0 && s.shares > 0);
+  const totalCost = withPos.reduce((a, s) => a + s.avg_cost * s.shares, 0);
+  const avgScore = Math.round(stocks.reduce((a, s) => a + s.thesis_score, 0) / stocks.length);
+  const green = stocks.filter(s => s.thesis_score >= 75).length;
+  const yellow = stocks.filter(s => s.thesis_score >= 60 && s.thesis_score < 75).length;
+  const orange = stocks.filter(s => s.thesis_score >= 45 && s.thesis_score < 60).length;
+  const red = stocks.filter(s => s.thesis_score < 45).length;
+  const el = document.getElementById('portfolioSummary');
+  el.innerHTML = `
+    <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:13px">
+      <div><div style="color:var(--tx2);font-size:11px;margin-bottom:2px">Avg Thesis Score</div><div style="font-size:22px;font-weight:800;color:var(--c1)">${avgScore}</div></div>
+      <div><div style="color:var(--tx2);font-size:11px;margin-bottom:2px">Total Cost (invested)</div><div style="font-size:22px;font-weight:800">฿${totalCost.toLocaleString()}</div></div>
+      <div><div style="color:var(--tx2);font-size:11px;margin-bottom:4px">Score Distribution</div>
+        <div style="display:flex;gap:6px">
+          ${green ? `<span class="chip green">🟢 ${green}</span>` : ''}
+          ${yellow ? `<span class="chip yellow">🟡 ${yellow}</span>` : ''}
+          ${orange ? `<span class="chip" style="color:var(--orange);background:var(--oranged)">🟠 ${orange}</span>` : ''}
+          ${red ? `<span class="chip down">🔴 ${red}</span>` : ''}
+        </div>
+      </div>
+      ${S.lastSync ? `<div><div style="color:var(--tx2);font-size:11px;margin-bottom:2px">Last Sync</div><div style="font-size:13px;color:var(--tx2)">${S.lastSync}</div></div>` : ''}
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DETAIL MODAL
+// ═══════════════════════════════════════════════════════════════
+function openDetail(ticker) {
+  const stock = S.registry?.stocks?.find(s => s.ticker === ticker);
+  if (!stock) return;
+  const hist = S.kb?.score_history?.[ticker] || [];
+  const guidance = S.kb?.guidance_tracker?.[ticker] || [];
+  const clips = (S.kb?.evidence_clips || []).filter(e => e.ticker === ticker);
+  const catalysts = S.kb?.catalyst_log?.[ticker] || [];
+  const cred = getCredibility(ticker);
+  const trend = getTrend(ticker);
+
+  document.getElementById('detailTitle').textContent = `${ticker} · ${stock.thesis_score}/100`;
+  document.getElementById('detailSub').textContent = stock.company + (stock.sector ? ' · ' + stock.sector : '');
+  document.getElementById('btnEditFromDetail').dataset.ticker = ticker;
+
+  let html = `
+    <div class="score-hero">
+      <div class="score-num ${scoreColor(stock.thesis_score)}">${stock.thesis_score}</div>
+      <div class="score-meta">
+        <div class="score-trend chip ${trend.cls}" style="border-radius:6px">${trend.arrow} ${trend.cls === 'flat' ? 'Stable' : trend.cls === 'up' ? `Improving ${trend.weeks}w` : `Declining ${trend.weeks}w`}</div>
+        <div class="score-date" style="margin-top:6px">Last review: ${stock.last_review_date || '—'}</div>
+      </div>
+    </div>`;
+
+  // Thesis
+  html += `<div class="sec-title">Thesis</div>
+    <div style="font-size:13px;color:var(--tx2);line-height:1.6">${stock.thesis || '—'}</div>`;
+
+  // Score History
+  if (hist.length > 0) {
+    html += `<div class="sec-title">Score History (${hist.length} weeks)</div>
+      <div style="height:80px;margin-bottom:10px"><canvas id="detailSpark" width="520" height="80"></canvas></div>`;
+    html += hist.slice().reverse().slice(0, 12).map(h => {
+      const dc = (h.delta || 0) > 0 ? 'color:var(--green)' : (h.delta || 0) < 0 ? 'color:var(--red)' : 'color:var(--tx3)';
+      return `<div class="hist-row">
+        <span class="h-date">${h.date}</span>
+        <span class="h-score ${scoreColor(h.score)}">${h.score}</span>
+        <span class="h-delta" style="${dc}">${h.delta > 0 ? '+' : ''}${h.delta || 0}</span>
+        <span class="h-reason">${h.reason || ''}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // Thesis Breakers
+  if (stock.thesis_breakers?.length) {
+    html += `<div class="sec-title">Thesis Breakers</div>`;
+    html += stock.thesis_breakers.map(b => `<div style="display:flex;gap:6px;padding:5px 0;font-size:12px;border-bottom:1px solid var(--border)"><span style="color:var(--red)">⛔</span><span style="color:var(--tx2)">${b}</span></div>`).join('');
+  }
+
+  // Catalysts from registry
+  if (stock.catalysts?.length) {
+    html += `<div class="sec-title">Catalysts</div>`;
+    html += stock.catalysts.map(c => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
+      <span class="ct ${c.status==='in_progress'?'ip':c.status==='completed'?'done':''}" style="border-radius:4px">${c.status}</span>
+      <span>${c.event}</span><span style="color:var(--tx3);margin-left:auto">${c.expected_period}</span>
+    </div>`).join('');
+  }
+
+  // Guidance Tracker
+  if (guidance.length) {
+    html += `<div class="sec-title">Management Guidance Tracker</div>`;
+    if (cred) {
+      const pctColor = cred.pct >= 70 ? 'var(--green)' : cred.pct >= 50 ? 'var(--yellow)' : 'var(--red)';
+      html += `<div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+          <span style="color:var(--tx2)">Credibility Score</span>
+          <span style="font-weight:700;color:${pctColor}">${cred.pct}% (${cred.hits}✓ ${cred.misses}✗)</span>
+        </div>
+        <div class="cred-bar"><div class="cred-fill" style="width:${cred.pct}%;background:${pctColor}"></div></div>
+      </div>`;
+    }
+    html += guidance.map(g => {
+      const vcls = {pending:'vp',on_track:'von',exceeded:'vex',in_progress:'vip',missed:'vms'}[g.verdict] || 'vp';
+      return `<div class="guide-row">
+        <div class="g-qtr">${g.ticker} · Q${g.quarter || '?'} · ${g.date_stated || ''}</div>
+        <div class="g-text">${g.guidance}</div>
+        <div class="g-src">${g.source || ''}</div>
+        <span class="g-verdict ${vcls}">${g.verdict || 'pending'}</span>
+        ${g.management_credibility_note ? `<div style="color:var(--tx2);font-size:11px;margin-top:3px">${g.management_credibility_note}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  // Evidence Clips
+  if (clips.length) {
+    html += `<div class="sec-title">Evidence Clips (${clips.length})</div>`;
+    html += clips.slice().reverse().map(e => {
+      const tc = {support_thesis:'ev-sp',contradict_thesis:'ev-ct',neutral:'ev-nu'}[e.type] || 'ev-nu';
+      return `<div class="ev-item">
+        <div class="ev-meta">
+          <span class="ev-type ${tc}">${e.type?.replace('_thesis','') || 'neutral'}</span>
+          <span style="color:var(--tx3);font-size:10px">${e.date}</span>
+        </div>
+        <div class="ev-clip">"${e.clip}"</div>
+        <div class="ev-src">${e.source || ''}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Notes
+  if (stock.notes) {
+    html += `<div class="sec-title">Notes</div><div style="font-size:13px;color:var(--tx2);line-height:1.6">${stock.notes}</div>`;
+  }
+
+  document.getElementById('detailBody').innerHTML = html;
+  document.getElementById('detailModal').classList.remove('hidden');
+
+  // Render detail sparkline
+  if (hist.length > 1) {
+    setTimeout(() => {
+      const labels = hist.map(h => h.date?.slice(5) || '');
+      const scores = hist.map(h => h.score);
+      const trend2 = getTrend(ticker);
+      const bc = trend2.cls === 'up' ? '#51cf66' : trend2.cls === 'down' ? '#ff6b6b' : '#00e5cc';
+      ensureChartJs(() => {
+        const c = document.getElementById('detailSpark');
+        if (!c) return;
+        if (c._chart) c._chart.destroy();
+        c._chart = new Chart(c, {
+          type:'line',
+          data: { labels, datasets: [{ data:scores, borderColor:bc, borderWidth:2, fill:true, backgroundColor:bc.replace(')',',.1)').replace('rgb','rgba'), pointRadius:3, pointBackgroundColor:bc, tension:0.3 }] },
+          options: { responsive:false, animation:false, plugins:{ legend:{display:false}, tooltip:{callbacks:{label:ctx=>`Score: ${ctx.raw}`}} }, scales:{ x:{display:true,ticks:{color:'#445566',font:{size:9}}}, y:{display:true,min:Math.max(0,Math.min(...scores)-15),max:Math.min(100,Math.max(...scores)+15),ticks:{color:'#445566',font:{size:9}}} } }
+        });
+      });
+    }, 80);
+  }
+}
+
+function openEditFromDetail(ticker) {
+  closeM('detailModal');
+  setTimeout(() => openEdit(ticker), 150);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EDIT MODAL
+// ═══════════════════════════════════════════════════════════════
+function openEdit(ticker) {
+  const stock = S.registry?.stocks?.find(s => s.ticker === ticker);
+  if (!stock) return;
+  S.editData = { ticker, originalScore: stock.thesis_score };
+  document.getElementById('editTitle').textContent = `Edit — ${ticker}`;
+  const sc = scoreColor(stock.thesis_score);
+  document.getElementById('editBody').innerHTML = `
+    <div class="form-group">
+      <label class="form-label">Thesis Score (0–100)</label>
+      <div class="score-preview-big ${sc}" id="editScorePreview">${stock.thesis_score}</div>
+      <input type="range" min="0" max="100" value="${stock.thesis_score}" id="editScoreSlider" class="score-slider"
+        oninput="updateScorePreview(this.value)">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--tx3);margin-top:2px">
+        <span>🔴 0</span><span>🟠 45</span><span>🟡 60</span><span>🟢 75</span><span>100</span>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Thesis Status</label>
+      <select class="form-input" id="editStatus">
+        <option value="🟢" ${stock.thesis_status==='🟢'?'selected':''}>🟢 Good (75+)</option>
+        <option value="🟡" ${stock.thesis_status==='🟡'?'selected':''}>🟡 Monitor (60–74)</option>
+        <option value="🟠" ${stock.thesis_status==='🟠'?'selected':''}>🟠 Weak (45–59)</option>
+        <option value="🔴" ${stock.thesis_status==='🔴'?'selected':''}>🔴 Broken (0–44)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Score Change Reason</label>
+      <input class="form-input" type="text" id="editReason" placeholder="เช่น margin ดีขึ้น Q3, AI revenue delay">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes</label>
+      <textarea class="form-input" id="editNotes" rows="3">${stock.notes || ''}</textarea>
+    </div>
+    <div style="font-size:11px;color:var(--tx3);padding:8px 0">
+      Original score: <strong>${stock.thesis_score}</strong> →
+      Delta: <strong id="editDelta">0</strong>
+    </div>`;
+  document.getElementById('editModal').classList.remove('hidden');
+}
+
+function updateScorePreview(val) {
+  const v = parseInt(val);
+  const el = document.getElementById('editScorePreview');
+  el.textContent = v;
+  el.className = 'score-preview-big ' + scoreColor(v);
+  const orig = S.editData?.originalScore || v;
+  const delta = v - orig;
+  const de = document.getElementById('editDelta');
+  if (de) {
+    de.textContent = (delta > 0 ? '+' : '') + delta;
+    de.style.color = delta > 0 ? 'var(--green)' : delta < 0 ? 'var(--red)' : 'var(--tx2)';
+  }
+  // Auto-update status
+  const sel = document.getElementById('editStatus');
+  if (sel) {
+    if (v >= 75) sel.value = '🟢';
+    else if (v >= 60) sel.value = '🟡';
+    else if (v >= 45) sel.value = '🟠';
+    else sel.value = '🔴';
+  }
+}
+
+async function saveEdit() {
+  const ticker = S.editData?.ticker;
+  if (!ticker) return;
+  const stock = S.registry?.stocks?.find(s => s.ticker === ticker);
+  if (!stock) return;
+  const newScore = parseInt(document.getElementById('editScoreSlider').value);
+  const newStatus = document.getElementById('editStatus').value;
+  const reason = document.getElementById('editReason').value.trim() || 'manual edit';
+  const notes = document.getElementById('editNotes').value.trim();
+  const delta = newScore - (S.editData?.originalScore || stock.thesis_score);
+  const today = new Date().toISOString().split('T')[0];
+
+  // Update registry
+  stock.thesis_score = newScore;
+  stock.thesis_status = newStatus;
+  stock.notes = notes;
+  stock.last_review_date = today;
+
+  // Update knowledge base score_history
+  if (S.kb?.score_history?.[ticker]) {
+    S.kb.score_history[ticker].push({ date: today, score: newScore, delta, reason });
+    S.kb.last_updated = today;
+  }
+
+  closeM('editModal');
+  renderDashboard();
+
+  // Save to Drive
+  if (!S.offline && S.accessToken) {
+    await saveRegistry();
+    // Also save KB
+    try {
+      if (S.kbFileId) {
+        await drivePatch(S.kbFileId, S.kb);
+        toast('✅ บันทึก knowledge base สำเร็จ');
+      }
+    } catch(e) { toast('⚠️ บันทึก KB ไม่สำเร็จ'); }
+  } else {
+    toast('💾 อัพเดทแล้ว (offline)');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SETUP
+// ═══════════════════════════════════════════════════════════════
+function saveSetup() {
+  const cid = document.getElementById('inputClientId').value.trim();
+  const fid = document.getElementById('inputFolderId').value.trim();
+  if (!cid) { toast('⚠️ ใส่ Client ID ก่อน'); return; }
+  S.clientId = cid;
+  S.folderId = fid || S.folderId;
+  saveLS();
+  showSignIn();
+}
+
+function useOffline() {
+  S.offline = true;
+  S.registry = FALLBACK.registry;
+  S.kb = FALLBACK.kb;
+  S.lastSync = 'Offline mode';
+  renderDashboard();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════════════
+function showSetup() {
+  document.getElementById('setupWrap').classList.remove('hidden');
+  document.getElementById('signInWrap').classList.add('hidden');
+  document.getElementById('dashboard').classList.add('hidden');
+  document.getElementById('btnSync').classList.add('hidden');
+  document.getElementById('btnSignOut').classList.add('hidden');
+}
+
+function showSignIn() {
+  document.getElementById('setupWrap').classList.add('hidden');
+  document.getElementById('signInWrap').classList.remove('hidden');
+  document.getElementById('signInWrap').style.display = 'flex';
+  document.getElementById('dashboard').classList.add('hidden');
+  document.getElementById('btnSync').classList.add('hidden');
+  document.getElementById('btnSignOut').classList.add('hidden');
+}
+
+function showDashboard() {
+  document.getElementById('setupWrap').classList.add('hidden');
+  document.getElementById('signInWrap').classList.add('hidden');
+  document.getElementById('dashboard').classList.remove('hidden');
+  document.getElementById('btnSync').classList.remove('hidden');
+  document.getElementById('btnSignOut').classList.remove('hidden');
+}
+
+function showLoading(msg) {
+  document.getElementById('loading').classList.remove('hidden');
+  setLoadMsg(msg || 'กำลังโหลด…');
+}
+
+function hideLoading() {
+  document.getElementById('loading').classList.add('hidden');
+}
+
+function setLoadMsg(m) {
+  const el = document.getElementById('loadMsg');
+  if (el) el.textContent = m;
+}
+
+function closeM(id) {
+  document.getElementById(id)?.classList.add('hidden');
+}
+
+function toast(msg) {
+  const existing = document.querySelectorAll('.toast');
+  existing.forEach(e => e.remove());
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2800);
+}
+
+// Close modals on backdrop click
+document.querySelectorAll('.mbg').forEach(mbg => {
+  mbg.addEventListener('click', e => {
+    if (e.target === mbg) mbg.classList.add('hidden');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  loadLS();
+  if (S.clientId) {
+    showSignIn();
+  } else {
+    showSetup();
+    // Pre-fill folder ID
+    const fi = document.getElementById('inputFolderId');
+    if (fi && S.folderId) fi.value = S.folderId;
+  }
+});
+</script>
+</body>
+</html>
