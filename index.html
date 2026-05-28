@@ -205,6 +205,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
   <div class="nav-right" id="navRight">
     <span class="sync-ts hidden" id="syncTs"></span>
     <button class="btn btn-s btn-sm hidden" id="btnSync" onclick="syncData()">⟳ Sync</button>
+    <button class="btn btn-p btn-sm hidden" id="btnAddStock" onclick="openAddStock()">+ Add Stock</button>
     <button class="btn btn-g btn-sm hidden" id="btnSignOut" onclick="signOut()">Sign Out</button>
   </div>
 </nav>
@@ -263,6 +264,62 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
   <div style="margin-top:24px;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r)">
     <div style="font-size:12px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Portfolio Summary</div>
     <div id="portfolioSummary"></div>
+  </div>
+</div>
+
+<!-- ADD STOCK MODAL -->
+<div class="mbg center hidden" id="addStockModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">
+      <div class="mt-t">+ Add New Stock</div>
+      <button class="btn btn-g btn-sm" onclick="closeM('addStockModal')">✕</button>
+    </div>
+    <div class="mb">
+      <div class="form-group">
+        <label class="form-label">Ticker Symbol *</label>
+        <input class="form-input mono" id="addTicker" placeholder="เช่น ADVANC, AOT, KBANK" style="text-transform:uppercase">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Company Name *</label>
+        <input class="form-input" id="addCompany" placeholder="เช่น Advanced Info Service">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Sector</label>
+        <input class="form-input" id="addSector" placeholder="เช่น Technology, Banking, Healthcare">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Avg Cost (฿)</label>
+          <input class="form-input" id="addAvgCost" type="number" min="0" step="0.01" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Shares</label>
+          <input class="form-input" id="addShares" type="number" min="0" step="1" placeholder="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Initial Thesis Score (0–100)</label>
+        <div class="score-preview-big g" id="addScorePreview">70</div>
+        <input type="range" min="0" max="100" value="70" id="addScoreSlider"
+          oninput="document.getElementById('addScorePreview').textContent=this.value;document.getElementById('addScorePreview').className='score-preview-big '+scoreColor(+this.value)">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--tx3);margin-top:2px">
+          <span>🔴 0</span><span>🟠 45</span><span>🟡 60</span><span>🟢 75</span><span>100</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea class="form-input" id="addNotes" rows="3" placeholder="Investment thesis, key observations…"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Thesis Breakers (คั่นด้วย Enter)</label>
+        <textarea class="form-input" id="addBreakers" rows="3" placeholder="กำไรลด YoY 3 ไตรมาสติดต่อกัน&#10;ผู้บริหาร C-suite ลาออก 2+ คน"></textarea>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-g" onclick="closeM('addStockModal')">Cancel</button>
+      <button class="btn btn-p" onclick="saveNewStock()">💾 Add & Save to Drive</button>
+    </div>
   </div>
 </div>
 
@@ -1011,6 +1068,70 @@ async function saveEdit() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ADD STOCK
+// ═══════════════════════════════════════════════════════════════
+function openAddStock() {
+  // Reset form
+  ['addTicker','addCompany','addSector','addNotes','addBreakers'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('addAvgCost').value = '';
+  document.getElementById('addShares').value = '';
+  document.getElementById('addScoreSlider').value = 70;
+  document.getElementById('addScorePreview').textContent = '70';
+  document.getElementById('addScorePreview').className = 'score-preview-big y';
+  document.getElementById('addStockModal').classList.remove('hidden');
+}
+
+async function saveNewStock() {
+  const ticker = document.getElementById('addTicker').value.trim().toUpperCase();
+  const company = document.getElementById('addCompany').value.trim();
+  if (!ticker) { toast('⚠️ ใส่ Ticker ก่อน'); return; }
+  if (!company) { toast('⚠️ ใส่ Company Name ก่อน'); return; }
+  if (S.registry?.stocks?.find(s => s.ticker === ticker)) {
+    toast(`⚠️ ${ticker} มีอยู่แล้วใน portfolio`); return;
+  }
+
+  const score = parseInt(document.getElementById('addScoreSlider').value);
+  const avgCost = parseFloat(document.getElementById('addAvgCost').value) || 0;
+  const shares = parseInt(document.getElementById('addShares').value) || 0;
+  const notes = document.getElementById('addNotes').value.trim();
+  const breakersRaw = document.getElementById('addBreakers').value.trim();
+  const thesis_breakers = breakersRaw ? breakersRaw.split('\n').map(l => l.trim()).filter(Boolean) : [];
+  const today = new Date().toISOString().split('T')[0];
+
+  const newStock = {
+    ticker, company,
+    sector: document.getElementById('addSector').value.trim() || '—',
+    avg_cost: avgCost, shares,
+    thesis_score: score,
+    thesis_status: scoreEmoji(score),
+    notes, last_review_date: today,
+    catalysts: [], thesis_breakers
+  };
+
+  if (!S.registry) S.registry = FALLBACK.registry;
+  S.registry.stocks.push(newStock);
+
+  // Init KB entries for the new ticker
+  if (!S.kb) S.kb = FALLBACK.kb;
+  if (!S.kb.score_history) S.kb.score_history = {};
+  if (!S.kb.catalyst_log) S.kb.catalyst_log = {};
+  if (!S.kb.guidance_tracker) S.kb.guidance_tracker = {};
+  S.kb.score_history[ticker] = [{ date: today, score, delta: 0, reason: 'initial entry' }];
+  S.kb.catalyst_log[ticker] = [];
+  S.kb.guidance_tracker[ticker] = [];
+
+  closeM('addStockModal');
+  renderDashboard();
+  toast(`✅ เพิ่ม ${ticker} แล้ว — กำลังบันทึก…`);
+
+  // Save both files to Drive
+  await saveRegistry();
+  if (!S.offline && S.accessToken && S.kbFileId) {
+    try { await drivePatch(S.kbFileId, S.kb); } catch(e) {}
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // SETUP
 // ═══════════════════════════════════════════════════════════════
 function saveSetup() {
@@ -1039,6 +1160,7 @@ function showSetup() {
   document.getElementById('signInWrap').classList.add('hidden');
   document.getElementById('dashboard').classList.add('hidden');
   document.getElementById('btnSync').classList.add('hidden');
+  document.getElementById('btnAddStock').classList.add('hidden');
   document.getElementById('btnSignOut').classList.add('hidden');
 }
 
@@ -1048,6 +1170,7 @@ function showSignIn() {
   document.getElementById('signInWrap').style.display = 'flex';
   document.getElementById('dashboard').classList.add('hidden');
   document.getElementById('btnSync').classList.add('hidden');
+  document.getElementById('btnAddStock').classList.add('hidden');
   document.getElementById('btnSignOut').classList.add('hidden');
 }
 
@@ -1056,6 +1179,7 @@ function showDashboard() {
   document.getElementById('signInWrap').classList.add('hidden');
   document.getElementById('dashboard').classList.remove('hidden');
   document.getElementById('btnSync').classList.remove('hidden');
+  document.getElementById('btnAddStock').classList.remove('hidden');
   document.getElementById('btnSignOut').classList.remove('hidden');
 }
 
