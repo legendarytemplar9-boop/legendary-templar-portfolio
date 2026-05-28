@@ -323,6 +323,45 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
   </div>
 </div>
 
+<!-- EDIT DETAILS MODAL -->
+<div class="mbg center hidden" id="editDetailsModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">
+      <div class="mt-t" id="editDetailsTitle">Edit Details</div>
+      <button class="btn btn-g btn-sm" onclick="closeM('editDetailsModal')">✕</button>
+    </div>
+    <div class="mb">
+      <div class="form-group">
+        <label class="form-label">Company Name</label>
+        <input class="form-input" id="edCompany" placeholder="Company name">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Sector</label>
+        <input class="form-input" id="edSector" placeholder="เช่น Technology, Banking, Healthcare">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Avg Cost (฿)</label>
+          <input class="form-input" id="edAvgCost" type="number" min="0" step="0.01" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Shares</label>
+          <input class="form-input" id="edShares" type="number" min="0" step="1" placeholder="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Thesis Breakers (คั่นด้วย Enter)</label>
+        <textarea class="form-input" id="edBreakers" rows="4" placeholder="หนึ่งบรรทัดต่อหนึ่งเงื่อนไข…"></textarea>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-g" onclick="closeM('editDetailsModal')">Cancel</button>
+      <button class="btn btn-p" onclick="saveStockDetails()">💾 Save to Drive</button>
+    </div>
+  </div>
+</div>
+
 <!-- DETAIL MODAL -->
 <div class="mbg hidden" id="detailModal">
   <div class="modal">
@@ -758,7 +797,10 @@ function renderDashboard() {
     const hasPos = stock.avg_cost > 0;
     return `
     <div class="card" data-ticker="${ticker}" onclick="openDetail(this.dataset.ticker)">
-      <button class="btn btn-sm" onclick="event.stopPropagation();confirmDeleteStock('${ticker}')" style="position:absolute;top:10px;right:10px;padding:3px 8px;font-size:11px;background:transparent;color:var(--tx3);border:1px solid var(--border);border-radius:6px;opacity:0;transition:opacity .15s" onmouseenter="this.style.opacity=1;this.style.color='var(--red)';this.style.borderColor='var(--red)'" onmouseleave="this.style.opacity=0;this.style.color='var(--tx3)';this.style.borderColor='var(--border)'">✕</button>
+      <div class="card-actions" style="position:absolute;top:10px;right:10px;display:flex;gap:4px;opacity:0;transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0">
+        <button onclick="event.stopPropagation();openEditDetails('${ticker}')" style="padding:3px 8px;font-size:11px;background:transparent;color:var(--tx3);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:color .15s,border-color .15s" onmouseenter="this.style.color='var(--c1)';this.style.borderColor='var(--c1)'" onmouseleave="this.style.color='var(--tx3)';this.style.borderColor='var(--border)'">✏️</button>
+        <button onclick="event.stopPropagation();confirmDeleteStock('${ticker}')" style="padding:3px 8px;font-size:11px;background:transparent;color:var(--tx3);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:color .15s,border-color .15s" onmouseenter="this.style.color='var(--red)';this.style.borderColor='var(--red)'" onmouseleave="this.style.color='var(--tx3)';this.style.borderColor='var(--border)'">✕</button>
+      </div>
       <div class="card-top">
         <div>
           <div class="card-ticker">${ticker}</div>
@@ -1130,6 +1172,36 @@ async function saveNewStock() {
   if (!S.offline && S.accessToken && S.kbFileId) {
     try { await drivePatch(S.kbFileId, S.kb); } catch(e) {}
   }
+}
+
+function openEditDetails(ticker) {
+  const stock = S.registry?.stocks?.find(s => s.ticker === ticker);
+  if (!stock) return;
+  S.editData = { ...(S.editData || {}), detailTicker: ticker };
+  document.getElementById('editDetailsTitle').textContent = `Edit Details — ${ticker}`;
+  document.getElementById('edCompany').value = stock.company || '';
+  document.getElementById('edSector').value = stock.sector === '—' ? '' : (stock.sector || '');
+  document.getElementById('edAvgCost').value = stock.avg_cost || '';
+  document.getElementById('edShares').value = stock.shares || '';
+  document.getElementById('edBreakers').value = (stock.thesis_breakers || []).join('\n');
+  document.getElementById('editDetailsModal').classList.remove('hidden');
+}
+
+async function saveStockDetails() {
+  const ticker = S.editData?.detailTicker;
+  if (!ticker) return;
+  const stock = S.registry?.stocks?.find(s => s.ticker === ticker);
+  if (!stock) return;
+  stock.company = document.getElementById('edCompany').value.trim() || stock.company;
+  stock.sector = document.getElementById('edSector').value.trim() || '—';
+  stock.avg_cost = parseFloat(document.getElementById('edAvgCost').value) || 0;
+  stock.shares = parseInt(document.getElementById('edShares').value) || 0;
+  const breakersRaw = document.getElementById('edBreakers').value.trim();
+  stock.thesis_breakers = breakersRaw ? breakersRaw.split('\n').map(l => l.trim()).filter(Boolean) : [];
+  closeM('editDetailsModal');
+  renderDashboard();
+  toast(`✅ อัพเดท ${ticker} แล้ว — กำลังบันทึก…`);
+  await saveRegistry();
 }
 
 function confirmDeleteStock(ticker) {
