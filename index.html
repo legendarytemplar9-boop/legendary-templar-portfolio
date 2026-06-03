@@ -429,7 +429,7 @@ const FALLBACK = {
 // ═══════════════════════════════════════════════════════════════
 let S = {
   clientId: '',
-  folderId: '11Yd13tCrYF8haYmnEU8OQEoRG63k8Ln9D',
+  folderId: '1Yd13tCrYF8haYmnEU8OQEoRG63k8Ln9D',
   accessToken: null,
   tokenExpiry: 0,
   registry: null,
@@ -441,6 +441,9 @@ let S = {
   editData: {}
 };
 
+const GOOD_FOLDER_ID = '1Yd13tCrYF8haYmnEU8OQEoRG63k8Ln9D';
+const BAD_FOLDER_ID  = '11Yd13tCrYF8haYmnEU8OQEoRG63k8Ln9D'; // legacy typo (double "1")
+
 function saveLS() {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({
@@ -448,7 +451,11 @@ function saveLS() {
       folderId: S.folderId,
       regFileId: S.regFileId,
       kbFileId: S.kbFileId,
-      lastSync: S.lastSync
+      lastSync: S.lastSync,
+      // Recovery buffer ONLY — Google Drive is the source of truth. This lets a
+      // failed Drive save be retried/recovered instead of lost on reload.
+      registry: S.registry,
+      kb: S.kb
     }));
   } catch(e) {}
 }
@@ -461,6 +468,13 @@ function loadLS() {
     if (d.regFileId) S.regFileId = d.regFileId;
     if (d.kbFileId) S.kbFileId = d.kbFileId;
     if (d.lastSync) S.lastSync = d.lastSync;
+    if (d.registry) S.cachedRegistry = d.registry; // recovery buffer
+    if (d.kb) S.cachedKb = d.kb;
+    // Migrate a previously-cached typo'd folder ID so old sessions self-heal.
+    if (S.folderId === BAD_FOLDER_ID) {
+      S.folderId = GOOD_FOLDER_ID;
+      S.regFileId = null; S.kbFileId = null; // force re-search in the correct folder
+    }
   } catch(e) {}
 }
 
@@ -601,14 +615,15 @@ async function syncData() {
       setLoadMsg('อ่าน stock_registry.json…');
       S.registry = await driveGetMedia(S.regFileId);
     } else {
-      S.registry = FALLBACK.registry;
+      S.registry = S.cachedRegistry || FALLBACK.registry;
+      toast('⚠️ ไม่พบ stock_registry.json ในโฟลเดอร์ — ตรวจสอบ Folder ID');
     }
     // Read knowledge base
     if (S.kbFileId) {
       setLoadMsg('อ่าน thesis_knowledge_base.json…');
       S.kb = await driveGetMedia(S.kbFileId);
     } else {
-      S.kb = FALLBACK.kb;
+      S.kb = S.cachedKb || FALLBACK.kb;
     }
     S.lastSync = new Date().toLocaleTimeString('th-TH');
     saveLS();
@@ -617,20 +632,61 @@ async function syncData() {
   } catch(err) {
     console.error(err);
     hideLoading();
-    // Try with fallback
-    if (!S.registry) S.registry = FALLBACK.registry;
-    if (!S.kb) S.kb = FALLBACK.kb;
+    // Prefer the local recovery buffer over the generic baseline.
+    if (!S.registry) S.registry = S.cachedRegistry || FALLBACK.registry;
+    if (!S.kb) S.kb = S.cachedKb || FALLBACK.kb;
     renderDashboard();
-    toast('⚠️ Drive error — ใช้ข้อมูล cache');
+    toast('⚠️ Drive error — ใช้ข้อมูลสำรองในเครื่อง');
   }
   hideLoading();
 }
 
+function ensureTokenAsync() {
+  return new Promise((resolve) => {
+    if (S.offline) { resolve(); return; }
+    let done = false;
+    ensureToken(() => { if (!done) { done = true; resolve(); } });
+    setTimeout(() => { if (!done) { done = true; resolve(); } }, 4000); // safety
+  });
+}
+
+// Persistent, hard-to-miss banner when a Drive save fails (unlike a toast).
+function saveErrorBanner(msg) {
+  let b = document.getElementById('saveErrBanner');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'saveErrBanner';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:1000;background:#7f1d1d;color:#fff;padding:10px 14px;font-size:13px;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;box-shadow:0 2px 10px rgba(0,0,0,.5)';
+    document.body.appendChild(b);
+  }
+  b.innerHTML = '';
+  const span = document.createElement('span'); span.textContent = '⚠️ ' + msg; b.appendChild(span);
+  const retry = document.createElement('button');
+  retry.textContent = 'ลองบันทึกอีกครั้ง';
+  retry.style.cssText = 'background:#fff;color:#7f1d1d;border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer';
+  retry.onclick = () => { b.remove(); saveRegistry(); };
+  b.appendChild(retry);
+  const x = document.createElement('button');
+  x.textContent = '✕';
+  x.style.cssText = 'background:transparent;color:#fff;border:none;font-size:15px;cursor:pointer';
+  x.onclick = () => b.remove();
+  b.appendChild(x);
+}
+function clearSaveErrorBanner() { const b = document.getElementById('saveErrBanner'); if (b) b.remove(); }
+
 async function saveRegistry() {
-  if (S.offline || !S.accessToken) { saveLS(); toast('💾 บันทึก offline'); return; }
+  // Always write the recovery buffer FIRST so nothing is lost if Drive fails.
+  saveLS();
+  if (S.offline) { toast('💾 บันทึก offline (เก็บในเครื่อง)'); return; }
   try {
-    showLoading('กำลังบันทึกไป Drive…');
+    await ensureTokenAsync();
+    if (!S.accessToken) throw new Error('ยังไม่ได้เข้าสู่ระบบ / token หมดอายุ');
+    showLoading('กำลังบันทึกไป Google Drive…');
     S.registry.last_updated = new Date().toISOString().split('T')[0];
+    if (!S.regFileId) { // recover the file id if we lost it
+      const rf = await driveSearch('stock_registry.json', S.folderId);
+      if (rf) S.regFileId = rf.id;
+    }
     if (S.regFileId) {
       await drivePatch(S.regFileId, S.registry);
     } else {
@@ -638,10 +694,11 @@ async function saveRegistry() {
     }
     saveLS();
     hideLoading();
-    toast('✅ บันทึก stock_registry.json สำเร็จ');
+    clearSaveErrorBanner();
+    toast('✅ บันทึกไป Google Drive สำเร็จ');
   } catch(err) {
     hideLoading();
-    toast('❌ บันทึกไม่สำเร็จ: ' + err.message);
+    saveErrorBanner('บันทึกไป Drive ไม่สำเร็จ: ' + err.message + ' — ข้อมูลถูกเก็บในเครื่องชั่วคราว ยังไม่หาย');
   }
 }
 
