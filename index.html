@@ -1090,6 +1090,14 @@ function openEdit(ticker) {
       </select>
     </div>
     <div class="form-group">
+      <label class="form-label">Holdings — Avg Cost (THB) / Shares</label>
+      <div style="display:flex;gap:8px">
+        <input class="form-input" type="number" min="0" step="0.01" id="editAvgCost" value="${stock.avg_cost || ''}" placeholder="Avg cost">
+        <input class="form-input" type="number" min="0" step="1" id="editShares" value="${stock.shares || ''}" placeholder="Shares">
+      </div>
+      <div style="font-size:10px;color:var(--tx3);margin-top:3px">Leave both 0 for a watch-only position.</div>
+    </div>
+    <div class="form-group">
       <label class="form-label">Score Change Reason</label>
       <input class="form-input" type="text" id="editReason" placeholder="เช่น margin ดีขึ้น Q3, AI revenue delay">
     </div>
@@ -1135,6 +1143,8 @@ async function saveEdit() {
   const newStatus = document.getElementById('editStatus').value;
   const reason = document.getElementById('editReason').value.trim() || 'manual edit';
   const notes = document.getElementById('editNotes').value.trim();
+  const avgCost = parseFloat(document.getElementById('editAvgCost').value) || 0;
+  const shares = parseInt(document.getElementById('editShares').value) || 0;
   const delta = newScore - (S.editData?.originalScore || stock.thesis_score);
   const today = new Date().toISOString().split('T')[0];
 
@@ -1142,6 +1152,8 @@ async function saveEdit() {
   stock.thesis_score = newScore;
   stock.thesis_status = newStatus;
   stock.notes = notes;
+  stock.avg_cost = avgCost;
+  stock.shares = shares;
   stock.last_review_date = today;
 
   // Update knowledge base score_history
