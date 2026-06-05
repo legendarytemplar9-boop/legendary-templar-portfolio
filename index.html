@@ -183,6 +183,26 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 .dot-g{background:var(--green)}.dot-y{background:var(--yellow)}.dot-o{background:var(--orange)}.dot-r{background:var(--red)}
 .empty-state{text-align:center;padding:32px 16px;color:var(--tx2);font-size:13px}
 @media(max-width:480px){.grid{grid-template-columns:1fr}.main{padding:12px}}
+/* Reports view */
+.rpt-pills{display:flex;gap:8px;overflow-x:auto;padding:2px 0 12px;-webkit-overflow-scrolling:touch}
+.rpt-pill{flex:0 0 auto;padding:7px 12px;border-radius:20px;font-size:12px;background:var(--bg3);border:1px solid var(--border);color:var(--tx2);cursor:pointer;white-space:nowrap;transition:.15s}
+.rpt-pill.active{background:var(--c1d);border-color:rgba(0,229,204,.4);color:var(--c1);font-weight:700}
+.rpt{line-height:1.55;font-size:13px;color:var(--tx)}
+.rpt h1{font-size:19px;font-weight:800;letter-spacing:-.3px;margin:2px 0 4px}
+.rpt h2{font-size:14px;font-weight:700;margin:18px 0 8px;padding-left:9px;border-left:3px solid var(--c1)}
+.rpt p{margin:6px 0;color:var(--tx2)}
+.rpt strong{color:var(--tx)}
+.rpt ul{list-style:none;margin:6px 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.rpt li{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 11px;color:var(--tx2);font-size:12.5px}
+.rpt table{width:100%;border-collapse:collapse;margin:8px 0;font-size:12px}
+.rpt th{text-align:left;padding:7px 8px;color:var(--tx3);font-weight:600;border-bottom:1px solid var(--border2);font-size:11px;text-transform:uppercase;letter-spacing:.3px}
+.rpt td{padding:8px;border-bottom:1px solid var(--border);color:var(--tx);vertical-align:top}
+.rpt tr:last-child td{border-bottom:none}
+.rpt td.sc{font-weight:800}
+.rpt td.sc.g{color:var(--green)}.rpt td.sc.y{color:var(--yellow)}.rpt td.sc.o{color:var(--orange)}.rpt td.sc.r{color:var(--red)}
+.rpt td.up{color:var(--green);font-weight:700}.rpt td.dn{color:var(--red);font-weight:700}
+.rpt-empty{text-align:center;color:var(--tx3);padding:30px 14px;font-size:13px;line-height:1.6}
+.rpt-meta{font-size:11px;color:var(--tx3);margin-bottom:6px}
 </style>
 </head>
 <body>
@@ -205,6 +225,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
   <div class="nav-right" id="navRight">
     <span class="sync-ts hidden" id="syncTs"></span>
     <button class="btn btn-s btn-sm hidden" id="btnSync" onclick="syncData()">⟳ Sync</button>
+    <button class="btn btn-s btn-sm hidden" id="btnReports" onclick="openReports()">📊 Reports</button>
     <button class="btn btn-p btn-sm hidden" id="btnAddStock" onclick="openAddStock()">+ Add Stock</button>
     <button class="btn btn-g btn-sm hidden" id="btnSignOut" onclick="signOut()">Sign Out</button>
   </div>
@@ -389,6 +410,20 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
     <div class="mf">
       <button class="btn btn-g" onclick="closeM('editModal')">Cancel</button>
       <button class="btn btn-p" onclick="saveEdit()">💾 Save to Drive</button>
+    </div>
+  </div>
+</div>
+
+<div class="mbg center hidden" id="reportsModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">
+      <div class="mt-t">📊 Monitor Reports</div>
+      <button class="btn btn-g btn-sm" onclick="closeM('reportsModal')">✕</button>
+    </div>
+    <div class="mb">
+      <div class="rpt-pills" id="rptPills"></div>
+      <div id="rptContent"><div class="rpt-empty">Loading…</div></div>
     </div>
   </div>
 </div>
@@ -590,6 +625,121 @@ async function driveSearch(name, folderId) {
   const q = encodeURIComponent(`name='${name}' and '${folderId}' in parents and trashed=false`);
   const data = await driveGet(`${DRIVE_API}/files?q=${q}&fields=files(id,name)&pageSize=5`);
   return data.files?.[0] || null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REPORTS — recall archived monitor reports, rendered visually
+// ═══════════════════════════════════════════════════════════════
+async function openReports() {
+  document.getElementById('reportsModal').classList.remove('hidden');
+  const pills = document.getElementById('rptPills');
+  const content = document.getElementById('rptContent');
+  pills.innerHTML = '';
+  content.innerHTML = '<div class="rpt-empty">Loading reports…</div>';
+  if (!S.accessToken) {
+    content.innerHTML = '<div class="rpt-empty">Sign in to load reports from Drive.</div>';
+    return;
+  }
+  try {
+    const q = encodeURIComponent("name contains '_report.md' and trashed=false and mimeType != 'application/vnd.google-apps.folder'");
+    const data = await driveGet(`${DRIVE_API}/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc&pageSize=60`);
+    const files = (data.files || []).filter(f => /_report\.md$/i.test(f.name));
+    if (!files.length) {
+      content.innerHTML = '<div class="rpt-empty">No reports archived yet.<br>They appear here automatically after each monitor run (Sun &amp; Wed).</div>';
+      return;
+    }
+    S.reportFiles = files;
+    pills.innerHTML = files.map((f, i) =>
+      `<div class="rpt-pill${i === 0 ? ' active' : ''}" data-i="${i}" onclick="openReportFile(${i})">${escHtml(reportLabel(f))}</div>`
+    ).join('');
+    openReportFile(0);
+  } catch (e) {
+    content.innerHTML = `<div class="rpt-empty">Couldn't load reports: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function reportLabel(f) {
+  const m = (f.name || '').match(/(\d{4}-\d{2}-\d{2})/);
+  const d = m ? m[1] : (f.name || '');
+  const t = f.modifiedTime ? new Date(f.modifiedTime) : null;
+  return d + (t ? ' ' + t.toTimeString().slice(0, 5) : '');
+}
+
+async function openReportFile(i) {
+  const f = (S.reportFiles || [])[i];
+  if (!f) return;
+  document.querySelectorAll('.rpt-pill').forEach(p => p.classList.toggle('active', +p.dataset.i === i));
+  const content = document.getElementById('rptContent');
+  content.innerHTML = '<div class="rpt-empty">Loading…</div>';
+  try {
+    const r = await fetch(`${DRIVE_API}/files/${f.id}?alt=media`, { headers: { Authorization: 'Bearer ' + S.accessToken } });
+    if (!r.ok) throw new Error('Drive read ' + r.status);
+    const md = await r.text();
+    content.innerHTML = `<div class="rpt-meta">Archived ${escHtml(reportLabel(f))} · ${escHtml(f.name)}</div><div class="rpt">${mdToHtml(md)}</div>`;
+    const mb = content.closest('.mb'); if (mb) mb.scrollTop = 0;
+  } catch (e) {
+    content.innerHTML = `<div class="rpt-empty">Couldn't open report: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+function mdInline(s) {
+  return escHtml(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+}
+
+// Lightweight markdown → styled HTML tailored to the monitor report
+function mdToHtml(md) {
+  const lines = (md || '').replace(/\r/g, '').split('\n');
+  let html = '', i = 0, inUl = false;
+  const closeUl = () => { if (inUl) { html += '</ul>'; inUl = false; } };
+  while (i < lines.length) {
+    const raw = lines[i];
+    if (/^\s*\|/.test(raw)) {                       // markdown table block
+      closeUl();
+      const tbl = [];
+      while (i < lines.length && /^\s*\|/.test(lines[i])) { tbl.push(lines[i]); i++; }
+      html += renderTable(tbl);
+      continue;
+    }
+    const t = raw.trim();
+    if (!t) { closeUl(); i++; continue; }
+    if (t.startsWith('## ')) { closeUl(); html += `<h2>${mdInline(t.slice(3))}</h2>`; i++; continue; }
+    if (t.startsWith('# ')) { closeUl(); html += `<h1>${mdInline(t.slice(2))}</h1>`; i++; continue; }
+    if (/^([-*]|\d+\.)\s+/.test(t)) {               // bullet OR numbered list
+      if (!inUl) { html += '<ul>'; inUl = true; }
+      html += `<li>${mdInline(t.replace(/^([-*]|\d+\.)\s+/, ''))}</li>`; i++; continue;
+    }
+    closeUl();
+    html += `<p>${mdInline(t)}</p>`; i++;
+  }
+  closeUl();
+  return html || '<div class="rpt-empty">Empty report.</div>';
+}
+
+function renderTable(rows) {
+  const cells = r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+  const header = cells(rows[0]);
+  const body = rows.slice(2).filter(r => r.trim());   // row[1] is the |---| separator
+  const scoreIdx = header.findIndex(h => /^score$/i.test(h));
+  const deltaIdx = header.findIndex(h => /(Δ|delta)/i.test(h));
+  let h = '<table><thead><tr>' + header.map(c => `<th>${mdInline(c)}</th>`).join('') + '</tr></thead><tbody>';
+  for (const r of body) {
+    const cs = cells(r);
+    h += '<tr>' + cs.map((c, idx) => {
+      let cls = '';
+      if (idx === scoreIdx) {
+        const n = parseInt(c, 10);
+        cls = ' class="sc' + (isNaN(n) ? '' : ' ' + scoreColor(n)) + '"';
+      } else if (idx === deltaIdx) {
+        if (/-\s*[1-9]/.test(c) || /↘|↓/.test(c)) cls = ' class="dn"';
+        else if (/\+\s*[1-9]/.test(c) || /↗|↑/.test(c)) cls = ' class="up"';
+      }
+      return `<td${cls}>${mdInline(c)}</td>`;
+    }).join('') + '</tr>';
+  }
+  return h + '</tbody></table>';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1324,6 +1474,7 @@ function showSetup() {
   document.getElementById('signInWrap').classList.add('hidden');
   document.getElementById('dashboard').classList.add('hidden');
   document.getElementById('btnSync').classList.add('hidden');
+  document.getElementById('btnReports').classList.add('hidden');
   document.getElementById('btnAddStock').classList.add('hidden');
   document.getElementById('btnSignOut').classList.add('hidden');
 }
@@ -1334,6 +1485,7 @@ function showSignIn() {
   document.getElementById('signInWrap').style.display = 'flex';
   document.getElementById('dashboard').classList.add('hidden');
   document.getElementById('btnSync').classList.add('hidden');
+  document.getElementById('btnReports').classList.add('hidden');
   document.getElementById('btnAddStock').classList.add('hidden');
   document.getElementById('btnSignOut').classList.add('hidden');
 }
@@ -1343,6 +1495,7 @@ function showDashboard() {
   document.getElementById('signInWrap').classList.add('hidden');
   document.getElementById('dashboard').classList.remove('hidden');
   document.getElementById('btnSync').classList.remove('hidden');
+  document.getElementById('btnReports').classList.remove('hidden');
   document.getElementById('btnAddStock').classList.remove('hidden');
   document.getElementById('btnSignOut').classList.remove('hidden');
 }
