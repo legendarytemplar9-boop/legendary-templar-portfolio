@@ -390,6 +390,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
     <div class="mt">
       <div><div class="mt-t" id="detailTitle">—</div><div class="mt-sub" id="detailSub">—</div></div>
       <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-p btn-sm" id="btnDeepDive" data-ticker="" onclick="runDeepDive(this.dataset.ticker)">🔬 Deep Dive</button>
         <button class="btn btn-s btn-sm" id="btnEditFromDetail" data-ticker="" onclick="openEditFromDetail(this.dataset.ticker)">✏️ Edit</button>
         <button class="btn btn-g btn-sm" onclick="closeM('detailModal')">✕</button>
       </div>
@@ -436,6 +437,11 @@ const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
 const SCOPES = 'https://www.googleapis.com/auth/drive';
 const LS_KEY = 'lt_portfolio_v1';
+
+// Manual on-demand deep-dive (calls Claude directly from the browser).
+const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
+const DEEPDIVE_MODEL = 'claude-opus-4-8';
+const DEEPDIVE_KEY_LS = 'lt_anthropic_key'; // device-local only, never synced to Drive
 
 // Embedded fallback data
 const FALLBACK = {
@@ -1092,6 +1098,7 @@ function openDetail(ticker) {
   document.getElementById('detailTitle').textContent = `${ticker} · ${stock.thesis_score}/100`;
   document.getElementById('detailSub').textContent = stock.company + (stock.sector ? ' · ' + stock.sector : '');
   document.getElementById('btnEditFromDetail').dataset.ticker = ticker;
+  document.getElementById('btnDeepDive').dataset.ticker = ticker;
 
   let html = `
     <div class="score-hero">
@@ -1328,6 +1335,206 @@ async function saveEdit() {
   } else {
     toast('💾 อัพเดทแล้ว (offline)');
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DEEP DIVE — manual, on-demand AI research for ONE stock (no routine wait)
+// Calls Claude directly from the browser with web search. API key is stored
+// in localStorage on this device only and never written to Drive.
+// ═══════════════════════════════════════════════════════════════
+function getDeepDiveKey() { return (localStorage.getItem(DEEPDIVE_KEY_LS) || '').trim(); }
+function setDeepDiveKey(k) {
+  if (k) localStorage.setItem(DEEPDIVE_KEY_LS, k.trim());
+  else localStorage.removeItem(DEEPDIVE_KEY_LS);
+}
+function promptForDeepDiveKey() {
+  const k = prompt('วาง Anthropic API key (ขึ้นต้น sk-ant-...)\n\nเก็บไว้ในเครื่องนี้เท่านั้น — ไม่ถูกส่งขึ้น Drive\nรับ key ได้ที่ console.anthropic.com');
+  if (k && k.trim()) { setDeepDiveKey(k); return getDeepDiveKey(); }
+  return '';
+}
+
+function buildDeepDivePrompt(stock) {
+  const breakers = (stock.thesis_breakers || []).map(b => '- ' + b).join('\n') || '-';
+  const cats = (stock.catalysts || []).map(c => `- ${c.event} (${c.expected_period || 'TBD'}, ${c.status || 'pending'})`).join('\n') || '-';
+  return [
+    `หุ้น: ${stock.ticker} — ${stock.company || ''}${stock.sector ? ' · ' + stock.sector : ''}`,
+    `คะแนน thesis ปัจจุบัน: ${stock.thesis_score} ${stock.thesis_status || ''} (รีวิวล่าสุด ${stock.last_review_date || 'ไม่ทราบ'})`,
+    `Thesis: ${stock.thesis || '(ไม่ได้ระบุ)'}`,
+    `Thesis breakers:\n${breakers}`,
+    `Catalysts:\n${cats}`,
+    '',
+    'ช่วยทำ deep dive ของหุ้นตัวนี้ "วันนี้" โดยค้นข่าว/งบ/guidance/มุมมองนักวิเคราะห์ล่าสุด แล้วเสนอคะแนน thesis ใหม่พร้อมเหตุผล'
+  ].join('\n');
+}
+
+async function callDeepDive(key, system, userText, onStatus) {
+  const body = {
+    model: DEEPDIVE_MODEL,
+    max_tokens: 8000,
+    thinking: { type: 'adaptive' },
+    system,
+    tools: [{ type: 'web_search_20260209', name: 'web_search' }],
+    messages: [{ role: 'user', content: userText }]
+  };
+  const texts = [];
+  // Server-side web-search loop may pause (stop_reason "pause_turn") — resume up to a few times.
+  for (let i = 0; i < 6; i++) {
+    const r = await fetch(ANTHROPIC_API, {
+      method: 'POST',
+      headers: {
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) {
+      const t = await r.text().catch(() => '');
+      const err = new Error('API ' + r.status + (t ? ': ' + t.slice(0, 300) : ''));
+      err.status = r.status;
+      throw err;
+    }
+    const data = await r.json();
+    (data.content || []).forEach(b => { if (b.type === 'text' && b.text) texts.push(b.text); });
+    if (data.stop_reason === 'pause_turn') {
+      if (onStatus) onStatus('กำลังค้นข้อมูลเพิ่ม…');
+      body.messages.push({ role: 'assistant', content: data.content });
+      continue;
+    }
+    break;
+  }
+  return texts.join('\n').trim();
+}
+
+function parseDeepDiveVerdict(md) {
+  const m = md.match(/```json\s*([\s\S]*?)```/i);
+  if (!m) return { report: md, verdict: null };
+  let verdict = null;
+  try {
+    const v = JSON.parse(m[1]);
+    if (typeof v.score === 'number') verdict = {
+      score: Math.max(0, Math.min(100, Math.round(v.score))),
+      status: v.status || scoreEmoji(v.score),
+      reason: (v.reason || '').toString().slice(0, 160)
+    };
+  } catch (e) {}
+  return { report: md.replace(m[0], '').trim(), verdict };
+}
+
+function ensureDeepDiveSection() {
+  const body = document.getElementById('detailBody');
+  let sec = document.getElementById('deepDiveSection');
+  if (!sec) {
+    sec = document.createElement('div');
+    sec.id = 'deepDiveSection';
+    sec.style.cssText = 'margin:0 0 16px;padding:12px;border:1px solid rgba(0,229,204,.35);border-radius:10px;background:var(--c1d)';
+    body.insertBefore(sec, body.firstChild);
+  }
+  return sec;
+}
+
+async function runDeepDive(ticker) {
+  const stock = S.registry?.stocks?.find(s => s.ticker === ticker);
+  if (!stock) return;
+  let key = getDeepDiveKey();
+  if (!key) { key = promptForDeepDiveKey(); if (!key) return; }
+
+  const sec = ensureDeepDiveSection();
+  const setStatus = (msg) => {
+    sec.innerHTML = `<div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--tx2)">
+      <div class="spin" style="width:18px;height:18px;border-width:2px"></div><span>${escHtml(msg)}</span></div>`;
+  };
+  setStatus('🔬 กำลัง research ' + ticker + ' จากเว็บ… (~20–40 วินาที)');
+
+  const today = new Date().toISOString().split('T')[0];
+  const system = [
+    `You are a sharp, skeptical equity research analyst for a Thai SET retail investor's thesis tracker ("Legendary Templar"). Today is ${today}.`,
+    'Do a focused, UP-TO-DATE deep dive on ONE stock using web search. Prioritise the most recent news, earnings, guidance and analyst views (look back ~3–6 months). Be evidence-based; cite concrete numbers and name sources.',
+    'Write the report in Thai, concise and scannable, using this markdown structure:',
+    '## สรุป  (3–4 bullet)',
+    '## ข่าว/ปัจจัยล่าสุด',
+    '## งบ/ตัวเลขสำคัญ',
+    '## ความเสี่ยง / thesis breakers',
+    '## มุมมองคะแนน',
+    'Then END your answer with a fenced ```json code block of EXACTLY this shape (no extra keys):',
+    '{"score": <int 0-100>, "status": "🟢|🟡|🟠|🔴", "reason": "<one-line Thai, <=120 chars>"}',
+    'Score guide: 75+ = แข็งแกร่ง/ดี 🟢, 60–74 = ติดตาม 🟡, 45–59 = เฝ้าระวัง 🟠, <45 = thesis เสีย 🔴.'
+  ].join('\n');
+
+  try {
+    const md = await callDeepDive(key, system, buildDeepDivePrompt(stock), setStatus);
+    if (!md) { sec.innerHTML = '<div style="font-size:13px;color:var(--red)">ไม่ได้รับผลลัพธ์ — ลองใหม่อีกครั้ง</div>'; return; }
+    renderDeepDiveResult(ticker, md);
+  } catch (e) {
+    if (e.status === 401) { setDeepDiveKey(''); }
+    sec.innerHTML = '';
+    const msg = document.createElement('div');
+    msg.style.cssText = 'font-size:13px;color:var(--red);line-height:1.5';
+    msg.textContent = (e.status === 401 ? '🔑 API key ไม่ถูกต้อง — ลบออกแล้ว ลองกด Deep Dive ใหม่' : '❌ ' + e.message);
+    sec.appendChild(msg);
+    const retry = document.createElement('button');
+    retry.className = 'btn btn-s btn-sm'; retry.textContent = '↻ ลองใหม่'; retry.style.marginTop = '8px';
+    retry.onclick = () => runDeepDive(ticker);
+    sec.appendChild(retry);
+  }
+}
+
+function renderDeepDiveResult(ticker, md) {
+  const { report, verdict } = parseDeepDiveVerdict(md);
+  const sec = ensureDeepDiveSection();
+  sec.innerHTML = '';
+
+  const head = document.createElement('div');
+  head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px';
+  head.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--c1)">🔬 Deep Dive · ${escHtml(new Date().toLocaleString('th-TH'))}</div>`;
+  sec.appendChild(head);
+
+  if (verdict) {
+    const vbar = document.createElement('div');
+    vbar.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px';
+    vbar.innerHTML = `<span style="font-size:12px;color:var(--tx2)">คะแนนที่เสนอ</span>
+      <span class="score-trend chip" style="border-radius:6px;font-weight:800">${verdict.status} ${verdict.score}</span>
+      <span style="font-size:12px;color:var(--tx2);flex:1;min-width:140px">${escHtml(verdict.reason)}</span>`;
+    const apply = document.createElement('button');
+    apply.className = 'btn btn-p btn-sm'; apply.textContent = '📥 ใช้คะแนนนี้';
+    apply.onclick = () => applyDeepDiveScore(ticker, verdict);
+    vbar.appendChild(apply);
+    sec.appendChild(vbar);
+  }
+
+  const rep = document.createElement('div');
+  rep.className = 'rpt';
+  rep.innerHTML = mdToHtml(report);
+  sec.appendChild(rep);
+
+  const foot = document.createElement('div');
+  foot.style.cssText = 'display:flex;gap:8px;margin-top:10px;flex-wrap:wrap';
+  const copy = document.createElement('button');
+  copy.className = 'btn btn-g btn-sm'; copy.textContent = '📋 คัดลอกรายงาน';
+  copy.onclick = () => { navigator.clipboard?.writeText(md); toast('คัดลอกแล้ว'); };
+  const rerun = document.createElement('button');
+  rerun.className = 'btn btn-g btn-sm'; rerun.textContent = '↻ รันใหม่';
+  rerun.onclick = () => runDeepDive(ticker);
+  const chKey = document.createElement('button');
+  chKey.className = 'btn btn-g btn-sm'; chKey.textContent = '🔑 เปลี่ยน key';
+  chKey.onclick = () => { setDeepDiveKey(''); promptForDeepDiveKey(); };
+  foot.appendChild(copy); foot.appendChild(rerun); foot.appendChild(chKey);
+  sec.appendChild(foot);
+}
+
+// Open the Edit modal pre-filled with the deep-dive's suggested score so the
+// user reviews before saving (Save writes registry + KB history to Drive).
+function applyDeepDiveScore(ticker, verdict) {
+  openEditFromDetail(ticker);
+  setTimeout(() => {
+    const sl = document.getElementById('editScoreSlider');
+    if (sl) { sl.value = verdict.score; updateScorePreview(verdict.score); }
+    const st = document.getElementById('editStatus');
+    if (st && verdict.status) st.value = verdict.status;
+    const rs = document.getElementById('editReason');
+    if (rs) rs.value = (verdict.reason || 'deep dive').slice(0, 120);
+  }, 220);
 }
 
 // ═══════════════════════════════════════════════════════════════
