@@ -1319,8 +1319,11 @@ async function saveEdit() {
 
   closeM('editModal');
   renderDashboard();
+  await persistRegistryKB();
+}
 
-  // Save to Drive
+// Shared Drive-save tail: writes registry + knowledge base (or notes offline).
+async function persistRegistryKB() {
   if (!S.offline && S.accessToken) {
     await saveRegistry();
     // Also save KB
@@ -1353,6 +1356,11 @@ function buildDeepDivePrompt(stock) {
     '## งบ/ตัวเลขสำคัญ',
     '## ความเสี่ยง / thesis breakers',
     '## มุมมองคะแนน — เสนอคะแนน thesis ใหม่ 0–100 (75+ ดี🟢, 60–74 ติดตาม🟡, 45–59 เฝ้าระวัง🟠, <45 เสีย🔴) พร้อมเหตุผลสั้น 1 บรรทัด',
+    '',
+    'สำคัญ: ปิดท้ายคำตอบด้วยบล็อก JSON บรรทัดเดียว (เอาไว้ copy กลับเข้าแอป) รูปแบบนี้เป๊ะๆ:',
+    '```json',
+    '{"score": <ตัวเลข 0-100>, "status": "🟢|🟡|🟠|🔴", "notes": "สรุปมุมมอง+เหตุผลสั้น 1 บรรทัด"}',
+    '```',
     '',
     '— ข้อมูลใน portfolio ของฉันตอนนี้ —',
     `คะแนน thesis ปัจจุบัน: ${stock.thesis_score} ${stock.thesis_status || ''} (รีวิวล่าสุด ${stock.last_review_date || 'ไม่ทราบ'})`,
@@ -1417,6 +1425,88 @@ function runDeepDive(ticker) {
   edit.onclick = () => openEditFromDetail(ticker);
   foot.appendChild(copy); foot.appendChild(open); foot.appendChild(edit);
   sec.appendChild(foot);
+
+  // ── Paste-back importer: drop the JSON block from Claude and apply in one tap ──
+  const impLabel = document.createElement('div');
+  impLabel.style.cssText = 'font-size:12px;font-weight:700;color:var(--c1);margin:14px 0 4px';
+  impLabel.textContent = '⬇️ วางผลจาก Claude แล้วนำเข้าเลย';
+  sec.appendChild(impLabel);
+
+  const impNote = document.createElement('div');
+  impNote.style.cssText = 'font-size:11px;color:var(--tx3);line-height:1.5;margin-bottom:6px';
+  impNote.innerHTML = 'คัดลอกบล็อก JSON (หรือทั้งคำตอบ) จาก Claude มาวางที่นี่ → กด <b>นำเข้า</b> จะอัพเดทคะแนน/สถานะ/โน้ตให้อัตโนมัติ';
+  sec.appendChild(impNote);
+
+  const imp = document.createElement('textarea');
+  imp.id = 'ddResult';
+  imp.placeholder = '{"score": 78, "status": "🟢", "notes": "..."}';
+  imp.style.cssText = 'width:100%;min-height:70px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--tx1);font-size:12px;padding:8px;line-height:1.5;resize:vertical';
+  sec.appendChild(imp);
+
+  const impFoot = document.createElement('div');
+  impFoot.style.cssText = 'display:flex;gap:8px;margin-top:8px;flex-wrap:wrap';
+  const impBtn = document.createElement('button');
+  impBtn.className = 'btn btn-g btn-sm'; impBtn.textContent = '⬇️ นำเข้า';
+  impBtn.onclick = () => importDeepDive(ticker);
+  const pasteBtn = document.createElement('button');
+  pasteBtn.className = 'btn btn-s btn-sm'; pasteBtn.textContent = '📥 วางจากคลิปบอร์ด';
+  pasteBtn.onclick = async () => {
+    try { imp.value = await navigator.clipboard.readText(); toast('วางแล้ว'); }
+    catch (e) { toast('⚠️ อ่านคลิปบอร์ดไม่ได้ — วางเองด้วยมือ'); }
+  };
+  impFoot.appendChild(pasteBtn); impFoot.appendChild(impBtn);
+  sec.appendChild(impFoot);
+}
+
+function statusForScore(v) {
+  return v >= 75 ? '🟢' : v >= 60 ? '🟡' : v >= 45 ? '🟠' : '🔴';
+}
+
+// Pull the {score,status,notes} object out of Claude's reply — tolerant of a
+// ```json fence, a bare object, or the object embedded in surrounding prose.
+function parseDeepDiveResult(text) {
+  if (!text || !text.trim()) return null;
+  let candidate = null;
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) candidate = fence[1];
+  if (!candidate) {
+    const i = text.indexOf('{'), j = text.lastIndexOf('}');
+    if (i !== -1 && j > i) candidate = text.slice(i, j + 1);
+  }
+  if (!candidate) return null;
+  try { return JSON.parse(candidate); } catch (e) { return null; }
+}
+
+async function importDeepDive(ticker) {
+  const stock = S.registry?.stocks?.find(s => s.ticker === ticker);
+  if (!stock) return;
+  const raw = document.getElementById('ddResult')?.value || '';
+  const parsed = parseDeepDiveResult(raw);
+  if (!parsed) { toast('⚠️ หาบล็อก JSON ไม่เจอ — วางผลให้ครบ'); return; }
+  const score = parseInt(parsed.score, 10);
+  if (isNaN(score) || score < 0 || score > 100) { toast('⚠️ score ต้องเป็น 0–100'); return; }
+  const orig = stock.thesis_score;
+  const delta = score - orig;
+  const allowed = ['🟢','🟡','🟠','🔴'];
+  const status = allowed.includes(parsed.status) ? parsed.status : statusForScore(score);
+  const today = new Date().toISOString().split('T')[0];
+
+  stock.thesis_score = score;
+  stock.thesis_status = status;
+  if (parsed.notes != null && String(parsed.notes).trim()) stock.notes = String(parsed.notes).trim();
+  stock.last_review_date = today;
+
+  if (S.kb) {
+    if (!S.kb.score_history) S.kb.score_history = {};
+    if (!S.kb.score_history[ticker]) S.kb.score_history[ticker] = [];
+    S.kb.score_history[ticker].push({ date: today, score, delta, reason: 'deep dive (claude.ai)' });
+    S.kb.last_updated = today;
+  }
+
+  closeM('detailModal');
+  renderDashboard();
+  await persistRegistryKB();
+  toast(`✅ ${ticker}: ${orig} → ${score} ${status}`);
 }
 
 // ═══════════════════════════════════════════════════════════════
