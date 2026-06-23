@@ -227,6 +227,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
     <button class="btn btn-s btn-sm hidden" id="btnSync" onclick="syncData()">⟳ Sync</button>
     <button class="btn btn-s btn-sm hidden" id="btnReports" onclick="openReports()">📊 Reports</button>
     <button class="btn btn-p btn-sm hidden" id="btnAddStock" onclick="openAddStock()">+ Add Stock</button>
+    <button class="btn btn-s btn-sm hidden" id="btnImport" onclick="openImportJSON()">📥 Import JSON</button>
     <button class="btn btn-g btn-sm hidden" id="btnSignOut" onclick="signOut()">Sign Out</button>
   </div>
 </nav>
@@ -379,6 +380,41 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
     <div class="mf">
       <button class="btn btn-g" onclick="closeM('editDetailsModal')">Cancel</button>
       <button class="btn btn-p" onclick="saveStockDetails()">💾 Save to Drive</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT JSON MODAL -->
+<div class="mbg center hidden" id="importJsonModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">
+      <div class="mt-t">📥 Import Deep Dive JSON</div>
+      <button class="btn btn-g btn-sm" onclick="closeM('importJsonModal')">✕</button>
+    </div>
+    <div class="mb">
+      <div style="font-size:12px;color:var(--tx3);line-height:1.6;margin-bottom:10px">
+        วาง JSON จาก deep dive ได้เลย — รองรับ object เดี่ยว, แบบ <code>{"TICKER": {…}}</code>, array หรือทั้ง registry<br>
+        จะ <strong>merge</strong> เข้าหุ้นเดิมตาม ticker (ค่า <code>avg_cost</code> / <code>shares</code> ที่ไม่ได้ใส่จะถูกเก็บไว้),
+        รับทั้ง <code>score</code>/<code>thesis_score</code> และ <code>status</code>/<code>thesis_status</code>,
+        บันทึก score history แล้วเซฟขึ้น Drive อัตโนมัติ
+      </div>
+      <textarea id="importJsonText" rows="12" class="form-input" style="font-family:var(--mono);font-size:11px;white-space:pre" placeholder='{
+  "XIAOMI80": {
+    "thesis_score": 62,
+    "status": "🟡",
+    "previous_score": 81,
+    "thesis": "…",
+    "catalysts": ["…"],
+    "thesis_breakers": ["…"],
+    "notes": "…"
+  }
+}'></textarea>
+      <div id="importJsonMsg" style="font-size:12px;margin-top:8px;min-height:16px"></div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-g" onclick="closeM('importJsonModal')">Cancel</button>
+      <button class="btn btn-p" onclick="doImportJSON()">⬆️ Merge &amp; Save to Drive</button>
     </div>
   </div>
 </div>
@@ -1603,6 +1639,134 @@ async function saveStockDetails() {
   await saveRegistry();
 }
 
+// ═══════════════════════════════════════════════════════════════
+// IMPORT JSON (deep dive merge)
+// ═══════════════════════════════════════════════════════════════
+function openImportJSON() {
+  document.getElementById('importJsonText').value = '';
+  const m = document.getElementById('importJsonMsg');
+  m.textContent = ''; m.style.color = 'var(--tx3)';
+  document.getElementById('importJsonModal').classList.remove('hidden');
+}
+
+function normalizeCatalysts(c) {
+  if (!Array.isArray(c)) return undefined;
+  return c.map(item => {
+    if (typeof item === 'string') return { event: item, expected_period: '', status: 'pending' };
+    if (item && typeof item === 'object')
+      return { event: item.event || item.catalyst || '', expected_period: item.expected_period || item.expected || '', status: item.status || 'pending' };
+    return null;
+  }).filter(Boolean);
+}
+
+// Merge one deep-dive / stock object onto the registry (and KB) by ticker.
+function mergeStockObject(ticker, obj, today, changed) {
+  ticker = (ticker || obj.ticker || '').toString().trim().toUpperCase();
+  if (!ticker) return;
+  const def = v => v !== undefined && v !== null && v !== '';
+  let stock = S.registry.stocks.find(s => s.ticker === ticker);
+  const isNew = !stock;
+  if (isNew) { stock = { ticker, catalysts: [], thesis_breakers: [], avg_cost: 0, shares: 0 }; S.registry.stocks.push(stock); }
+
+  const score = (obj.thesis_score !== undefined ? obj.thesis_score : obj.score);
+
+  if (def(obj.company))            stock.company = obj.company;
+  if (def(obj.sector))             stock.sector = obj.sector;
+  if (def(obj.avg_cost))           stock.avg_cost = obj.avg_cost;     // absent → keep existing
+  if (def(obj.shares))             stock.shares = obj.shares;         // absent → keep existing
+  if (def(obj.thesis))             stock.thesis = obj.thesis;
+  if (def(obj.investment_horizon)) stock.investment_horizon = obj.investment_horizon;
+  if (obj.key_metrics && typeof obj.key_metrics === 'object') stock.key_metrics = obj.key_metrics;
+  if (Array.isArray(obj.thesis_breakers)) stock.thesis_breakers = obj.thesis_breakers;
+  const cats = normalizeCatalysts(obj.catalysts);
+  if (cats) stock.catalysts = cats;
+
+  // Notes (+ fold analyst targets / next earnings since the UI has no field for them)
+  let notes = def(obj.notes) ? obj.notes : (stock.notes || '');
+  const extra = [];
+  if (obj.analyst_targets && typeof obj.analyst_targets === 'object')
+    extra.push('เป้านักวิเคราะห์: ' + Object.entries(obj.analyst_targets).map(([k, v]) => `${k} ${v}`).join(', '));
+  if (def(obj.next_earnings)) extra.push('งบถัดไป: ' + obj.next_earnings);
+  if (extra.length) notes = (notes ? notes + ' | ' : '') + extra.join(' | ');
+  if (def(notes)) stock.notes = notes;
+
+  if (def(score)) {
+    stock.thesis_score = score;
+    stock.thesis_status = obj.thesis_status || obj.status || scoreEmoji(score);
+  } else if (def(obj.thesis_status) || def(obj.status)) {
+    stock.thesis_status = obj.thesis_status || obj.status;
+  }
+  stock.last_review_date = obj.last_review_date || today;
+  if (!Array.isArray(stock.catalysts)) stock.catalysts = [];
+  if (!Array.isArray(stock.thesis_breakers)) stock.thesis_breakers = [];
+
+  // KB score_history — only when a score is supplied
+  if (def(score)) {
+    if (!S.kb) S.kb = { score_history: {}, catalyst_log: {}, guidance_tracker: {}, evidence_clips: [] };
+    S.kb.score_history = S.kb.score_history || {};
+    const hist = S.kb.score_history[ticker] || (S.kb.score_history[ticker] = []);
+    const prev = (obj.previous_score !== undefined ? obj.previous_score
+                 : hist.length ? hist[hist.length - 1].score : score);
+    const delta = (obj.score_change !== undefined ? obj.score_change : score - prev);
+    const date = stock.last_review_date;
+    const reason = obj.reason || 'deep dive import';
+    const last = hist[hist.length - 1];
+    if (last && last.date === date) { last.score = score; last.delta = delta; last.reason = reason; }
+    else hist.push({ date, score, delta, reason });
+    S.kb.catalyst_log = S.kb.catalyst_log || {};
+    S.kb.guidance_tracker = S.kb.guidance_tracker || {};
+    if (!S.kb.catalyst_log[ticker]) S.kb.catalyst_log[ticker] = [];
+    if (!S.kb.guidance_tracker[ticker]) S.kb.guidance_tracker[ticker] = [];
+    S.kb.last_updated = today;
+  }
+
+  changed.push((isNew ? '+ ' : '↻ ') + ticker + (def(score) ? ' (' + score + ')' : ''));
+}
+
+async function doImportJSON() {
+  const msg = document.getElementById('importJsonMsg');
+  const raw = document.getElementById('importJsonText').value.trim();
+  const fail = t => { msg.style.color = 'var(--red)'; msg.textContent = t; };
+  if (!raw) { fail('⚠️ วาง JSON ก่อน'); return; }
+  let data;
+  try { data = JSON.parse(raw); }
+  catch (e) { fail('❌ JSON ไม่ถูกต้อง: ' + e.message); return; }
+
+  if (!S.registry) S.registry = FALLBACK.registry;
+  if (!Array.isArray(S.registry.stocks)) S.registry.stocks = [];
+  if (!S.kb) S.kb = FALLBACK.kb;
+
+  const today = new Date().toISOString().split('T')[0];
+  const changed = [];
+  try {
+    if (Array.isArray(data)) {
+      data.forEach(o => o && typeof o === 'object' && mergeStockObject(o.ticker, o, today, changed));
+    } else if (Array.isArray(data.stocks)) {
+      data.stocks.forEach(o => o && typeof o === 'object' && mergeStockObject(o.ticker, o, today, changed));
+      const inKb = data.kb || data.knowledge_base;
+      if (inKb && inKb.score_history) { S.kb.score_history = S.kb.score_history || {}; Object.assign(S.kb.score_history, inKb.score_history); }
+    } else if (data.ticker) {
+      mergeStockObject(data.ticker, data, today, changed);
+    } else {
+      Object.entries(data).forEach(([k, v]) => { if (v && typeof v === 'object') mergeStockObject(v.ticker || k, v, today, changed); });
+    }
+  } catch (e) { fail('❌ Merge error: ' + e.message); return; }
+
+  if (!changed.length) { fail('⚠️ ไม่พบหุ้นใน JSON (ต้องมี "ticker" หรือใช้ ticker เป็นคีย์)'); return; }
+
+  closeM('importJsonModal');
+  renderDashboard();
+  toast('✅ Import: ' + changed.join(', ') + ' — กำลังบันทึก…');
+
+  if (!S.offline && S.accessToken) {
+    await saveRegistry();
+    try { if (S.kbFileId) { await drivePatch(S.kbFileId, S.kb); toast('✅ บันทึก KB สำเร็จ'); } }
+    catch (e) { toast('⚠️ บันทึก KB ไม่สำเร็จ'); }
+  } else {
+    toast('💾 Import แล้ว (offline)');
+  }
+}
+
 function confirmDeleteStock(ticker) {
   if (!confirm(`ลบ ${ticker} ออกจาก portfolio?\n\nข้อมูลทั้งหมดของ ${ticker} จะถูกลบออก`)) return;
   deleteStock(ticker);
@@ -1676,6 +1840,7 @@ function showDashboard() {
   document.getElementById('btnSync').classList.remove('hidden');
   document.getElementById('btnReports').classList.remove('hidden');
   document.getElementById('btnAddStock').classList.remove('hidden');
+  document.getElementById('btnImport').classList.remove('hidden');
   document.getElementById('btnSignOut').classList.remove('hidden');
 }
 
