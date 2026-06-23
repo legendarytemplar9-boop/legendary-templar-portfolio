@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
 <title>Legendary Templar · Portfolio</title>
 <style>
 :root{
@@ -1730,7 +1732,12 @@ async function doImportJSON() {
   if (!raw) { fail('⚠️ วาง JSON ก่อน'); return; }
   let data;
   try { data = JSON.parse(raw); }
-  catch (e) { fail('❌ JSON ไม่ถูกต้อง: ' + e.message); return; }
+  catch (e1) {
+    // Forgiving: deep-dive output is often pasted as  "TICKER": {…}  (or several
+    // such pairs) without the wrapping braces — auto-wrap and retry.
+    try { data = JSON.parse('{' + raw.replace(/^[\s,]+|[\s,]+$/g, '') + '}'); }
+    catch (e2) { fail('❌ JSON ไม่ถูกต้อง: ' + e1.message); return; }
+  }
 
   if (!S.registry) S.registry = FALLBACK.registry;
   if (!Array.isArray(S.registry.stocks)) S.registry.stocks = [];
