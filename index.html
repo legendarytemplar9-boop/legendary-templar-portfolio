@@ -205,6 +205,25 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 .rpt td.up{color:var(--green);font-weight:700}.rpt td.dn{color:var(--red);font-weight:700}
 .rpt-empty{text-align:center;color:var(--tx3);padding:30px 14px;font-size:13px;line-height:1.6}
 .rpt-meta{font-size:11px;color:var(--tx3);margin-bottom:6px}
+/* ── Money Dashboard ── */
+.md-wrap{margin-bottom:20px}
+.md-hero{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;background:linear-gradient(135deg,var(--bg2),var(--bg3));border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-bottom:14px}
+.md-label{font-size:11px;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.md-value{font-size:34px;font-weight:900;letter-spacing:-1px;line-height:1}
+.md-pl{font-size:16px;font-weight:800;margin-top:6px}
+.md-sub{font-size:11px;color:var(--tx3);margin-top:8px;line-height:1.5}
+.md-charts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+@media(max-width:720px){.md-charts{grid-template-columns:1fr}.md-value{font-size:28px}}
+.md-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+.md-card-t{font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.md-canvas-wrap{position:relative;height:200px}
+.md-note{font-size:11px;color:var(--tx3);margin-top:8px;text-align:center;line-height:1.5}
+.md-rows{display:flex;flex-direction:column}
+.md-row{display:flex;justify-content:space-between;align-items:center;padding:9px 4px;border-bottom:1px solid var(--border)}
+.md-row:last-child{border-bottom:none}
+.md-row-l b{font-size:14px}
+.md-row-sub{color:var(--tx3);font-size:11px;margin-left:6px}
+.md-row-r{text-align:right;font-weight:800;font-size:14px}
 </style>
 </head>
 <body>
@@ -227,6 +246,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
   <div class="nav-right" id="navRight">
     <span class="sync-ts hidden" id="syncTs"></span>
     <button class="btn btn-s btn-sm hidden" id="btnSync" onclick="syncData()">⟳ Sync</button>
+    <button class="btn btn-p btn-sm hidden" id="btnPrices" onclick="updatePrices()">💰 ราคา</button>
     <button class="btn btn-s btn-sm hidden" id="btnReports" onclick="openReports()">📊 Reports</button>
     <button class="btn btn-p btn-sm hidden" id="btnAddStock" onclick="openAddStock()">+ Add Stock</button>
     <button class="btn btn-s btn-sm hidden" id="btnImport" onclick="openImportJSON()">📥 Import JSON</button>
@@ -282,6 +302,8 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 <div class="main hidden" id="dashboard">
   <!-- ALERTS -->
   <div class="alerts-wrap" id="alertsWrap"></div>
+  <!-- MONEY DASHBOARD (value / growth / allocation) -->
+  <div class="md-wrap" id="moneyDash"></div>
   <!-- GRID -->
   <div class="grid" id="stockGrid"></div>
   <!-- PORTFOLIO SUMMARY -->
@@ -356,6 +378,10 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
       <button class="btn btn-g btn-sm" onclick="closeM('editDetailsModal')">✕</button>
     </div>
     <div class="mb">
+      <div class="form-group">
+        <label class="form-label">Ticker Symbol (แก้ได้เผื่อพิมพ์ผิด)</label>
+        <input class="form-input mono" id="edTicker" placeholder="เช่น BDMS" style="text-transform:uppercase">
+      </div>
       <div class="form-group">
         <label class="form-label">Company Name</label>
         <input class="form-input" id="edCompany" placeholder="Company name">
@@ -1021,6 +1047,192 @@ function renderSparkline(ticker, canvasId) {
   });
 }
 
+// ═══════════════════════════════════════════════════════════════
+// LIVE PRICES + MONEY DASHBOARD
+// Prices come from Yahoo Finance (SET tickers use the .BK suffix).
+// Yahoo blocks browser CORS, so we route through public CORS proxies
+// with a fallback chain + retry. Last good price is cached in the
+// registry so the dashboard still works when every proxy is down.
+// ═══════════════════════════════════════════════════════════════
+const PRICE_PROXIES = [
+  u => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
+  u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u)
+];
+
+async function fetchYahooPrice(ticker) {
+  const sym = ticker.includes('.') ? ticker : ticker + '.BK';
+  const yurl = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
+  for (const wrap of PRICE_PROXIES) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await fetch(wrap(yurl));
+        if (!r.ok) continue;
+        const j = await r.json();
+        const p = j?.chart?.result?.[0]?.meta?.regularMarketPrice;
+        if (typeof p === 'number' && p > 0) return p;
+      } catch (e) { /* try next proxy/attempt */ }
+    }
+  }
+  return null;
+}
+
+async function updatePrices() {
+  if (!S.registry) return;
+  const held = S.registry.stocks.filter(s => s.avg_cost > 0 && s.shares > 0);
+  if (!held.length) { toast('ยังไม่มีหุ้นที่กรอกจำนวน/ต้นทุน'); return; }
+  showLoading('กำลังดึงราคาตลาด…');
+  let ok = 0; const fail = [];
+  for (const s of held) {
+    setLoadMsg('ดึงราคา ' + s.ticker + '…');
+    const p = await fetchYahooPrice(s.ticker);
+    if (p != null) { s.current_price = p; s.price_updated = new Date().toISOString(); ok++; }
+    else fail.push(s.ticker);
+  }
+  recordValueSnapshot();
+  hideLoading();
+  renderDashboard();
+  await persistRegistryKB();
+  if (fail.length) toast(`✅ อัพเดต ${ok} ตัว · ❌ ไม่ได้: ${fail.join(', ')} (ใช้ราคาเดิม)`);
+  else toast(`✅ อัพเดตราคา ${ok} ตัวสำเร็จ`);
+}
+
+function portfolioTotals() {
+  const held = (S.registry?.stocks || []).filter(s => s.avg_cost > 0 && s.shares > 0);
+  let cost = 0, value = 0, priced = 0;
+  held.forEach(s => {
+    const c = s.avg_cost * s.shares;
+    cost += c;
+    if (s.current_price > 0) { value += s.current_price * s.shares; priced++; }
+    else value += c; // no live price yet → fall back to cost
+  });
+  return { cost, value, pl: value - cost, plPct: cost ? (value - cost) / cost * 100 : 0, priced, held };
+}
+
+function recordValueSnapshot() {
+  if (!S.kb) return;
+  if (!Array.isArray(S.kb.value_history)) S.kb.value_history = [];
+  const t = portfolioTotals();
+  if (!t.priced) return; // nothing priced → don't pollute the time series
+  const today = new Date().toISOString().split('T')[0];
+  const entry = { date: today, value: Math.round(t.value), cost: Math.round(t.cost) };
+  const arr = S.kb.value_history;
+  const last = arr[arr.length - 1];
+  if (last && last.date === today) arr[arr.length - 1] = entry; // one point per day
+  else arr.push(entry);
+}
+
+function fmtBaht(n) { return '฿' + Math.round(n).toLocaleString(); }
+
+const ALLOC_COLORS = ['#00e5cc','#ffb800','#7c9eff','#51cf66','#ff6b6b','#c78bff','#ff9f43','#4dd0e1','#f06595','#a9e34b'];
+
+function renderMoneyDashboard() {
+  const el = document.getElementById('moneyDash');
+  if (!el || !S.registry) return;
+  const t = portfolioTotals();
+  if (!t.held.length) { el.innerHTML = '<div class="md-card" style="text-align:center;color:var(--tx3);font-size:13px">ยังไม่มีหุ้นที่กรอกจำนวน/ต้นทุน — เพิ่ม Shares + Avg Cost เพื่อดูมูลค่าพอร์ต</div>'; return; }
+  const anyPriced = t.held.some(s => s.current_price > 0);
+  const plColor = t.pl >= 0 ? 'var(--green)' : 'var(--red)';
+  const sign = t.pl >= 0 ? '+' : '−';
+  const lastUpd = t.held.map(s => s.price_updated).filter(Boolean).sort().pop();
+  const lastStr = lastUpd ? new Date(lastUpd).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }) : 'ยังไม่ได้ดึง';
+
+  el.innerHTML = `
+  <div class="md-hero">
+    <div>
+      <div class="md-label">มูลค่าพอร์ตรวม${anyPriced ? '' : ' (ยังไม่มีราคา · ใช้ต้นทุน)'}</div>
+      <div class="md-value">${fmtBaht(t.value)}</div>
+      <div class="md-pl" style="color:${plColor}">${sign}${fmtBaht(Math.abs(t.pl)).replace('฿','฿')} (${sign}${Math.abs(t.plPct).toFixed(2)}%)</div>
+      <div class="md-sub">ต้นทุนรวม ${fmtBaht(t.cost)} · ราคาล่าสุด ${lastStr}</div>
+    </div>
+    <button class="btn btn-p btn-sm" onclick="updatePrices()">💰 อัพเดตราคา</button>
+  </div>
+  <div class="md-charts">
+    <div class="md-card"><div class="md-card-t">📈 มูลค่าพอร์ตตามเวลา</div><div class="md-canvas-wrap"><canvas id="valueChart"></canvas></div><div class="md-note" id="valueChartNote"></div></div>
+    <div class="md-card"><div class="md-card-t">🍩 สัดส่วนพอร์ต (Allocation)</div><div class="md-canvas-wrap"><canvas id="allocChart"></canvas></div></div>
+  </div>
+  <div class="md-card"><div class="md-card-t">📊 กำไร/ขาดทุน รายตัว</div><div class="md-rows" id="plRows"></div></div>`;
+
+  const rows = t.held.slice().sort((a,b) => (b.current_price>0?b.current_price:b.avg_cost)*b.shares - (a.current_price>0?a.current_price:a.avg_cost)*a.shares).map(s => {
+    const c = s.avg_cost * s.shares;
+    const hasP = s.current_price > 0;
+    const v = hasP ? s.current_price * s.shares : c;
+    const pl = v - c, pct = c ? pl / c * 100 : 0;
+    const col = pl >= 0 ? 'var(--green)' : 'var(--red)';
+    const sg = pl >= 0 ? '+' : '−';
+    return `<div class="md-row">
+      <div class="md-row-l"><b>${s.ticker}</b><span class="md-row-sub">${s.shares.toLocaleString()} × ${hasP ? '฿'+s.current_price : 'ยังไม่มีราคา'}</span></div>
+      <div class="md-row-r">${fmtBaht(v)}<div style="color:${col};font-size:12px;font-weight:700">${sg}${Math.abs(pct).toFixed(2)}%</div></div>
+    </div>`;
+  }).join('');
+  const plRowsEl = document.getElementById('plRows');
+  if (plRowsEl) plRowsEl.innerHTML = rows;
+
+  renderValueChart();
+  renderAllocChart(t.held);
+}
+
+function renderValueChart() {
+  const canvas = document.getElementById('valueChart');
+  if (!canvas) return;
+  const hist = (S.kb?.value_history || []).slice(-90);
+  const note = document.getElementById('valueChartNote');
+  if (hist.length < 2) {
+    if (note) note.textContent = hist.length === 1
+      ? 'มี snapshot แล้ว 1 วัน — เส้นกราฟจะเริ่มขึ้นเมื่อกด "อัพเดตราคา" อีกวัน'
+      : 'ยังไม่มีข้อมูลย้อนหลัง — กด "💰 อัพเดตราคา" เพื่อเริ่มเก็บมูลค่าพอร์ตรายวัน';
+    if (canvas._chart) { canvas._chart.destroy(); canvas._chart = null; }
+    return;
+  }
+  if (note) note.textContent = '';
+  const labels = hist.map(h => h.date.slice(5));
+  const values = hist.map(h => h.value);
+  const costs = hist.map(h => h.cost);
+  ensureChartJs(() => {
+    if (canvas._chart) canvas._chart.destroy();
+    const up = values[values.length-1] >= costs[costs.length-1];
+    const line = up ? '#51cf66' : '#ff6b6b';
+    canvas._chart = new Chart(canvas, {
+      type: 'line',
+      data: { labels, datasets: [
+        { label: 'มูลค่า', data: values, borderColor: line, borderWidth: 2, fill: true, backgroundColor: line + '22', pointRadius: 0, tension: 0.25 },
+        { label: 'ต้นทุน', data: costs, borderColor: '#8899aa', borderWidth: 1, borderDash: [4,4], fill: false, pointRadius: 0 }
+      ]},
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { legend: { display: true, labels: { color: '#8899aa', boxWidth: 12, font: { size: 11 } } }, tooltip: { enabled: true } },
+        scales: {
+          x: { ticks: { color: '#445566', font: { size: 10 }, maxTicksLimit: 6 }, grid: { display: false } },
+          y: { ticks: { color: '#445566', font: { size: 10 }, callback: v => '฿' + (v/1000).toFixed(0) + 'k' }, grid: { color: '#1a1f24' } }
+        }
+      }
+    });
+  });
+}
+
+function renderAllocChart(held) {
+  const canvas = document.getElementById('allocChart');
+  if (!canvas) return;
+  const parts = held.map(s => ({ ticker: s.ticker, v: (s.current_price > 0 ? s.current_price : s.avg_cost) * s.shares }))
+    .filter(p => p.v > 0).sort((a,b) => b.v - a.v);
+  if (!parts.length) return;
+  const labels = parts.map(p => p.ticker);
+  const data = parts.map(p => p.v);
+  ensureChartJs(() => {
+    if (canvas._chart) canvas._chart.destroy();
+    canvas._chart = new Chart(canvas, {
+      type: 'doughnut',
+      data: { labels, datasets: [{ data, backgroundColor: labels.map((_, i) => ALLOC_COLORS[i % ALLOC_COLORS.length]), borderColor: '#0e1012', borderWidth: 2 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false, cutout: '60%',
+        plugins: {
+          legend: { position: 'right', labels: { color: '#8899aa', boxWidth: 12, padding: 8, font: { size: 11 } } },
+          tooltip: { callbacks: { label: c => { const tot = data.reduce((a,b)=>a+b,0); return `${c.label}: ฿${Math.round(c.raw).toLocaleString()} (${(c.raw/tot*100).toFixed(1)}%)`; } } }
+        }
+      }
+    });
+  });
+}
+
 function renderDashboard() {
   if (!S.registry) return;
   showDashboard();
@@ -1080,6 +1292,9 @@ function renderDashboard() {
   setTimeout(() => {
     S.registry.stocks.forEach(s => renderSparkline(s.ticker, 'spark_' + s.ticker));
   }, 50);
+
+  // Money dashboard (value / P&L / allocation / value-over-time)
+  try { renderMoneyDashboard(); } catch(e) { console.warn('renderMoneyDashboard:', e); }
 
   // Portfolio summary
   renderSummary();
@@ -1616,6 +1831,7 @@ function openEditDetails(ticker) {
   if (!stock) return;
   S.editData = { ...(S.editData || {}), detailTicker: ticker };
   document.getElementById('editDetailsTitle').textContent = `Edit Details — ${ticker}`;
+  document.getElementById('edTicker').value = ticker;
   document.getElementById('edCompany').value = stock.company || '';
   document.getElementById('edSector').value = stock.sector === '—' ? '' : (stock.sector || '');
   document.getElementById('edAvgCost').value = stock.avg_cost || '';
@@ -1629,6 +1845,22 @@ async function saveStockDetails() {
   if (!ticker) return;
   const stock = S.registry?.stocks?.find(s => s.ticker === ticker);
   if (!stock) return;
+
+  // ── Ticker rename (in case it was typed wrong) ──
+  const newTicker = (document.getElementById('edTicker').value || '').trim().toUpperCase();
+  let tickerChanged = false;
+  if (newTicker && newTicker !== ticker) {
+    if (S.registry.stocks.some(s => s.ticker === newTicker)) {
+      toast(`⚠️ มี ${newTicker} อยู่แล้ว — เปลี่ยนชื่อไม่ได้`);
+      return;
+    }
+    renameTicker(ticker, newTicker);
+    stock.ticker = newTicker;
+    S.editData.detailTicker = newTicker;
+    tickerChanged = true;
+  }
+  const cur = tickerChanged ? newTicker : ticker;
+
   stock.company = document.getElementById('edCompany').value.trim() || stock.company;
   stock.sector = document.getElementById('edSector').value.trim() || '—';
   stock.avg_cost = parseFloat(document.getElementById('edAvgCost').value) || 0;
@@ -1637,8 +1869,25 @@ async function saveStockDetails() {
   stock.thesis_breakers = breakersRaw ? breakersRaw.split('\n').map(l => l.trim()).filter(Boolean) : [];
   closeM('editDetailsModal');
   renderDashboard();
-  toast(`✅ อัพเดท ${ticker} แล้ว — กำลังบันทึก…`);
-  await saveRegistry();
+  toast(`✅ อัพเดท ${cur} แล้ว — กำลังบันทึก…`);
+  // KB keys move with the ticker, so persist both files when the ticker changed.
+  if (tickerChanged) await persistRegistryKB();
+  else await saveRegistry();
+}
+
+// Rename a ticker key everywhere it is used as an index (KB maps + evidence).
+function renameTicker(oldT, newT) {
+  const kb = S.kb;
+  if (!kb) return;
+  ['score_history', 'catalyst_log', 'guidance_tracker'].forEach(map => {
+    if (kb[map] && Object.prototype.hasOwnProperty.call(kb[map], oldT)) {
+      kb[map][newT] = kb[map][oldT];
+      delete kb[map][oldT];
+    }
+  });
+  if (Array.isArray(kb.evidence_clips)) {
+    kb.evidence_clips.forEach(e => { if (e && e.ticker === oldT) e.ticker = newT; });
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1845,6 +2094,7 @@ function showDashboard() {
   document.getElementById('signInWrap').classList.add('hidden');
   document.getElementById('dashboard').classList.remove('hidden');
   document.getElementById('btnSync').classList.remove('hidden');
+  document.getElementById('btnPrices').classList.remove('hidden');
   document.getElementById('btnReports').classList.remove('hidden');
   document.getElementById('btnAddStock').classList.remove('hidden');
   document.getElementById('btnImport').classList.remove('hidden');
