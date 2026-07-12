@@ -455,7 +455,8 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
       <div><div class="mt-t" id="detailTitle">—</div><div class="mt-sub" id="detailSub">—</div></div>
       <div style="display:flex;gap:6px;align-items:center">
         <button class="btn btn-p btn-sm" id="btnDeepDive" data-ticker="" onclick="runDeepDive(this.dataset.ticker)">🔬 Deep Dive</button>
-        <button class="btn btn-s btn-sm" id="btnEditFromDetail" data-ticker="" onclick="openEditFromDetail(this.dataset.ticker)">✏️ Edit</button>
+        <button class="btn btn-s btn-sm" id="btnEditFromDetail" data-ticker="" onclick="openEditFromDetail(this.dataset.ticker)">★ คะแนน</button>
+        <button class="btn btn-s btn-sm" id="btnDetailsFromDetail" data-ticker="" onclick="closeM('detailModal');openEditDetails(this.dataset.ticker)">✏️ แก้ชื่อ/หุ้น/ทุน</button>
         <button class="btn btn-g btn-sm" onclick="closeM('detailModal')">✕</button>
       </div>
     </div>
@@ -1258,7 +1259,7 @@ function renderDashboard() {
     const hasPos = stock.avg_cost > 0;
     return `
     <div class="card" data-ticker="${ticker}" onclick="openDetail(this.dataset.ticker)">
-      <div class="card-actions" style="position:absolute;top:10px;right:10px;display:flex;gap:4px;opacity:0;transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0">
+      <div class="card-actions" style="position:absolute;top:10px;right:10px;display:flex;gap:4px;opacity:.55;transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=.55">
         <button onclick="event.stopPropagation();openEdit('${ticker}')" style="padding:3px 8px;font-size:11px;background:transparent;color:var(--tx3);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:color .15s,border-color .15s" onmouseenter="this.style.color='var(--yellow)';this.style.borderColor='var(--yellow)'" onmouseleave="this.style.color='var(--tx3)';this.style.borderColor='var(--border)'" title="Edit Score">★</button>
         <button onclick="event.stopPropagation();openEditDetails('${ticker}')" style="padding:3px 8px;font-size:11px;background:transparent;color:var(--tx3);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:color .15s,border-color .15s" onmouseenter="this.style.color='var(--c1)';this.style.borderColor='var(--c1)'" onmouseleave="this.style.color='var(--tx3)';this.style.borderColor='var(--border)'" title="Edit Details">✏️</button>
         <button onclick="event.stopPropagation();confirmDeleteStock('${ticker}')" style="padding:3px 8px;font-size:11px;background:transparent;color:var(--tx3);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:color .15s,border-color .15s" onmouseenter="this.style.color='var(--red)';this.style.borderColor='var(--red)'" onmouseleave="this.style.color='var(--tx3)';this.style.borderColor='var(--border)'" title="Delete">✕</button>
@@ -1349,6 +1350,7 @@ function openDetail(ticker) {
   document.getElementById('detailTitle').textContent = `${ticker} · ${stock.thesis_score}/100`;
   document.getElementById('detailSub').textContent = stock.company + (stock.sector ? ' · ' + stock.sector : '');
   document.getElementById('btnEditFromDetail').dataset.ticker = ticker;
+  document.getElementById('btnDetailsFromDetail').dataset.ticker = ticker;
   document.getElementById('btnDeepDive').dataset.ticker = ticker;
 
   let html = `
