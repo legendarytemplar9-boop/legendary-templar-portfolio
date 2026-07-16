@@ -215,6 +215,23 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 .md-charts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
 @media(max-width:720px){.md-charts{grid-template-columns:1fr}.md-value{font-size:28px}}
 .md-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+/* ── View tabs (หุ้น / Net Worth) ── */
+.vtabs{display:flex;gap:8px;max-width:1200px;margin:14px auto 0;padding:0 16px}
+.vtabs.hidden{display:none}
+.vtab{flex:0 0 auto;padding:9px 18px;border-radius:22px;font-size:14px;font-weight:700;background:var(--bg2);border:1px solid var(--border);color:var(--tx2);cursor:pointer;transition:.15s;font-family:var(--fn)}
+.vtab.active{background:var(--c1d);border-color:rgba(0,229,204,.4);color:var(--c1)}
+/* ── Net worth rows ── */
+.nw-group-t{font-size:12px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px;display:flex;align-items:center;gap:8px}
+.nw-row{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:8px}
+.nw-row-l{min-width:0}
+.nw-row-nm{font-weight:700;font-size:14px}
+.nw-row-sub{font-size:11.5px;color:var(--tx3);margin-top:2px}
+.nw-row-r{text-align:right;font-weight:700;font-size:14px;flex:0 0 auto}
+.nw-row-acts{display:flex;gap:4px;flex:0 0 auto}
+.nw-act{padding:3px 8px;font-size:11px;background:transparent;color:var(--tx3);border:1px solid var(--border);border-radius:6px;cursor:pointer}
+.nw-act:hover{color:var(--c1);border-color:var(--c1)}
+.nw-act.del:hover{color:var(--red);border-color:var(--red)}
+.nw-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:14px;font-size:12px;font-weight:600;background:var(--bg3);border:1px solid var(--border);color:var(--tx2)}
 .md-card-t{font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
 .md-canvas-wrap{position:relative;height:200px}
 .md-note{font-size:11px;color:var(--tx3);margin-top:8px;text-align:center;line-height:1.5}
@@ -276,7 +293,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
     </div>
     <div class="form-group">
       <label class="form-label">Drive Folder ID (ที่เก็บ JSON files)</label>
-      <input class="form-input mono" id="inputFolderId" placeholder="11Yd13tCrYF8haYmnEU8OQEoRG63k8Ln9D" type="text" value="11Yd13tCrYF8haYmnEU8OQEoRG63k8Ln9D">
+      <input class="form-input mono" id="inputFolderId" placeholder="1Yd13tCrYF8haYmnEU8OQEoRG63k8Ln9D" type="text" value="1Yd13tCrYF8haYmnEU8OQEoRG63k8Ln9D">
     </div>
     <button class="btn btn-p" style="width:100%;justify-content:center" onclick="saveSetup()">บันทึกและเชื่อมต่อ →</button>
     <div style="text-align:center;margin-top:12px">
@@ -298,6 +315,12 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
   </div>
 </div>
 
+<!-- VIEW TABS (หุ้น / Net Worth) -->
+<div class="vtabs hidden" id="viewTabs">
+  <button class="vtab active" id="vtabStocks" data-view="stocks" onclick="switchView(this.dataset.view)">⚔️ หุ้น</button>
+  <button class="vtab" id="vtabNw" data-view="networth" onclick="switchView(this.dataset.view)">🏦 Net Worth</button>
+</div>
+
 <!-- DASHBOARD -->
 <div class="main hidden" id="dashboard">
   <!-- ALERTS -->
@@ -310,6 +333,106 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
   <div style="margin-top:24px;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r)">
     <div style="font-size:12px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Portfolio Summary</div>
     <div id="portfolioSummary"></div>
+  </div>
+</div>
+
+<!-- NET WORTH VIEW -->
+<div class="main hidden" id="nwView">
+  <div class="md-wrap" id="nwDash"></div>
+  <div id="nwLists"></div>
+</div>
+
+<!-- ASSET MODAL (add/edit asset or liability) -->
+<div class="mbg center hidden" id="assetModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">
+      <div class="mt-t" id="assetModalTitle">+ เพิ่มทรัพย์สิน</div>
+      <button class="btn btn-g btn-sm" onclick="closeM('assetModal')">✕</button>
+    </div>
+    <div class="mb">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">ประเภท *</label>
+          <select class="form-input" id="asKind">
+            <option value="asset">💎 ทรัพย์สิน (Asset)</option>
+            <option value="liability">💳 หนี้สิน (Liability)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">หมวดหมู่</label>
+          <input class="form-input" id="asCat" list="asCatList" placeholder="เช่น Crypto, Cash, Gold">
+          <datalist id="asCatList"></datalist>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">ชื่อ *</label>
+        <input class="form-input" id="asName" placeholder="เช่น Bitcoin, เงินฝาก SCB, บ้าน, สินเชื่อรถ">
+      </div>
+      <div class="form-group">
+        <label class="form-label">วิธีคิดราคา</label>
+        <select class="form-input" id="asPriceMode" onchange="onAsPriceModeChange()">
+          <option value="manual">✍️ กรอกมูลค่าเอง</option>
+          <option value="auto">🔄 Crypto — ดึงราคาอัตโนมัติ (Binance)</option>
+        </select>
+      </div>
+      <div class="form-group hidden" id="asTickerGroup">
+        <label class="form-label">Crypto Ticker</label>
+        <div style="display:flex;gap:8px">
+          <input class="form-input mono" id="asTicker" placeholder="เช่น BTC, ETH, SOL" style="text-transform:uppercase">
+          <button class="btn btn-s btn-sm" style="flex:0 0 auto" onclick="testFetchCrypto()">ทดสอบ</button>
+        </div>
+        <div style="font-size:11px;color:var(--tx3);margin-top:4px" id="asTickerHint">ราคาจะเป็น USD และแปลงเป็นบาทอัตโนมัติ</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">จำนวน (Qty)</label>
+          <input class="form-input" id="asQty" type="number" min="0" step="any" placeholder="1" value="1">
+        </div>
+        <div class="form-group" id="asPriceGroup">
+          <label class="form-label">ราคา/หน่วย</label>
+          <input class="form-input" id="asPrice" type="number" min="0" step="any" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">สกุลเงิน</label>
+          <select class="form-input" id="asCur">
+            <option value="THB">฿ THB</option>
+            <option value="USD">$ USD</option>
+          </select>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--tx3);margin:-6px 0 12px" id="asValuePreview"></div>
+      <div class="form-group">
+        <label class="form-label">Note</label>
+        <input class="form-input" id="asNote" placeholder="(ไม่บังคับ)">
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-p" style="flex:1;justify-content:center" onclick="saveAsset()">💾 บันทึก</button>
+        <button class="btn btn-g" onclick="closeM('assetModal')">ยกเลิก</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FX SETTING MODAL -->
+<div class="mbg center hidden" id="fxModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">
+      <div class="mt-t">💱 อัตราแลกเปลี่ยน USD→THB</div>
+      <button class="btn btn-g btn-sm" onclick="closeM('fxModal')">✕</button>
+    </div>
+    <div class="mb">
+      <div style="font-size:13px;color:var(--tx2);margin-bottom:12px">
+        ปกติแอพดึงอัตโนมัติ (ตอนนี้ <b id="fxModalRate">—</b>)<br>
+        ถ้าต้องการล็อคค่าเอง ใส่ตัวเลขด้านล่าง (ใส่ 0 = กลับไปใช้อัตโนมัติ)
+      </div>
+      <div class="form-group">
+        <label class="form-label">USD→THB Override</label>
+        <input class="form-input" id="fxOverrideInput" type="number" min="0" step="0.01" placeholder="0 = อัตโนมัติ">
+      </div>
+      <button class="btn btn-p" style="width:100%;justify-content:center" onclick="saveFxOverride()">💾 บันทึก</button>
+    </div>
   </div>
 </div>
 
@@ -538,12 +661,20 @@ let S = {
   tokenExpiry: 0,
   registry: null,
   kb: null,
+  assetReg: null,
   regFileId: null,
   kbFileId: null,
+  assetFileId: null,
   lastSync: null,
   offline: false,
+  view: 'stocks',
   editData: {}
 };
+
+const ASSET_FILE = 'asset_registry.json';
+function emptyAssetReg() {
+  return { version: 1, last_updated: '', assets: [], snapshots: [], settings: { usdthb_override: 0, last_fx: null } };
+}
 
 const GOOD_FOLDER_ID = '1Yd13tCrYF8haYmnEU8OQEoRG63k8Ln9D';
 const BAD_FOLDER_ID  = '11Yd13tCrYF8haYmnEU8OQEoRG63k8Ln9D'; // legacy typo (double "1")
@@ -556,10 +687,12 @@ function saveLS() {
       regFileId: S.regFileId,
       kbFileId: S.kbFileId,
       lastSync: S.lastSync,
+      assetFileId: S.assetFileId,
       // Recovery buffer ONLY — Google Drive is the source of truth. This lets a
       // failed Drive save be retried/recovered instead of lost on reload.
       registry: S.registry,
-      kb: S.kb
+      kb: S.kb,
+      assetReg: S.assetReg
     }));
   } catch(e) {}
 }
@@ -571,9 +704,11 @@ function loadLS() {
     if (d.folderId) S.folderId = d.folderId;
     if (d.regFileId) S.regFileId = d.regFileId;
     if (d.kbFileId) S.kbFileId = d.kbFileId;
+    if (d.assetFileId) S.assetFileId = d.assetFileId;
     if (d.lastSync) S.lastSync = d.lastSync;
     if (d.registry) S.cachedRegistry = d.registry; // recovery buffer
     if (d.kb) S.cachedKb = d.kb;
+    if (d.assetReg) S.cachedAssetReg = d.assetReg;
     // Migrate a previously-cached typo'd folder ID so old sessions self-heal.
     if (S.folderId === BAD_FOLDER_ID) {
       S.folderId = GOOD_FOLDER_ID;
@@ -644,7 +779,7 @@ function signOut() {
   if (S.accessToken) {
     try { google.accounts.oauth2.revoke(S.accessToken, () => {}); } catch(e) {}
   }
-  S.accessToken = null; S.registry = null; S.kb = null;
+  S.accessToken = null; S.registry = null; S.kb = null; S.assetReg = null;
   showSignIn();
   toast('Signed out');
 }
@@ -844,6 +979,21 @@ async function syncData() {
     } else {
       S.kb = S.cachedKb || FALLBACK.kb;
     }
+    // Find + read asset registry (Net Worth) — created on first save if missing
+    if (!S.assetFileId) {
+      setLoadMsg('ค้นหา ' + ASSET_FILE + '…');
+      const af = await driveSearch(ASSET_FILE, S.folderId);
+      if (af) S.assetFileId = af.id;
+    }
+    if (S.assetFileId) {
+      setLoadMsg('อ่าน ' + ASSET_FILE + '…');
+      S.assetReg = await driveGetMedia(S.assetFileId);
+      if (!Array.isArray(S.assetReg.assets)) S.assetReg.assets = [];
+      if (!Array.isArray(S.assetReg.snapshots)) S.assetReg.snapshots = [];
+      if (!S.assetReg.settings) S.assetReg.settings = { usdthb_override: 0, last_fx: null };
+    } else {
+      S.assetReg = S.cachedAssetReg || emptyAssetReg();
+    }
     S.lastSync = new Date().toLocaleTimeString('th-TH');
     saveLS();
     renderDashboard();
@@ -854,6 +1004,7 @@ async function syncData() {
     // Prefer the local recovery buffer over the generic baseline.
     if (!S.registry) S.registry = S.cachedRegistry || FALLBACK.registry;
     if (!S.kb) S.kb = S.cachedKb || FALLBACK.kb;
+    if (!S.assetReg) S.assetReg = S.cachedAssetReg || emptyAssetReg();
     renderDashboard();
     toast('⚠️ Drive error — ใช้ข้อมูลสำรองในเครื่อง');
   }
@@ -870,7 +1021,7 @@ function ensureTokenAsync() {
 }
 
 // Persistent, hard-to-miss banner when a Drive save fails (unlike a toast).
-function saveErrorBanner(msg) {
+function saveErrorBanner(msg, retryFn) {
   let b = document.getElementById('saveErrBanner');
   if (!b) {
     b = document.createElement('div');
@@ -883,7 +1034,7 @@ function saveErrorBanner(msg) {
   const retry = document.createElement('button');
   retry.textContent = 'ลองบันทึกอีกครั้ง';
   retry.style.cssText = 'background:#fff;color:#7f1d1d;border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer';
-  retry.onclick = () => { b.remove(); saveRegistry(); };
+  retry.onclick = () => { b.remove(); (retryFn || saveRegistry)(); };
   b.appendChild(retry);
   const x = document.createElement('button');
   x.textContent = '✕';
@@ -919,6 +1070,503 @@ async function saveRegistry() {
     hideLoading();
     saveErrorBanner('บันทึกไป Drive ไม่สำเร็จ: ' + err.message + ' — ข้อมูลถูกเก็บในเครื่องชั่วคราว ยังไม่หาย');
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NET WORTH (merged Asset Tracker)
+// Assets + liabilities live in asset_registry.json (same Drive
+// folder). Stocks value flows in automatically from the registry —
+// no double entry. Crypto prices via Binance, FX via open.er-api
+// with Yahoo THB=X fallback and a manual override.
+// ═══════════════════════════════════════════════════════════════
+async function saveAssetReg() {
+  saveLS(); // recovery buffer first — nothing is lost if Drive fails
+  if (S.offline) { toast('💾 บันทึก offline (เก็บในเครื่อง)'); return; }
+  try {
+    await ensureTokenAsync();
+    if (!S.accessToken) throw new Error('ยังไม่ได้เข้าสู่ระบบ / token หมดอายุ');
+    S.assetReg.last_updated = new Date().toISOString().split('T')[0];
+    if (!S.assetFileId) {
+      const af = await driveSearch(ASSET_FILE, S.folderId);
+      if (af) S.assetFileId = af.id;
+    }
+    if (S.assetFileId) {
+      await drivePatch(S.assetFileId, S.assetReg);
+    } else {
+      S.assetFileId = await driveCreate(ASSET_FILE, S.folderId, S.assetReg);
+    }
+    saveLS();
+    clearSaveErrorBanner();
+  } catch(err) {
+    saveErrorBanner('บันทึก Net Worth ไป Drive ไม่สำเร็จ: ' + err.message + ' — ข้อมูลถูกเก็บในเครื่องชั่วคราว ยังไม่หาย', saveAssetReg);
+  }
+}
+
+// ── FX (USD→THB) ──
+let fxRate = { usdthb: 35, source: 'default', updated: null };
+
+function fxInit() {
+  const st = S.assetReg?.settings || {};
+  if (+st.usdthb_override > 0) fxRate = { usdthb: +st.usdthb_override, source: 'manual', updated: null };
+  else if (st.last_fx && +st.last_fx.usdthb > 0) fxRate = st.last_fx;
+}
+
+async function fetchFxRate() {
+  const ov = +(S.assetReg?.settings?.usdthb_override || 0);
+  if (ov > 0) { fxRate = { usdthb: ov, source: 'manual', updated: new Date().toISOString() }; return; }
+  try {
+    const r = await fetch('https://open.er-api.com/v6/latest/USD');
+    if (r.ok) {
+      const j = await r.json();
+      const v = j?.rates?.THB;
+      if (v > 0) {
+        fxRate = { usdthb: v, source: 'ER-API', updated: new Date().toISOString() };
+        if (S.assetReg?.settings) S.assetReg.settings.last_fx = fxRate;
+        return;
+      }
+    }
+  } catch(e) {}
+  const p = await fetchYahooPrice('THB=X');
+  if (p > 0) {
+    fxRate = { usdthb: p, source: 'Yahoo', updated: new Date().toISOString() };
+    if (S.assetReg?.settings) S.assetReg.settings.last_fx = fxRate;
+  }
+}
+
+// ── Crypto prices (USD) via Binance, proxy fallback ──
+async function fetchCryptoPrice(ticker) {
+  const t = (ticker || '').toUpperCase().trim();
+  if (!t) return null;
+  if (t === 'USDT') return 1;
+  const sym = t.endsWith('USDT') ? t : t + 'USDT';
+  const url = `https://api.binance.com/api/v3/ticker/price?symbol=${sym}`;
+  const attempts = [u => u, ...PRICE_PROXIES];
+  for (const wrap of attempts) {
+    try {
+      const r = await fetch(wrap(url));
+      if (!r.ok) continue;
+      const j = await r.json();
+      const p = parseFloat(j.price);
+      if (p > 0) return p;
+    } catch(e) {}
+  }
+  return null;
+}
+
+// ── Value math ──
+function assetValueTHB(a) {
+  const qty = parseFloat(a.qty) || 0;
+  const price = a.price_mode === 'auto' ? (parseFloat(a.fetched_price) || 0) : (parseFloat(a.manual_price) || 0);
+  let v = qty * price;
+  if (a.price_cur === 'USD') v *= fxRate.usdthb;
+  return v;
+}
+
+function netWorthTotals() {
+  const st = portfolioTotals();
+  let assets = 0, liab = 0;
+  (S.assetReg?.assets || []).forEach(a => {
+    const v = assetValueTHB(a);
+    if (a.kind === 'liability') liab += v; else assets += v;
+  });
+  return { stocksValue: st.value, stocksHeld: st.held.length, assets, liab, net: st.value + assets - liab };
+}
+
+function recordNwSnapshot() {
+  if (!S.assetReg) return;
+  const t = netWorthTotals();
+  if (t.net === 0 && !S.assetReg.assets.length && !t.stocksHeld) return;
+  const today = new Date().toISOString().split('T')[0];
+  const entry = {
+    date: today,
+    net: Math.round(t.net),
+    stocks: Math.round(t.stocksValue),
+    assets: Math.round(t.assets),
+    liabilities: Math.round(t.liab),
+    usdthb: +fxRate.usdthb.toFixed(2)
+  };
+  const arr = S.assetReg.snapshots;
+  const last = arr[arr.length - 1];
+  if (last && last.date === today) arr[arr.length - 1] = entry; // one point per day
+  else arr.push(entry);
+}
+
+// ── Update everything: FX + stock prices + crypto → snapshot → save ──
+async function nwUpdateAll() {
+  if (!S.assetReg) return;
+  showLoading('กำลังอัพเดต Net Worth…');
+  try {
+    setLoadMsg('ดึงอัตราแลกเปลี่ยน USD/THB…');
+    await fetchFxRate();
+    const held = (S.registry?.stocks || []).filter(s => s.avg_cost > 0 && s.shares > 0);
+    let stockFail = [];
+    for (const s of held) {
+      setLoadMsg('ราคาหุ้น ' + s.ticker + '…');
+      const p = await fetchYahooPrice(s.ticker);
+      if (p != null) { s.current_price = p; s.price_updated = new Date().toISOString(); }
+      else stockFail.push(s.ticker);
+    }
+    if (held.length) recordValueSnapshot();
+    const autos = (S.assetReg.assets || []).filter(a => a.price_mode === 'auto' && a.ticker);
+    let cryptoFail = [];
+    for (const a of autos) {
+      setLoadMsg('ราคา ' + a.ticker + '…');
+      const p = await fetchCryptoPrice(a.ticker);
+      if (p != null) { a.fetched_price = p; a.price_updated = new Date().toISOString(); }
+      else cryptoFail.push(a.ticker);
+    }
+    recordNwSnapshot();
+    hideLoading();
+    renderNetWorth();
+    if (held.length) await persistRegistryKB();
+    await saveAssetReg();
+    const fails = [...stockFail, ...cryptoFail];
+    toast(fails.length ? `✅ อัพเดตแล้ว · ❌ ไม่ได้: ${fails.join(', ')}` : '✅ อัพเดต Net Worth สำเร็จ');
+  } catch(e) {
+    hideLoading();
+    toast('⚠️ ' + e.message);
+  }
+}
+
+// ── View switching ──
+function applyView() {
+  const onStocks = S.view !== 'networth';
+  document.getElementById('dashboard').classList.toggle('hidden', !onStocks);
+  document.getElementById('nwView').classList.toggle('hidden', onStocks);
+  document.getElementById('vtabStocks').classList.toggle('active', onStocks);
+  document.getElementById('vtabNw').classList.toggle('active', !onStocks);
+  document.getElementById('btnAddStock').classList.toggle('hidden', !onStocks);
+  document.getElementById('btnPrices').classList.toggle('hidden', !onStocks);
+}
+
+function switchView(v) {
+  S.view = v;
+  applyView();
+  if (v === 'networth') { try { renderNetWorth(); } catch(e) { console.warn('renderNetWorth:', e); } }
+}
+
+// ── Render ──
+const NW_CAT_SUGGESTIONS = ['Crypto', 'Cash / เงินฝาก', 'Gold / ทอง', 'Fund / กองทุน', 'Property / อสังหาฯ', 'Insurance / ประกัน', 'Loan / สินเชื่อ', 'อื่นๆ'];
+
+function fmtQty(n) {
+  const v = parseFloat(n) || 0;
+  return v.toLocaleString(undefined, { maximumFractionDigits: 8 });
+}
+
+function renderNetWorth() {
+  const dash = document.getElementById('nwDash');
+  const lists = document.getElementById('nwLists');
+  if (!dash || !S.assetReg) return;
+  fxInit();
+  const t = netWorthTotals();
+  const items = S.assetReg.assets || [];
+  const fxStr = fxRate.usdthb.toFixed(2);
+  const fxSub = fxRate.source === 'manual' ? 'ล็อคเอง' : fxRate.updated ? new Date(fxRate.updated).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : 'ค่าเริ่มต้น';
+
+  dash.innerHTML = `
+  <div class="md-hero">
+    <div>
+      <div class="md-label">🏦 ความมั่งคั่งสุทธิ (Net Worth)</div>
+      <div class="md-value">${fmtBaht(t.net)}</div>
+      <div class="md-sub" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        <span class="nw-chip">⚔️ หุ้น ${fmtBaht(t.stocksValue)}</span>
+        <span class="nw-chip">💎 ทรัพย์สินอื่น ${fmtBaht(t.assets)}</span>
+        <span class="nw-chip" style="color:var(--red)">💳 หนี้สิน −${fmtBaht(t.liab)}</span>
+        <span class="nw-chip" style="cursor:pointer" onclick="openFxModal()" title="ตั้งค่าอัตราแลกเปลี่ยน">💱 $1 = ฿${fxStr} <span style="color:var(--tx3)">(${fxSub})</span></span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn btn-p btn-sm" onclick="nwUpdateAll()">💰 อัพเดตทั้งหมด</button>
+      <button class="btn btn-s btn-sm" onclick="openAddAsset()">+ เพิ่มรายการ</button>
+    </div>
+  </div>
+  <div class="md-charts">
+    <div class="md-card"><div class="md-card-t">📈 Net Worth ตามเวลา</div><div class="md-canvas-wrap"><canvas id="nwValueChart"></canvas></div><div class="md-note" id="nwChartNote"></div></div>
+    <div class="md-card"><div class="md-card-t">🍩 สัดส่วนทรัพย์สิน</div><div class="md-canvas-wrap"><canvas id="nwAllocChart"></canvas></div></div>
+  </div>`;
+
+  // ── Lists: stocks row + assets grouped by category + liabilities ──
+  let html = '';
+  html += `<div class="nw-group-t">⚔️ หุ้น (จากแท็บ หุ้น)</div>
+  <div class="nw-row" style="cursor:pointer" data-view="stocks" onclick="switchView(this.dataset.view)">
+    <div class="nw-row-l"><div class="nw-row-nm">พอร์ตหุ้น SET/DR</div><div class="nw-row-sub">${t.stocksHeld} ตัว · มูลค่าดึงจาก stock registry อัตโนมัติ · แตะเพื่อไปแท็บหุ้น</div></div>
+    <div class="nw-row-r">${fmtBaht(t.stocksValue)}</div>
+  </div>`;
+
+  const assets = items.filter(a => a.kind !== 'liability');
+  const liabs = items.filter(a => a.kind === 'liability');
+  const cats = [...new Set(assets.map(a => a.cat || 'อื่นๆ'))];
+
+  cats.forEach(cat => {
+    const group = assets.filter(a => (a.cat || 'อื่นๆ') === cat);
+    const sum = group.reduce((acc, a) => acc + assetValueTHB(a), 0);
+    html += `<div class="nw-group-t">💎 ${escHtml(cat)} <span style="color:var(--tx3);text-transform:none">· ${fmtBaht(sum)}</span></div>`;
+    html += group.map(a => nwRowHtml(a)).join('');
+  });
+
+  if (liabs.length) {
+    const sum = liabs.reduce((acc, a) => acc + assetValueTHB(a), 0);
+    html += `<div class="nw-group-t" style="color:var(--red)">💳 หนี้สิน <span style="color:var(--tx3);text-transform:none">· −${fmtBaht(sum)}</span></div>`;
+    html += liabs.map(a => nwRowHtml(a)).join('');
+  }
+
+  if (!items.length) {
+    html += `<div class="md-card" style="text-align:center;color:var(--tx3);font-size:13px;margin-top:16px">
+      ยังไม่มีทรัพย์สิน/หนี้สินอื่น — กด <b>+ เพิ่มรายการ</b> เพื่อเริ่มบันทึก<br>
+      <span style="font-size:12px">เช่น Crypto (ดึงราคาอัตโนมัติ), เงินฝาก, ทอง, กองทุน, สินเชื่อ</span>
+    </div>`;
+  }
+  lists.innerHTML = html;
+
+  renderNwValueChart();
+  renderNwAllocChart(t, assets);
+}
+
+function nwRowHtml(a) {
+  const v = assetValueTHB(a);
+  const isL = a.kind === 'liability';
+  const price = a.price_mode === 'auto' ? (parseFloat(a.fetched_price) || 0) : (parseFloat(a.manual_price) || 0);
+  const curSym = a.price_cur === 'USD' ? '$' : '฿';
+  const auto = a.price_mode === 'auto' ? ` · 🔄 ${escHtml((a.ticker || '').toUpperCase())}` : '';
+  const noteStr = a.note ? ` · ${escHtml(a.note)}` : '';
+  return `<div class="nw-row">
+    <div class="nw-row-l">
+      <div class="nw-row-nm">${escHtml(a.name)}</div>
+      <div class="nw-row-sub">${fmtQty(a.qty)} × ${curSym}${price.toLocaleString(undefined, { maximumFractionDigits: 6 })}${auto}${noteStr}</div>
+    </div>
+    <div class="nw-row-r" style="${isL ? 'color:var(--red)' : ''}">${isL ? '−' : ''}${fmtBaht(v)}</div>
+    <div class="nw-row-acts">
+      <button class="nw-act" data-id="${a.id}" onclick="openEditAssetById(this)" title="แก้ไข">✏️</button>
+      <button class="nw-act del" data-id="${a.id}" onclick="deleteAssetById(this)" title="ลบ">✕</button>
+    </div>
+  </div>`;
+}
+
+function renderNwValueChart() {
+  const canvas = document.getElementById('nwValueChart');
+  if (!canvas) return;
+  const hist = (S.assetReg?.snapshots || []).slice(-120);
+  const note = document.getElementById('nwChartNote');
+  if (hist.length < 2) {
+    if (note) note.textContent = hist.length === 1
+      ? 'มี snapshot แล้ว 1 วัน — เส้นกราฟจะเริ่มขึ้นเมื่อกด "อัพเดตทั้งหมด" อีกวัน'
+      : 'ยังไม่มีข้อมูลย้อนหลัง — กด "💰 อัพเดตทั้งหมด" เพื่อเริ่มเก็บ Net Worth รายวัน';
+    if (canvas._chart) { canvas._chart.destroy(); canvas._chart = null; }
+    return;
+  }
+  if (note) note.textContent = '';
+  const labels = hist.map(h => h.date.slice(5));
+  ensureChartJs(() => {
+    if (canvas._chart) canvas._chart.destroy();
+    canvas._chart = new Chart(canvas, {
+      type: 'line',
+      data: { labels, datasets: [
+        { label: 'Net Worth', data: hist.map(h => h.net), borderColor: '#00e5cc', borderWidth: 2, fill: true, backgroundColor: '#00e5cc22', pointRadius: 0, tension: 0.25 },
+        { label: 'หุ้น', data: hist.map(h => h.stocks), borderColor: '#7c9eff', borderWidth: 1, borderDash: [4,4], fill: false, pointRadius: 0 }
+      ]},
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { legend: { display: true, labels: { color: '#8899aa', boxWidth: 12, font: { size: 11 } } } },
+        scales: {
+          x: { ticks: { color: '#445566', font: { size: 10 }, maxTicksLimit: 6 }, grid: { display: false } },
+          y: { ticks: { color: '#445566', font: { size: 10 }, callback: v => '฿' + (v/1000).toFixed(0) + 'k' }, grid: { color: '#1a1f24' } }
+        }
+      }
+    });
+  });
+}
+
+function renderNwAllocChart(t, assets) {
+  const canvas = document.getElementById('nwAllocChart');
+  if (!canvas) return;
+  const parts = [];
+  if (t.stocksValue > 0) parts.push({ label: '⚔️ หุ้น', v: t.stocksValue });
+  const byCat = {};
+  assets.forEach(a => {
+    const c = a.cat || 'อื่นๆ';
+    byCat[c] = (byCat[c] || 0) + assetValueTHB(a);
+  });
+  Object.entries(byCat).forEach(([c, v]) => { if (v > 0) parts.push({ label: c, v }); });
+  parts.sort((a, b) => b.v - a.v);
+  if (!parts.length) { if (canvas._chart) { canvas._chart.destroy(); canvas._chart = null; } return; }
+  const data = parts.map(p => p.v);
+  ensureChartJs(() => {
+    if (canvas._chart) canvas._chart.destroy();
+    canvas._chart = new Chart(canvas, {
+      type: 'doughnut',
+      data: { labels: parts.map(p => p.label), datasets: [{ data, backgroundColor: parts.map((_, i) => ALLOC_COLORS[i % ALLOC_COLORS.length]), borderColor: '#0e1012', borderWidth: 2 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false, cutout: '60%',
+        plugins: {
+          legend: { position: 'right', labels: { color: '#8899aa', boxWidth: 12, padding: 8, font: { size: 11 } } },
+          tooltip: { callbacks: { label: c => { const tot = data.reduce((a,b)=>a+b,0); return `${c.label}: ฿${Math.round(c.raw).toLocaleString()} (${(c.raw/tot*100).toFixed(1)}%)`; } } }
+        }
+      }
+    });
+  });
+}
+
+// ── Asset CRUD ──
+let editAssetId = null;
+
+function nwGenId() { return 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+function fillCatDatalist() {
+  const dl = document.getElementById('asCatList');
+  if (!dl) return;
+  const existing = [...new Set((S.assetReg?.assets || []).map(a => a.cat).filter(Boolean))];
+  const all = [...new Set([...existing, ...NW_CAT_SUGGESTIONS])];
+  dl.innerHTML = all.map(c => `<option value="${escHtml(c)}"></option>`).join('');
+}
+
+function openAddAsset() {
+  editAssetId = null;
+  document.getElementById('assetModalTitle').textContent = '+ เพิ่มทรัพย์สิน / หนี้สิน';
+  document.getElementById('asKind').value = 'asset';
+  document.getElementById('asCat').value = '';
+  document.getElementById('asName').value = '';
+  document.getElementById('asPriceMode').value = 'manual';
+  document.getElementById('asTicker').value = '';
+  document.getElementById('asQty').value = '1';
+  document.getElementById('asPrice').value = '';
+  document.getElementById('asCur').value = 'THB';
+  document.getElementById('asNote').value = '';
+  fillCatDatalist();
+  onAsPriceModeChange();
+  updateAsPreview();
+  document.getElementById('assetModal').classList.remove('hidden');
+}
+
+function openEditAssetById(el) { openEditAsset(el.dataset.id); }
+
+function openEditAsset(id) {
+  const a = (S.assetReg?.assets || []).find(x => String(x.id) === String(id));
+  if (!a) return;
+  editAssetId = a.id;
+  document.getElementById('assetModalTitle').textContent = '✏️ แก้ไข ' + a.name;
+  document.getElementById('asKind').value = a.kind === 'liability' ? 'liability' : 'asset';
+  document.getElementById('asCat').value = a.cat || '';
+  document.getElementById('asName').value = a.name || '';
+  document.getElementById('asPriceMode').value = a.price_mode === 'auto' ? 'auto' : 'manual';
+  document.getElementById('asTicker').value = a.ticker || '';
+  document.getElementById('asQty').value = a.qty != null ? a.qty : '1';
+  document.getElementById('asPrice').value = a.manual_price != null ? a.manual_price : '';
+  document.getElementById('asCur').value = a.price_cur === 'USD' ? 'USD' : 'THB';
+  document.getElementById('asNote').value = a.note || '';
+  fillCatDatalist();
+  onAsPriceModeChange();
+  updateAsPreview();
+  document.getElementById('assetModal').classList.remove('hidden');
+}
+
+function onAsPriceModeChange() {
+  const auto = document.getElementById('asPriceMode').value === 'auto';
+  document.getElementById('asTickerGroup').classList.toggle('hidden', !auto);
+  document.getElementById('asPriceGroup').style.opacity = auto ? '.35' : '1';
+  document.getElementById('asPriceGroup').querySelector('input').disabled = auto;
+  updateAsPreview();
+}
+
+function updateAsPreview() {
+  const el = document.getElementById('asValuePreview');
+  if (!el) return;
+  const auto = document.getElementById('asPriceMode').value === 'auto';
+  const qty = parseFloat(document.getElementById('asQty').value) || 0;
+  const cur = auto ? 'USD' : document.getElementById('asCur').value;
+  let price;
+  if (auto) {
+    const a = editAssetId ? (S.assetReg?.assets || []).find(x => x.id === editAssetId) : null;
+    price = parseFloat(a?.fetched_price) || parseFloat(document.getElementById('asTicker').dataset.testPrice) || 0;
+  } else {
+    price = parseFloat(document.getElementById('asPrice').value) || 0;
+  }
+  let v = qty * price;
+  if (cur === 'USD') v *= fxRate.usdthb;
+  el.textContent = v > 0 ? `≈ มูลค่า ${fmtBaht(v)}` + (cur === 'USD' ? ` (ที่ $1 = ฿${fxRate.usdthb.toFixed(2)})` : '') : '';
+}
+
+async function testFetchCrypto() {
+  const tk = document.getElementById('asTicker').value.trim().toUpperCase();
+  const hint = document.getElementById('asTickerHint');
+  if (!tk) { hint.textContent = '⚠️ ใส่ ticker ก่อน เช่น BTC'; return; }
+  hint.textContent = '⏳ กำลังดึงราคา ' + tk + '…';
+  const p = await fetchCryptoPrice(tk);
+  if (p != null) {
+    document.getElementById('asTicker').dataset.testPrice = p;
+    hint.textContent = `✅ ${tk} = $${p.toLocaleString(undefined, { maximumFractionDigits: 6 })}`;
+    updateAsPreview();
+  } else {
+    hint.textContent = `❌ ไม่พบราคา ${tk} — ตรวจสอบ ticker (ต้องมีคู่ ${tk}USDT บน Binance)`;
+  }
+}
+
+async function saveAsset() {
+  const name = document.getElementById('asName').value.trim();
+  if (!name) { toast('⚠️ ใส่ชื่อรายการก่อน'); return; }
+  const mode = document.getElementById('asPriceMode').value;
+  const ticker = document.getElementById('asTicker').value.trim().toUpperCase();
+  if (mode === 'auto' && !ticker) { toast('⚠️ ใส่ crypto ticker ก่อน เช่น BTC'); return; }
+  const qty = parseFloat(document.getElementById('asQty').value) || 0;
+  if (qty <= 0) { toast('⚠️ ใส่จำนวนมากกว่า 0'); return; }
+  const kind = document.getElementById('asKind').value === 'liability' ? 'liability' : 'asset';
+  const obj = {
+    kind,
+    cat: document.getElementById('asCat').value.trim() || (kind === 'liability' ? 'หนี้สิน' : 'อื่นๆ'),
+    name,
+    ticker: mode === 'auto' ? ticker : '',
+    qty,
+    price_mode: mode,
+    price_cur: mode === 'auto' ? 'USD' : document.getElementById('asCur').value,
+    manual_price: parseFloat(document.getElementById('asPrice').value) || 0,
+    note: document.getElementById('asNote').value.trim()
+  };
+  const arr = S.assetReg.assets;
+  if (editAssetId) {
+    const ex = arr.find(x => x.id === editAssetId);
+    if (ex) Object.assign(ex, obj); // keeps id + fetched_price/price_updated
+  } else {
+    obj.id = nwGenId();
+    arr.push(obj);
+  }
+  closeM('assetModal');
+  if (mode === 'auto') {
+    const target = editAssetId ? arr.find(x => x.id === editAssetId) : arr[arr.length - 1];
+    const p = await fetchCryptoPrice(ticker);
+    if (p != null && target) { target.fetched_price = p; target.price_updated = new Date().toISOString(); }
+  }
+  recordNwSnapshot();
+  renderNetWorth();
+  await saveAssetReg();
+  toast('✅ บันทึกแล้ว');
+}
+
+function deleteAssetById(el) {
+  const id = el.dataset.id;
+  const a = (S.assetReg?.assets || []).find(x => String(x.id) === String(id));
+  if (!a) return;
+  if (!confirm(`ลบ "${a.name}" ออกจาก Net Worth?`)) return;
+  S.assetReg.assets = S.assetReg.assets.filter(x => String(x.id) !== String(id));
+  recordNwSnapshot();
+  renderNetWorth();
+  saveAssetReg();
+}
+
+// ── FX modal ──
+function openFxModal() {
+  document.getElementById('fxModalRate').textContent = `$1 = ฿${fxRate.usdthb.toFixed(2)} (${fxRate.source})`;
+  document.getElementById('fxOverrideInput').value = +(S.assetReg?.settings?.usdthb_override || 0) || '';
+  document.getElementById('fxModal').classList.remove('hidden');
+}
+
+async function saveFxOverride() {
+  const v = parseFloat(document.getElementById('fxOverrideInput').value) || 0;
+  if (!S.assetReg.settings) S.assetReg.settings = {};
+  S.assetReg.settings.usdthb_override = v;
+  closeM('fxModal');
+  await fetchFxRate();
+  renderNetWorth();
+  saveAssetReg();
+  toast(v > 0 ? `💱 ล็อคอัตรา $1 = ฿${v}` : '💱 กลับไปใช้อัตราอัตโนมัติ');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1061,7 +1709,8 @@ const PRICE_PROXIES = [
 ];
 
 async function fetchYahooPrice(ticker) {
-  const sym = ticker.includes('.') ? ticker : ticker + '.BK';
+  // SET tickers get .BK; symbols with '.' or '=' (FX like THB=X) pass through as-is
+  const sym = (ticker.includes('.') || ticker.includes('=')) ? ticker : ticker + '.BK';
   const yurl = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
   for (const wrap of PRICE_PROXIES) {
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -1299,6 +1948,9 @@ function renderDashboard() {
 
   // Portfolio summary
   renderSummary();
+
+  // Keep Net Worth tab in sync when data refreshes while it's open
+  try { if (S.view === 'networth') renderNetWorth(); } catch(e) { console.warn('renderNetWorth:', e); }
 
   // Sync timestamp
   if (S.lastSync) {
@@ -2061,8 +2713,9 @@ function saveSetup() {
 
 function useOffline() {
   S.offline = true;
-  S.registry = FALLBACK.registry;
-  S.kb = FALLBACK.kb;
+  S.registry = S.cachedRegistry || FALLBACK.registry;
+  S.kb = S.cachedKb || FALLBACK.kb;
+  S.assetReg = S.cachedAssetReg || emptyAssetReg();
   S.lastSync = 'Offline mode';
   renderDashboard();
 }
@@ -2074,6 +2727,8 @@ function showSetup() {
   document.getElementById('setupWrap').classList.remove('hidden');
   document.getElementById('signInWrap').classList.add('hidden');
   document.getElementById('dashboard').classList.add('hidden');
+  document.getElementById('nwView').classList.add('hidden');
+  document.getElementById('viewTabs').classList.add('hidden');
   document.getElementById('btnSync').classList.add('hidden');
   document.getElementById('btnReports').classList.add('hidden');
   document.getElementById('btnAddStock').classList.add('hidden');
@@ -2085,6 +2740,8 @@ function showSignIn() {
   document.getElementById('signInWrap').classList.remove('hidden');
   document.getElementById('signInWrap').style.display = 'flex';
   document.getElementById('dashboard').classList.add('hidden');
+  document.getElementById('nwView').classList.add('hidden');
+  document.getElementById('viewTabs').classList.add('hidden');
   document.getElementById('btnSync').classList.add('hidden');
   document.getElementById('btnReports').classList.add('hidden');
   document.getElementById('btnAddStock').classList.add('hidden');
@@ -2094,13 +2751,14 @@ function showSignIn() {
 function showDashboard() {
   document.getElementById('setupWrap').classList.add('hidden');
   document.getElementById('signInWrap').classList.add('hidden');
-  document.getElementById('dashboard').classList.remove('hidden');
+  document.getElementById('viewTabs').classList.remove('hidden');
   document.getElementById('btnSync').classList.remove('hidden');
   document.getElementById('btnPrices').classList.remove('hidden');
   document.getElementById('btnReports').classList.remove('hidden');
   document.getElementById('btnAddStock').classList.remove('hidden');
   document.getElementById('btnImport').classList.remove('hidden');
   document.getElementById('btnSignOut').classList.remove('hidden');
+  applyView(); // shows #dashboard or #nwView per current tab
 }
 
 function showLoading(msg) {
@@ -2136,6 +2794,12 @@ document.querySelectorAll('.mbg').forEach(mbg => {
   mbg.addEventListener('click', e => {
     if (e.target === mbg) mbg.classList.add('hidden');
   });
+});
+
+// Live value preview in the asset modal
+['asQty', 'asPrice', 'asCur'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) { el.addEventListener('input', updateAsPreview); el.addEventListener('change', updateAsPreview); }
 });
 
 // ═══════════════════════════════════════════════════════════════
