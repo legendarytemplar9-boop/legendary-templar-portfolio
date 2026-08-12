@@ -31,7 +31,11 @@ a{color:var(--c1);text-decoration:none}
 .nav-left{display:flex;align-items:center;gap:10px}
 .nav-logo{font-size:15px;font-weight:800;letter-spacing:-.3px}
 .nav-tag{font-size:10px;background:var(--c1d);color:var(--c1);padding:2px 7px;border-radius:20px;border:1px solid rgba(0,229,204,.2)}
-.nav-right{display:flex;align-items:center;gap:8px}
+/* Too many buttons to fit a phone — scroll them instead of pushing the whole
+   page sideways (which used to cut off Sign Out and desync every row). */
+.nav-right{display:flex;align-items:center;gap:8px;min-width:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-left:8px}
+.nav-right::-webkit-scrollbar{display:none}
+.nav-right>*{flex:0 0 auto}
 .sync-ts{font-size:11px;color:var(--tx3)}
 
 /* SETUP */
@@ -62,24 +66,44 @@ hr.div{border:none;height:1px;background:var(--border);margin:20px 0}
 .alert-item.warn .alert-body .at{color:var(--yellow)}
 .alert-body .ad{color:var(--tx2);font-size:12px;margin-top:2px}
 
-/* GRID */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:16px}
-
-/* CARD */
-.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px;cursor:pointer;transition:border-color .15s,box-shadow .15s;position:relative}
-.card:hover{border-color:var(--border2);box-shadow:0 4px 20px rgba(0,0,0,.3)}
-.card-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
-.card-ticker{font-size:20px;font-weight:800;letter-spacing:-.5px}
-.card-company{font-size:11px;color:var(--tx2);margin-top:2px}
-.card-sector{font-size:10px;color:var(--tx3);margin-top:1px}
-.card-right{text-align:right}
-.c-emoji{font-size:22px;line-height:1}
-.c-score{font-size:30px;font-weight:900;letter-spacing:-1px;line-height:1;margin-top:2px}
-.c-score.g{color:var(--green)}.c-score.y{color:var(--yellow)}.c-score.o{color:var(--orange)}.c-score.r{color:var(--red)}
-
-/* SPARKLINE */
-.spark-wrap{height:44px;margin:8px 0}
-.spark-wrap canvas{width:100%!important;height:44px!important}
+/* STOCK ROW — the single unified list (replaced the old card grid).
+   Identity | sparkline | money | actions ride the first line; the chips/notes/
+   catalysts block has flex-basis:100% so it always drops to its own line —
+   which is what keeps the row readable at phone widths. */
+.st-row{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px 12px;padding:11px 4px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s}
+.st-row:last-child{border-bottom:none}
+.st-row:hover{background:var(--bg3)}
+.st-id{flex:1 1 140px;min-width:0}
+.st-meta{flex:1 1 100%;min-width:0}
+.st-meta .chips,.st-meta .c-notes,.st-meta .cat-strip{margin-top:6px}
+.st-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.st-ticker{font-size:16px;font-weight:800;letter-spacing:-.3px}
+.st-emoji{font-size:14px;line-height:1}
+.st-score{font-size:17px;font-weight:900;line-height:1;letter-spacing:-.5px}
+.st-score.g{color:var(--green)}.st-score.y{color:var(--yellow)}.st-score.o{color:var(--orange)}.st-score.r{color:var(--red)}
+.st-sub{font-size:11px;color:var(--tx3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st-spark{flex:0 0 auto;width:110px;height:32px;margin-top:2px}
+.st-spark canvas{width:110px!important;height:32px!important}
+.st-money{flex:0 0 auto;text-align:right;min-width:120px;margin-left:auto}
+.st-val{font-weight:800;font-size:15px}
+.st-pl{font-size:12px;font-weight:700;margin-top:1px}
+.st-qty{font-size:10.5px;color:var(--tx3);margin-top:2px}
+.st-watch{font-size:12px;color:var(--tx3);font-style:italic}
+.st-acts{flex:0 0 auto;display:flex;gap:4px;margin-top:2px}
+.st-act{padding:3px 7px;font-size:11px;background:transparent;color:var(--tx3);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:color .15s,border-color .15s}
+.st-act.score:hover{color:var(--yellow);border-color:var(--yellow)}
+.st-act.edit:hover{color:var(--c1);border-color:var(--c1)}
+.st-act.del:hover{color:var(--red);border-color:var(--red)}
+@media (max-width:700px){
+  .st-spark{display:none}
+  .st-money{min-width:auto}
+  .st-id{flex:1 1 96px}
+  .st-val{font-size:14px}
+  .st-pl{font-size:11.5px}
+  .st-qty{font-size:10px}
+  .st-act{padding:3px 6px}
+  .st-acts{gap:3px;flex:1 1 100%;justify-content:flex-end;margin-top:2px}
+}
 .no-spark{height:44px;display:flex;align-items:center;justify-content:center;color:var(--tx3);font-size:11px}
 
 /* CHIPS */
@@ -349,10 +373,8 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 <div class="main hidden" id="dashboard">
   <!-- ALERTS -->
   <div class="alerts-wrap" id="alertsWrap"></div>
-  <!-- MONEY DASHBOARD (value / growth / allocation) -->
+  <!-- MONEY DASHBOARD (value / growth / allocation) + the unified stock list -->
   <div class="md-wrap" id="moneyDash"></div>
-  <!-- GRID -->
-  <div class="grid" id="stockGrid"></div>
   <!-- PORTFOLIO SUMMARY -->
   <div style="margin-top:24px;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r)">
     <div style="font-size:12px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Portfolio Summary</div>
@@ -1842,20 +1864,26 @@ const ALLOC_COLORS = ['#00e5cc','#ffb800','#7c9eff','#51cf66','#ff6b6b','#c78bff
 function renderMoneyDashboard() {
   const el = document.getElementById('moneyDash');
   if (!el || !S.registry) return;
+  const stocks = S.registry.stocks || [];
+  if (!stocks.length) {
+    el.innerHTML = '<div class="md-card" style="text-align:center;color:var(--tx3);font-size:13px">ยังไม่มีหุ้นในพอร์ต — กด "+ Add Stock" หรือ "📋 วางพอร์ต" เพื่อเริ่ม</div>';
+    return;
+  }
   const t = portfolioTotals();
-  if (!t.held.length) { el.innerHTML = '<div class="md-card" style="text-align:center;color:var(--tx3);font-size:13px">ยังไม่มีหุ้นที่กรอกจำนวน/ต้นทุน — เพิ่ม Shares + Avg Cost เพื่อดูมูลค่าพอร์ต</div>'; return; }
   const anyPriced = t.held.some(s => s.current_price > 0);
   const plColor = t.pl >= 0 ? 'var(--green)' : 'var(--red)';
   const sign = t.pl >= 0 ? '+' : '−';
   const lastUpd = t.held.map(s => s.price_updated).filter(Boolean).sort().pop();
   const lastStr = lastUpd ? new Date(lastUpd).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' }) : 'ยังไม่ได้ดึง';
 
-  el.innerHTML = `
+  // Hero + charts need at least one position; the list itself always renders
+  // (watch-only stocks live there too, and they used to have their own cards).
+  const heroHtml = t.held.length ? `
   <div class="md-hero">
     <div>
       <div class="md-label">มูลค่าพอร์ตรวม${anyPriced ? '' : ' (ยังไม่มีราคา · ใช้ต้นทุน)'}</div>
       <div class="md-value">${fmtBaht(t.value)}</div>
-      <div class="md-pl" style="color:${plColor}">${sign}${fmtBaht(Math.abs(t.pl)).replace('฿','฿')} (${sign}${Math.abs(t.plPct).toFixed(2)}%)</div>
+      <div class="md-pl" style="color:${plColor}">${sign}${fmtBaht(Math.abs(t.pl))} (${sign}${Math.abs(t.plPct).toFixed(2)}%)</div>
       <div class="md-sub">ต้นทุนรวม ${fmtBaht(t.cost)} · ราคาล่าสุด ${lastStr}</div>
     </div>
     <button class="btn btn-p btn-sm" onclick="updatePrices()">💰 อัพเดตราคา</button>
@@ -1863,43 +1891,50 @@ function renderMoneyDashboard() {
   <div class="md-charts">
     <div class="md-card"><div class="md-card-t">📈 มูลค่าพอร์ตตามเวลา</div><div class="md-canvas-wrap"><canvas id="valueChart"></canvas></div><div class="md-note" id="valueChartNote"></div></div>
     <div class="md-card"><div class="md-card-t">🍩 สัดส่วนพอร์ต (Allocation)</div><div class="md-canvas-wrap"><canvas id="allocChart"></canvas></div></div>
-  </div>
+  </div>` : `
+  <div class="md-card" style="text-align:center;color:var(--tx3);font-size:13px">
+    ยังไม่มีหุ้นที่กรอกจำนวน/ต้นทุน — ใส่ Shares + Avg Cost (ปุ่ม ✏️ ในแถว) เพื่อดูมูลค่าพอร์ตและกราฟ
+  </div>`;
+
+  el.innerHTML = heroHtml + `
   <div class="md-card">
     <div class="md-card-head">
-      <div class="md-card-t">📊 กำไร/ขาดทุน รายตัว</div>
+      <div class="md-card-t">📊 หุ้นทั้งหมด (${stocks.length})</div>
       <div class="sort-bar" id="plSortBar"></div>
     </div>
     <div class="md-rows" id="plRows"></div>
   </div>`;
 
   renderPlSortBar();
-  renderPlRows();
-  renderValueChart();
-  renderAllocChart(t.held);
+  renderStockRows();
+  if (t.held.length) { renderValueChart(); renderAllocChart(t.held); }
 }
 
-// ── Sortable per-stock P/L rows ──────────────────────────────────
-// value/cost/pl sort numerically (biggest first by default); ticker sorts
-// alphabetically (A→Z by default). Clicking the active key flips direction.
+// ── The unified stock list ───────────────────────────────────────
+// One row per stock, carrying everything the old card grid showed (score,
+// sparkline, trend, catalysts, notes, ★/✏️/✕) plus the money columns.
+// value/cost/pl/score sort numerically (biggest first by default); ticker
+// sorts alphabetically (A→Z by default). Clicking the active key flips it.
 const PL_SORTS = [
   { key: 'value',  label: 'มูลค่า'  },
   { key: 'pl',     label: 'กำไร'    },
   { key: 'cost',   label: 'ต้นทุน'  },
+  { key: 'score',  label: 'คะแนน'   },
   { key: 'ticker', label: 'ก-ฮ/A-Z' }
 ];
 
 function plRowStats(s) {
-  const cost = s.avg_cost * s.shares;
+  const cost = (s.avg_cost || 0) * (s.shares || 0);
   const hasP = s.current_price > 0;
   const value = hasP ? s.current_price * s.shares : cost;
   const pl = value - cost;
-  return { cost, hasP, value, pl, pct: cost ? pl / cost * 100 : 0 };
+  return { cost, hasP, value, pl, pct: cost ? pl / cost * 100 : 0, score: s.thesis_score || 0 };
 }
 
-function sortedPlRows() {
+function sortedStockRows() {
   const { key, dir } = S.plSort;
   const mul = dir === 'asc' ? 1 : -1;
-  return portfolioTotals().held.slice().sort((a, b) => {
+  return (S.registry?.stocks || []).slice().sort((a, b) => {
     if (key === 'ticker') return mul * a.ticker.localeCompare(b.ticker, 'th');
     const d = plRowStats(a)[key] - plRowStats(b)[key];
     // Ties keep a stable, predictable order instead of shuffling on re-render.
@@ -1909,11 +1944,11 @@ function sortedPlRows() {
 
 function setPlSort(key) {
   if (S.plSort.key === key) S.plSort.dir = S.plSort.dir === 'asc' ? 'desc' : 'asc';
-  // Names read best A→Z; money reads best biggest-first.
+  // Names read best A→Z; money and scores read best biggest-first.
   else S.plSort = { key, dir: key === 'ticker' ? 'asc' : 'desc' };
   saveLS();
   renderPlSortBar();
-  renderPlRows();
+  renderStockRows();
 }
 
 function renderPlSortBar() {
@@ -1926,21 +1961,61 @@ function renderPlSortBar() {
   }).join('');
 }
 
-function renderPlRows() {
+function renderStockRows() {
   const el = document.getElementById('plRows');
   if (!el) return;
-  el.innerHTML = sortedPlRows().map(s => {
+  const rows = sortedStockRows();
+  el.innerHTML = rows.map(s => {
+    const tk = s.ticker;
     const st = plRowStats(s);
+    const held = s.avg_cost > 0 && s.shares > 0;
+    const trend = getTrend(tk);
+    const delta = getLatestDelta(tk);
+    const deltaStr = delta > 0 ? `<span style="color:var(--green)">+${delta}</span>`
+                   : delta < 0 ? `<span style="color:var(--red)">${delta}</span>`
+                               : `<span style="color:var(--tx3)">±0</span>`;
+    const cred = getCredibility(tk);
+    const cats = (s.catalysts || []).filter(c => c.status !== 'cancelled');
     const col = st.pl >= 0 ? 'var(--green)' : 'var(--red)';
     const sg = st.pl >= 0 ? '+' : '−';
-    return `<div class="md-row">
-      <div class="md-row-l"><b>${s.ticker}</b><span class="md-row-sub">${s.shares.toLocaleString()} × ${st.hasP ? '฿'+s.current_price : 'ยังไม่มีราคา'} · ทุน ${fmtBaht(st.cost)}</span></div>
-      <div class="md-row-r">${fmtBaht(st.value)}<div style="color:${col};font-size:12px;font-weight:700">${sg}${fmtBaht(Math.abs(st.pl))} (${sg}${Math.abs(st.pct).toFixed(2)}%)</div></div>
-      <div class="md-row-acts">
-        <button class="nw-act" data-ticker="${s.ticker}" onclick="openEditDetails(this.dataset.ticker)" title="แก้ไขจำนวน/ต้นทุน">✏️</button>
+    const sub = [s.company, s.sector && s.sector !== '—' ? s.sector : ''].filter(Boolean).join(' · ');
+
+    const money = held
+      ? `<div class="st-val">${fmtBaht(st.value)}</div>
+         <div class="st-pl" style="color:${col}">${sg}${fmtBaht(Math.abs(st.pl))} (${sg}${Math.abs(st.pct).toFixed(2)}%)</div>
+         <div class="st-qty">${s.shares.toLocaleString()} × ${st.hasP ? '฿' + s.current_price : 'ยังไม่มีราคา'} · ทุน ${fmtBaht(st.cost)}</div>`
+      : `<div class="st-watch">Watch only</div>`;
+
+    return `<div class="st-row" data-ticker="${escHtml(tk)}" onclick="openDetail(this.dataset.ticker)">
+      <div class="st-id">
+        <div class="st-head">
+          <span class="st-emoji">${scoreEmoji(s.thesis_score)}</span>
+          <span class="st-ticker">${escHtml(tk)}</span>
+          <span class="st-score ${scoreColor(s.thesis_score)}">${s.thesis_score}</span>
+        </div>
+        ${sub ? `<div class="st-sub">${escHtml(sub)}</div>` : ''}
+      </div>
+      <div class="st-spark"><canvas id="spark_${escHtml(tk)}" width="110" height="32"></canvas></div>
+      <div class="st-money">${money}</div>
+      <div class="st-acts">
+        <button class="st-act score" data-ticker="${escHtml(tk)}" onclick="event.stopPropagation();openEdit(this.dataset.ticker)" title="แก้คะแนน">★</button>
+        <button class="st-act edit" data-ticker="${escHtml(tk)}" onclick="event.stopPropagation();openEditDetails(this.dataset.ticker)" title="แก้ชื่อ/จำนวน/ต้นทุน">✏️</button>
+        <button class="st-act del" data-ticker="${escHtml(tk)}" onclick="event.stopPropagation();confirmDeleteStock(this.dataset.ticker)" title="ลบ">✕</button>
+      </div>
+      <div class="st-meta">
+        <div class="chips">
+          <span class="chip ${trend.cls}">${trend.arrow} ${trend.cls === 'flat' ? 'Stable' : trend.cls === 'up' ? `Up ${trend.weeks}w` : `Down ${trend.weeks}w`}</span>
+          <span class="chip">Δ ${deltaStr}</span>
+          ${cred ? `<span class="chip ${cred.pct >= 70 ? 'green' : cred.pct >= 50 ? 'yellow' : 'down'}">Trust ${cred.pct}%</span>` : ''}
+        </div>
+        ${s.notes ? `<div class="c-notes">${escHtml(s.notes)}</div>` : ''}
+        ${cats.length ? `<div class="cat-strip">${cats.map(c => `<span class="ct ${c.status === 'in_progress' ? 'ip' : c.status === 'completed' ? 'done' : ''}">${c.status === 'in_progress' ? '⚡' : ''}${escHtml(c.event.length > 20 ? c.event.slice(0, 18) + '…' : c.event)}</span>`).join('')}</div>` : ''}
       </div>
     </div>`;
   }).join('');
+
+  // Sparklines need the canvases in the DOM first.
+  setTimeout(() => rows.forEach(s => renderSparkline(s.ticker, 'spark_' + s.ticker)), 30);
 }
 
 function renderValueChart() {
@@ -2017,53 +2092,6 @@ function renderDashboard() {
       <div class="alert-ic">${a.type==='warn'?'⚠️':'🚨'}</div>
       <div class="alert-body"><div class="at">${a.title}</div><div class="ad">${a.desc}</div></div>
     </div>`).join('') : '';
-
-  // Cards
-  const grid = document.getElementById('stockGrid');
-  grid.innerHTML = S.registry.stocks.map(stock => {
-    const ticker = stock.ticker;
-    const trend = getTrend(ticker);
-    const delta = getLatestDelta(ticker);
-    const deltaStr = delta > 0 ? `<span style="color:var(--green)">+${delta}</span>` : delta < 0 ? `<span style="color:var(--red)">${delta}</span>` : `<span style="color:var(--tx3)">±0</span>`;
-    const cats = (stock.catalysts || []).filter(c => c.status !== 'cancelled');
-    const cred = getCredibility(ticker);
-    const hasPos = stock.avg_cost > 0;
-    return `
-    <div class="card" data-ticker="${ticker}" onclick="openDetail(this.dataset.ticker)">
-      <div class="card-actions" style="position:absolute;top:10px;right:10px;display:flex;gap:4px;opacity:.55;transition:opacity .15s" onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=.55">
-        <button onclick="event.stopPropagation();openEdit('${ticker}')" style="padding:3px 8px;font-size:11px;background:transparent;color:var(--tx3);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:color .15s,border-color .15s" onmouseenter="this.style.color='var(--yellow)';this.style.borderColor='var(--yellow)'" onmouseleave="this.style.color='var(--tx3)';this.style.borderColor='var(--border)'" title="Edit Score">★</button>
-        <button onclick="event.stopPropagation();openEditDetails('${ticker}')" style="padding:3px 8px;font-size:11px;background:transparent;color:var(--tx3);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:color .15s,border-color .15s" onmouseenter="this.style.color='var(--c1)';this.style.borderColor='var(--c1)'" onmouseleave="this.style.color='var(--tx3)';this.style.borderColor='var(--border)'" title="Edit Details">✏️</button>
-        <button onclick="event.stopPropagation();confirmDeleteStock('${ticker}')" style="padding:3px 8px;font-size:11px;background:transparent;color:var(--tx3);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:color .15s,border-color .15s" onmouseenter="this.style.color='var(--red)';this.style.borderColor='var(--red)'" onmouseleave="this.style.color='var(--tx3)';this.style.borderColor='var(--border)'" title="Delete">✕</button>
-      </div>
-      <div class="card-top">
-        <div>
-          <div class="card-ticker">${ticker}</div>
-          <div class="card-company">${stock.company}</div>
-          <div class="card-sector">${stock.sector || '—'}</div>
-        </div>
-        <div class="card-right">
-          <div class="c-emoji">${scoreEmoji(stock.thesis_score)}</div>
-          <div class="c-score ${scoreColor(stock.thesis_score)}">${stock.thesis_score}</div>
-        </div>
-      </div>
-      <div class="spark-wrap">
-        <canvas id="spark_${ticker}" width="280" height="44"></canvas>
-      </div>
-      <div class="chips">
-        <span class="chip ${trend.cls}">${trend.arrow} ${trend.cls === 'flat' ? 'Stable' : trend.cls === 'up' ? `Up ${trend.weeks}w` : `Down ${trend.weeks}w`}</span>
-        <span class="chip">Δ ${deltaStr}</span>
-        ${hasPos ? `<span class="chip">${stock.shares.toLocaleString()} shares</span>` : '<span class="chip dimmed">Watch only</span>'}
-        ${cred ? `<span class="chip ${cred.pct >= 70 ? 'green' : cred.pct >= 50 ? 'yellow' : 'down'}">Trust ${cred.pct}%</span>` : ''}
-      </div>
-      ${stock.notes ? `<div class="c-notes">${stock.notes}</div>` : ''}
-      ${cats.length ? `<div class="cat-strip">${cats.map(c => `<span class="ct ${c.status==='in_progress'?'ip':c.status==='completed'?'done':''}">${c.status==='in_progress'?'⚡':''}${c.event.length>20?c.event.slice(0,18)+'…':c.event}</span>`).join('')}</div>` : ''}
-    </div>`;
-  }).join('');
-
-  // Render sparklines after DOM
-  setTimeout(() => {
-    S.registry.stocks.forEach(s => renderSparkline(s.ticker, 'spark_' + s.ticker));
-  }, 50);
 
   // Money dashboard (value / P&L / allocation / value-over-time)
   try { renderMoneyDashboard(); } catch(e) { console.warn('renderMoneyDashboard:', e); }

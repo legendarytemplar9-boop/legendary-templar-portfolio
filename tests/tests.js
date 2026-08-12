@@ -145,36 +145,43 @@
   S.registry = {
     portfolio_name: 'T', last_updated: TODAY, stocks: [
       // ticker, shares, avg_cost, current_price → cost / value / pl
-      { ticker: 'BBB', shares: 100, avg_cost: 10, current_price: 12, thesis_score: 70 }, // cost 1000 val 1200 pl +200
-      { ticker: 'AAA', shares: 100, avg_cost: 50, current_price: 45, thesis_score: 70 }, // cost 5000 val 4500 pl -500
+      { ticker: 'BBB', shares: 100, avg_cost: 10, current_price: 12, thesis_score: 82 }, // cost 1000 val 1200 pl +200
+      { ticker: 'AAA', shares: 100, avg_cost: 50, current_price: 45, thesis_score: 55 }, // cost 5000 val 4500 pl -500
       { ticker: 'CCC', shares: 200, avg_cost: 20, current_price: 30, thesis_score: 70 }, // cost 4000 val 6000 pl +2000
-      { ticker: 'ZZZ', shares: 0, avg_cost: 0, thesis_score: 70 }                        // not held → excluded
+      { ticker: 'ZZZ', shares: 0, avg_cost: 0, thesis_score: 91 }                        // watch only → 0 across the board
     ]
   };
   S.kb = { score_history: {}, catalyst_log: {}, guidance_tracker: {}, evidence_clips: [], value_history: [] };
 
-  const tickersBy = (key, dir) => { S.plSort = { key, dir }; return sortedPlRows().map(s => s.ticker); };
-  eq('excludes unheld', tickersBy('value', 'desc').includes('ZZZ'), false);
-  eq('value desc', tickersBy('value', 'desc'), ['CCC', 'AAA', 'BBB']);
-  eq('value asc', tickersBy('value', 'asc'), ['BBB', 'AAA', 'CCC']);
-  eq('cost desc', tickersBy('cost', 'desc'), ['AAA', 'CCC', 'BBB']);
-  eq('cost asc', tickersBy('cost', 'asc'), ['BBB', 'CCC', 'AAA']);
-  eq('pl desc', tickersBy('pl', 'desc'), ['CCC', 'BBB', 'AAA']);
-  eq('pl asc', tickersBy('pl', 'asc'), ['AAA', 'BBB', 'CCC']);
-  eq('ticker asc', tickersBy('ticker', 'asc'), ['AAA', 'BBB', 'CCC']);
-  eq('ticker desc', tickersBy('ticker', 'desc'), ['CCC', 'BBB', 'AAA']);
+  const tickersBy = (key, dir) => { S.plSort = { key, dir }; return sortedStockRows().map(s => s.ticker); };
+  // The list is now the ONLY place stocks appear, so watch-only ones must be in it.
+  eq('includes watch-only', tickersBy('value', 'desc').includes('ZZZ'), true);
+  eq('lists every stock', tickersBy('value', 'desc').length, 4);
+  eq('value desc', tickersBy('value', 'desc'), ['CCC', 'AAA', 'BBB', 'ZZZ']);
+  eq('value asc', tickersBy('value', 'asc'), ['ZZZ', 'BBB', 'AAA', 'CCC']);
+  eq('cost desc', tickersBy('cost', 'desc'), ['AAA', 'CCC', 'BBB', 'ZZZ']);
+  eq('cost asc', tickersBy('cost', 'asc'), ['ZZZ', 'BBB', 'CCC', 'AAA']);
+  eq('pl desc', tickersBy('pl', 'desc'), ['CCC', 'BBB', 'ZZZ', 'AAA']);
+  eq('pl asc', tickersBy('pl', 'asc'), ['AAA', 'ZZZ', 'BBB', 'CCC']);
+  eq('score desc', tickersBy('score', 'desc'), ['ZZZ', 'BBB', 'CCC', 'AAA']);
+  eq('score asc', tickersBy('score', 'asc'), ['AAA', 'CCC', 'BBB', 'ZZZ']);
+  eq('ticker asc', tickersBy('ticker', 'asc'), ['AAA', 'BBB', 'CCC', 'ZZZ']);
+  eq('ticker desc', tickersBy('ticker', 'desc'), ['ZZZ', 'CCC', 'BBB', 'AAA']);
 
   eq('stats value', plRowStats(S.registry.stocks[0]).value, 1200);
   eq('stats pl', plRowStats(S.registry.stocks[1]).pl, -500);
   eq('stats pct', Math.round(plRowStats(S.registry.stocks[2]).pct), 50);
+  eq('stats score', plRowStats(S.registry.stocks[3]).score, 91);
   eq('no price → value falls back to cost', plRowStats({ shares: 10, avg_cost: 5 }).value, 50);
+  eq('watch-only stats are zero, not NaN', plRowStats({ ticker: 'W' }), { cost: 0, hasP: false, value: 0, pl: 0, pct: 0, score: 0 });
 
   // tie-break stability
   S.registry.stocks = [
-    { ticker: 'DDD', shares: 10, avg_cost: 10, current_price: 10 },
-    { ticker: 'AAA', shares: 10, avg_cost: 10, current_price: 10 }
+    { ticker: 'DDD', shares: 10, avg_cost: 10, current_price: 10, thesis_score: 70 },
+    { ticker: 'AAA', shares: 10, avg_cost: 10, current_price: 10, thesis_score: 70 }
   ];
   eq('ties break alphabetically', tickersBy('value', 'desc'), ['AAA', 'DDD']);
+  eq('score ties break alphabetically', tickersBy('score', 'desc'), ['AAA', 'DDD']);
 
   sec('setPlSort toggle');
   S.plSort = { key: 'value', dir: 'desc' };
@@ -183,6 +190,8 @@
   setPlSort('ticker'); eq('ticker defaults asc', S.plSort, { key: 'ticker', dir: 'asc' });
   setPlSort('pl'); eq('money defaults desc', S.plSort, { key: 'pl', dir: 'desc' });
   setPlSort('cost'); eq('cost defaults desc', S.plSort, { key: 'cost', dir: 'desc' });
+  setPlSort('score'); eq('score defaults desc', S.plSort, { key: 'score', dir: 'desc' });
+  setPlSort('cost');
   ok('sort persisted to localStorage',
     JSON.parse(localStorage.getItem('lt_portfolio_v1') || '{}').plSort?.key === 'cost');
 
@@ -281,47 +290,111 @@
   eq('template round-trips: no errors', rt.errors, []);
   eq('template round-trips: date', rt.defaultDate, TODAY);
 
-  sec('render smoke test');
+  sec('render smoke test — the unified row list');
   S.registry = {
     portfolio_name: 'T', last_updated: TODAY, stocks: [
-      { ticker: 'AAA', company: 'A', sector: 'X', shares: 100, avg_cost: 10, current_price: 12, thesis_score: 70, thesis_status: '🟡', catalysts: [], thesis_breakers: [] },
-      { ticker: 'BBB', company: 'B', sector: 'Y', shares: 50, avg_cost: 20, current_price: 18, thesis_score: 70, thesis_status: '🟡', catalysts: [], thesis_breakers: [] }
+      { ticker: 'AAA', company: 'Alpha Co', sector: 'Tech', shares: 100, avg_cost: 10, current_price: 12, thesis_score: 78, thesis_status: '🟢', notes: 'a note', catalysts: [{ event: 'launch', status: 'in_progress' }], thesis_breakers: [] },
+      { ticker: 'BBB', company: 'Beta Co', sector: 'Bank', shares: 50, avg_cost: 20, current_price: 18, thesis_score: 64, thesis_status: '🟡', notes: '', catalysts: [], thesis_breakers: [] },
+      { ticker: 'WWW', company: 'Watch Co', sector: 'Food', shares: 0, avg_cost: 0, thesis_score: 70, thesis_status: '🟡', notes: '', catalysts: [], thesis_breakers: [] }
     ]
+  };
+  S.kb = {
+    score_history: { AAA: [{ date: '2026-01-01', score: 70, delta: 0, reason: 'x' }, { date: '2026-02-01', score: 74, delta: 4, reason: 'x' }, { date: '2026-03-01', score: 78, delta: 4, reason: 'x' }] },
+    catalyst_log: {}, guidance_tracker: {}, evidence_clips: [], value_history: []
   };
   S.plSort = { key: 'ticker', dir: 'asc' };
   try {
     renderMoneyDashboard();
     const rowsEl = document.getElementById('plRows');
-    ok('rows rendered', rowsEl && rowsEl.querySelectorAll('.md-row').length === 2,
-       rowsEl ? rowsEl.querySelectorAll('.md-row').length : 'no #plRows');
-    ok('edit button per row', rowsEl.querySelectorAll('.md-row-acts .nw-act').length === 2);
-    ok('edit button targets ticker',
-       rowsEl.querySelector('.md-row-acts .nw-act').dataset.ticker === 'AAA',
-       rowsEl.querySelector('.md-row-acts .nw-act')?.dataset.ticker);
+    const rows = () => [...document.getElementById('plRows').querySelectorAll('.st-row')];
+    ok('a row per stock incl. watch-only', rows().length === 3, rows().length);
+    eq('rows in ticker order', rows().map(r => r.dataset.ticker), ['AAA', 'BBB', 'WWW']);
+
+    // ── everything the old card showed must survive in the row ──
+    const aaa = rows()[0];
+    ok('row shows score', /\b78\b/.test(aaa.querySelector('.st-score').textContent));
+    ok('score is colour-coded', aaa.querySelector('.st-score').classList.contains('g'));
+    ok('row shows status emoji', aaa.querySelector('.st-emoji').textContent.length > 0);
+    ok('row shows company + sector', /Alpha Co · Tech/.test(aaa.querySelector('.st-sub').textContent));
+    ok('row has a sparkline canvas', !!aaa.querySelector('canvas[id="spark_AAA"]'));
+    ok('row shows trend chip', /Up|Down|Stable/.test(aaa.querySelector('.chips').textContent));
+    ok('row shows delta chip', /Δ/.test(aaa.querySelector('.chips').textContent));
+    ok('row shows notes', /a note/.test(aaa.querySelector('.c-notes').textContent));
+    ok('row shows catalysts', /launch/.test(aaa.querySelector('.cat-strip').textContent));
+    ok('row has 3 actions', aaa.querySelectorAll('.st-acts .st-act').length === 3, aaa.querySelectorAll('.st-acts .st-act').length);
+
+    // ── money columns ──
+    ok('row shows value', /฿1,200/.test(aaa.querySelector('.st-money').textContent), aaa.querySelector('.st-money').textContent);
+    ok('row shows baht P/L', /\+฿200/.test(aaa.querySelector('.st-money').textContent));
+    ok('row shows percent', /20\.00%/.test(aaa.querySelector('.st-money').textContent));
+    ok('row shows qty and cost', /100 × ฿12 · ทุน ฿1,000/.test(aaa.querySelector('.st-qty').textContent), aaa.querySelector('.st-qty').textContent);
+    ok('watch-only row says Watch only', /Watch only/.test(rows()[2].querySelector('.st-money').textContent));
+    ok('watch-only row has no fake value', !/฿/.test(rows()[2].querySelector('.st-money').textContent));
+
+    // ── the old card grid is gone ──
+    ok('#stockGrid removed from the page', document.getElementById('stockGrid') === null);
+    ok('no .card elements left', document.querySelectorAll('.card').length === 0);
+
+    // ── hero + charts kept ──
+    ok('hero still rendered', !!document.querySelector('.md-hero'));
+    ok('value chart canvas kept', !!document.getElementById('valueChart'));
+    ok('allocation chart canvas kept', !!document.getElementById('allocChart'));
+    ok('list header counts stocks', /หุ้นทั้งหมด \(3\)/.test(document.getElementById('moneyDash').textContent),
+       document.querySelector('.md-card-t')?.textContent);
+
     const bar = document.getElementById('plSortBar');
-    ok('4 sort chips', bar.querySelectorAll('.sort-chip').length === 4, bar.querySelectorAll('.sort-chip').length);
+    ok('5 sort chips', bar.querySelectorAll('.sort-chip').length === 5, bar.querySelectorAll('.sort-chip').length);
     ok('active chip marked', bar.querySelectorAll('.sort-chip.on').length === 1);
     ok('active chip shows direction', /↑/.test(bar.querySelector('.sort-chip.on').textContent));
-    ok('row shows cost', /ทุน/.test(rowsEl.innerHTML));
-    ok('row shows baht P/L', /฿/.test(rowsEl.innerHTML));
 
     // clicking a chip re-sorts the DOM
     bar.querySelector('[data-key="value"]').click();
-    const order = [...document.getElementById('plRows').querySelectorAll('.md-row b')].map(b => b.textContent);
-    eq('click chip re-sorts by value desc', order, ['AAA', 'BBB']);
-    bar.querySelector('[data-key="value"]').click();
-    const order2 = [...document.getElementById('plRows').querySelectorAll('.md-row b')].map(b => b.textContent);
-    eq('second click flips to asc', order2, ['BBB', 'AAA']);
+    eq('click chip re-sorts by value desc', rows().map(r => r.dataset.ticker), ['AAA', 'BBB', 'WWW']);
+    document.getElementById('plSortBar').querySelector('[data-key="value"]').click();
+    eq('second click flips to asc', rows().map(r => r.dataset.ticker), ['WWW', 'BBB', 'AAA']);
+    document.getElementById('plSortBar').querySelector('[data-key="score"]').click();
+    // scores: AAA 78, WWW 70, BBB 64
+    eq('score sort works from the UI', rows().map(r => r.dataset.ticker), ['AAA', 'WWW', 'BBB']);
 
-    // edit button opens the details modal prefilled
-    document.getElementById('plRows').querySelector('.nw-act').click();
-    ok('edit opens details modal', !document.getElementById('editDetailsModal').classList.contains('hidden'));
-    eq('modal prefilled ticker', document.getElementById('edTicker').value, 'BBB');
-    eq('modal prefilled shares', document.getElementById('edShares').value, '50');
-    eq('modal prefilled cost', document.getElementById('edAvgCost').value, '20');
+    // ── row actions ──
+    S.plSort = { key: 'ticker', dir: 'asc' }; renderStockRows();
+    rows()[1].querySelector('.st-act.edit').click();
+    ok('✏️ opens details modal', !document.getElementById('editDetailsModal').classList.contains('hidden'));
+    eq('details modal prefilled ticker', document.getElementById('edTicker').value, 'BBB');
+    eq('details modal prefilled shares', document.getElementById('edShares').value, '50');
+    eq('details modal prefilled cost', document.getElementById('edAvgCost').value, '20');
+    closeM('editDetailsModal');
+
+    rows()[0].querySelector('.st-act.score').click();
+    ok('★ opens the score modal', !document.getElementById('editModal').classList.contains('hidden'));
+    ok('★ score modal targets that ticker', /AAA/.test(document.getElementById('editTitle').textContent),
+       document.getElementById('editTitle').textContent);
+    closeM('editModal');
+
+    // clicking the row body (not a button) opens the detail view
+    rows()[0].click();
+    ok('row click opens detail modal', !document.getElementById('detailModal').classList.contains('hidden'));
+    ok('detail modal is for that ticker', /AAA/.test(document.getElementById('detailTitle').textContent));
+    closeM('detailModal');
+
+    // action buttons must not also trigger the row's openDetail
+    rows()[1].querySelector('.st-act.edit').click();
+    ok('action click does not open detail too', document.getElementById('detailModal').classList.contains('hidden'));
+    closeM('editDetailsModal');
   } catch (e) {
     fail++; L.push('  FAIL render smoke threw → ' + e.message + '\n' + e.stack);
   }
+
+  sec('watch-only portfolio still lists stocks');
+  try {
+    S.registry = { portfolio_name: 'T', last_updated: TODAY, stocks: [
+      { ticker: 'WWW', company: 'Watch Co', sector: '—', shares: 0, avg_cost: 0, thesis_score: 70, catalysts: [], thesis_breakers: [] }
+    ] };
+    renderMoneyDashboard();
+    ok('no hero when nothing is held', !document.querySelector('.md-hero'));
+    ok('but the row still renders', document.querySelectorAll('.st-row').length === 1);
+    ok('and it explains how to get the charts', /Shares \+ Avg Cost/.test(document.getElementById('moneyDash').textContent));
+  } catch (e) { fail++; L.push('  FAIL watch-only render threw → ' + e.message); }
 
   sec('empty portfolio does not crash');
   try {
@@ -329,6 +402,28 @@
     renderMoneyDashboard();
     ok('empty renders placeholder', /ยังไม่มีหุ้น/.test(document.getElementById('moneyDash').innerHTML));
   } catch (e) { fail++; L.push('  FAIL empty portfolio threw → ' + e.message); }
+
+  sec('layout: nothing pushes the page sideways');
+  try {
+    // Seed a realistic list, then check the document itself does not scroll
+    // horizontally. The nav button strip scrolls on its own instead.
+    S.registry = {
+      portfolio_name: 'T', last_updated: TODAY, stocks: [
+        { ticker: 'ADVANC', company: 'Advanced Info Service', sector: 'Telecom', shares: 500, avg_cost: 245.5, current_price: 251, thesis_score: 78, notes: 'ประเมินว่ากระแสเงินสดยังแข็งแรงและปันผลสม่ำเสมอ', catalysts: [{ event: '5G subscriber growth', status: 'in_progress' }], thesis_breakers: [] },
+        { ticker: 'BDMS', company: 'Bangkok Dusit Medical Services', sector: 'Healthcare', shares: 1000, avg_cost: 22.5, current_price: 24.1, thesis_score: 75, notes: '', catalysts: [], thesis_breakers: [] }
+      ]
+    };
+    S.kb = { score_history: {}, catalyst_log: {}, guidance_tracker: {}, evidence_clips: [], value_history: [] };
+    document.getElementById('dashboard').classList.remove('hidden');
+    renderMoneyDashboard();
+    const de = document.documentElement;
+    ok('document does not scroll horizontally', de.scrollWidth <= de.clientWidth + 1,
+       'scrollWidth ' + de.scrollWidth + ' vs clientWidth ' + de.clientWidth);
+    const wide = [...document.querySelectorAll('#moneyDash *')]
+      .filter(e => e.getBoundingClientRect().width > de.clientWidth + 1)
+      .map(e => e.className);
+    ok('no element in the list is wider than the viewport', wide.length === 0, wide.join(' | '));
+  } catch (e) { fail++; L.push('  FAIL layout check threw → ' + e.message); }
 
   L.push('');
   L.push('PASS ' + pass + '   FAIL ' + fail);
