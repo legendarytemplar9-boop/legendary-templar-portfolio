@@ -241,6 +241,29 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 .md-row-l b{font-size:14px}
 .md-row-sub{color:var(--tx3);font-size:11px;margin-left:6px}
 .md-row-r{text-align:right;font-weight:800;font-size:14px}
+/* sortable P/L rows */
+.md-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.md-card-head .md-card-t{margin-bottom:0}
+.sort-bar{display:flex;gap:4px;flex-wrap:wrap}
+.sort-chip{padding:3px 9px;font-size:11px;font-weight:600;background:transparent;color:var(--tx3);border:1px solid var(--border);border-radius:12px;cursor:pointer;white-space:nowrap}
+.sort-chip:hover{color:var(--c1);border-color:var(--c1)}
+.sort-chip.on{color:var(--c1);border-color:var(--c1);background:var(--c1d)}
+.md-row-l{min-width:0;flex:1 1 auto}
+.md-row-r{flex:0 0 auto}
+.md-row-acts{display:flex;gap:4px;flex:0 0 auto;margin-left:10px}
+/* paste-portfolio preview */
+.pp-tbl{width:100%;border-collapse:collapse;font-size:11.5px;font-family:var(--mono)}
+.pp-tbl th{text-align:right;color:var(--tx3);font-weight:700;padding:5px 6px;border-bottom:1px solid var(--border);white-space:nowrap}
+.pp-tbl th:first-child,.pp-tbl td:first-child{text-align:left}
+.pp-tbl td{text-align:right;padding:5px 6px;border-bottom:1px solid var(--border);white-space:nowrap}
+.pp-tbl tr:last-child td{border-bottom:none}
+.pp-tag{font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px}
+.pp-tag.new{color:var(--c1);background:var(--c1d)}
+.pp-tag.upd{color:#ffb800;background:rgba(255,184,0,.12)}
+.pp-tag.same{color:var(--tx3);background:var(--bg3)}
+.pp-old{color:var(--tx3);text-decoration:line-through;margin-right:4px}
+.pp-scroll{max-height:260px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:0 8px;margin-top:10px}
+.pp-err{color:var(--red);font-size:11.5px;margin-top:8px;line-height:1.6}
 </style>
 </head>
 <body>
@@ -266,6 +289,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
     <button class="btn btn-p btn-sm hidden" id="btnPrices" onclick="updatePrices()">💰 ราคา</button>
     <button class="btn btn-s btn-sm hidden" id="btnReports" onclick="openReports()">📊 Reports</button>
     <button class="btn btn-p btn-sm hidden" id="btnAddStock" onclick="openAddStock()">+ Add Stock</button>
+    <button class="btn btn-s btn-sm hidden" id="btnPastePort" onclick="openPastePort()">📋 วางพอร์ต</button>
     <button class="btn btn-s btn-sm hidden" id="btnImport" onclick="openImportJSON()">📥 Import JSON</button>
     <button class="btn btn-g btn-sm hidden" id="btnSignOut" onclick="signOut()">Sign Out</button>
   </div>
@@ -570,6 +594,42 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
   </div>
 </div>
 
+<!-- PASTE PORTFOLIO (bulk price / shares / date) -->
+<div class="mbg center hidden" id="pastePortModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">
+      <div class="mt-t">📋 วางพอร์ต (หลายตัวพร้อมกัน)</div>
+      <button class="btn btn-g btn-sm" onclick="closeM('pastePortModal')">✕</button>
+    </div>
+    <div class="mb">
+      <div style="font-size:12px;color:var(--tx3);line-height:1.7;margin-bottom:10px">
+        <b style="color:var(--tx2)">มีรูปหน้าจอพอร์ต/ใบยืนยัน?</b> กดปุ่มล่างนี้ → Claude จะเปิดขึ้นมาพร้อมคำสั่ง →
+        <b>แนบรูปแล้วส่ง</b> → Claude ตอบเป็นตารางตามรูปแบบข้างล่าง → copy มาวางในช่องนี้
+      </div>
+      <button class="btn btn-s btn-sm" style="width:100%;justify-content:center;margin-bottom:12px" onclick="openPasteTemplateInClaude()">
+        📸 เปิด Claude เพื่อแปลงรูป → ตาราง
+      </button>
+      <div style="font-size:12px;color:var(--tx3);line-height:1.6;margin-bottom:8px">
+        รูปแบบ 1 บรรทัด = 1 หุ้น: <code>TICKER | จำนวนหุ้น | ต้นทุนเฉลี่ย/หุ้น | ราคาตลาด | วันที่</code><br>
+        ราคาตลาดและวันที่ใส่หรือไม่ใส่ก็ได้ · คั่นด้วย <code>|</code> หรือ Tab หรือ <code>,</code> ก็ได้ ·
+        บรรทัด <code>#วันที่ 2026-08-12</code> จะใช้เป็นวันที่ของทุกแถว
+      </div>
+      <textarea id="pastePortText" rows="9" class="form-input" style="font-family:var(--mono);font-size:11.5px;white-space:pre"
+        oninput="previewPastePort()" placeholder="#วันที่ 2026-08-12
+ADVANC | 500 | 245.50 | 251.00
+BDMS   | 1000 | 22.50 | 24.10
+HANA   | 2000 | 38 | 35.75"></textarea>
+      <div id="pastePortMsg" style="font-size:12px;margin-top:8px;min-height:16px"></div>
+      <div id="pastePortPreview"></div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-g" onclick="closeM('pastePortModal')">Cancel</button>
+      <button class="btn btn-p" id="pastePortApply" onclick="applyPastePort()" disabled>⬆️ ใส่เข้าพอร์ต &amp; Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- DETAIL MODAL -->
 <div class="mbg hidden" id="detailModal">
   <div class="modal">
@@ -668,6 +728,7 @@ let S = {
   lastSync: null,
   offline: false,
   view: 'stocks',
+  plSort: { key: 'value', dir: 'desc' },
   editData: {}
 };
 
@@ -688,6 +749,7 @@ function saveLS() {
       kbFileId: S.kbFileId,
       lastSync: S.lastSync,
       assetFileId: S.assetFileId,
+      plSort: S.plSort,
       // Recovery buffer ONLY — Google Drive is the source of truth. This lets a
       // failed Drive save be retried/recovered instead of lost on reload.
       registry: S.registry,
@@ -706,6 +768,7 @@ function loadLS() {
     if (d.kbFileId) S.kbFileId = d.kbFileId;
     if (d.assetFileId) S.assetFileId = d.assetFileId;
     if (d.lastSync) S.lastSync = d.lastSync;
+    if (d.plSort && d.plSort.key) S.plSort = { key: d.plSort.key, dir: d.plSort.dir === 'asc' ? 'asc' : 'desc' };
     if (d.registry) S.cachedRegistry = d.registry; // recovery buffer
     if (d.kb) S.cachedKb = d.kb;
     if (d.assetReg) S.cachedAssetReg = d.assetReg;
@@ -1236,6 +1299,7 @@ function applyView() {
   document.getElementById('vtabStocks').classList.toggle('active', onStocks);
   document.getElementById('vtabNw').classList.toggle('active', !onStocks);
   document.getElementById('btnAddStock').classList.toggle('hidden', !onStocks);
+  document.getElementById('btnPastePort').classList.toggle('hidden', !onStocks);
   document.getElementById('btnPrices').classList.toggle('hidden', !onStocks);
 }
 
@@ -1800,25 +1864,83 @@ function renderMoneyDashboard() {
     <div class="md-card"><div class="md-card-t">📈 มูลค่าพอร์ตตามเวลา</div><div class="md-canvas-wrap"><canvas id="valueChart"></canvas></div><div class="md-note" id="valueChartNote"></div></div>
     <div class="md-card"><div class="md-card-t">🍩 สัดส่วนพอร์ต (Allocation)</div><div class="md-canvas-wrap"><canvas id="allocChart"></canvas></div></div>
   </div>
-  <div class="md-card"><div class="md-card-t">📊 กำไร/ขาดทุน รายตัว</div><div class="md-rows" id="plRows"></div></div>`;
+  <div class="md-card">
+    <div class="md-card-head">
+      <div class="md-card-t">📊 กำไร/ขาดทุน รายตัว</div>
+      <div class="sort-bar" id="plSortBar"></div>
+    </div>
+    <div class="md-rows" id="plRows"></div>
+  </div>`;
 
-  const rows = t.held.slice().sort((a,b) => (b.current_price>0?b.current_price:b.avg_cost)*b.shares - (a.current_price>0?a.current_price:a.avg_cost)*a.shares).map(s => {
-    const c = s.avg_cost * s.shares;
-    const hasP = s.current_price > 0;
-    const v = hasP ? s.current_price * s.shares : c;
-    const pl = v - c, pct = c ? pl / c * 100 : 0;
-    const col = pl >= 0 ? 'var(--green)' : 'var(--red)';
-    const sg = pl >= 0 ? '+' : '−';
-    return `<div class="md-row">
-      <div class="md-row-l"><b>${s.ticker}</b><span class="md-row-sub">${s.shares.toLocaleString()} × ${hasP ? '฿'+s.current_price : 'ยังไม่มีราคา'}</span></div>
-      <div class="md-row-r">${fmtBaht(v)}<div style="color:${col};font-size:12px;font-weight:700">${sg}${Math.abs(pct).toFixed(2)}%</div></div>
-    </div>`;
-  }).join('');
-  const plRowsEl = document.getElementById('plRows');
-  if (plRowsEl) plRowsEl.innerHTML = rows;
-
+  renderPlSortBar();
+  renderPlRows();
   renderValueChart();
   renderAllocChart(t.held);
+}
+
+// ── Sortable per-stock P/L rows ──────────────────────────────────
+// value/cost/pl sort numerically (biggest first by default); ticker sorts
+// alphabetically (A→Z by default). Clicking the active key flips direction.
+const PL_SORTS = [
+  { key: 'value',  label: 'มูลค่า'  },
+  { key: 'pl',     label: 'กำไร'    },
+  { key: 'cost',   label: 'ต้นทุน'  },
+  { key: 'ticker', label: 'ก-ฮ/A-Z' }
+];
+
+function plRowStats(s) {
+  const cost = s.avg_cost * s.shares;
+  const hasP = s.current_price > 0;
+  const value = hasP ? s.current_price * s.shares : cost;
+  const pl = value - cost;
+  return { cost, hasP, value, pl, pct: cost ? pl / cost * 100 : 0 };
+}
+
+function sortedPlRows() {
+  const { key, dir } = S.plSort;
+  const mul = dir === 'asc' ? 1 : -1;
+  return portfolioTotals().held.slice().sort((a, b) => {
+    if (key === 'ticker') return mul * a.ticker.localeCompare(b.ticker, 'th');
+    const d = plRowStats(a)[key] - plRowStats(b)[key];
+    // Ties keep a stable, predictable order instead of shuffling on re-render.
+    return d ? mul * d : a.ticker.localeCompare(b.ticker, 'th');
+  });
+}
+
+function setPlSort(key) {
+  if (S.plSort.key === key) S.plSort.dir = S.plSort.dir === 'asc' ? 'desc' : 'asc';
+  // Names read best A→Z; money reads best biggest-first.
+  else S.plSort = { key, dir: key === 'ticker' ? 'asc' : 'desc' };
+  saveLS();
+  renderPlSortBar();
+  renderPlRows();
+}
+
+function renderPlSortBar() {
+  const bar = document.getElementById('plSortBar');
+  if (!bar) return;
+  bar.innerHTML = PL_SORTS.map(o => {
+    const on = S.plSort.key === o.key;
+    const arrow = on ? (S.plSort.dir === 'asc' ? ' ↑' : ' ↓') : '';
+    return `<button class="sort-chip${on ? ' on' : ''}" data-key="${o.key}" onclick="setPlSort(this.dataset.key)">${o.label}${arrow}</button>`;
+  }).join('');
+}
+
+function renderPlRows() {
+  const el = document.getElementById('plRows');
+  if (!el) return;
+  el.innerHTML = sortedPlRows().map(s => {
+    const st = plRowStats(s);
+    const col = st.pl >= 0 ? 'var(--green)' : 'var(--red)';
+    const sg = st.pl >= 0 ? '+' : '−';
+    return `<div class="md-row">
+      <div class="md-row-l"><b>${s.ticker}</b><span class="md-row-sub">${s.shares.toLocaleString()} × ${st.hasP ? '฿'+s.current_price : 'ยังไม่มีราคา'} · ทุน ${fmtBaht(st.cost)}</span></div>
+      <div class="md-row-r">${fmtBaht(st.value)}<div style="color:${col};font-size:12px;font-weight:700">${sg}${fmtBaht(Math.abs(st.pl))} (${sg}${Math.abs(st.pct).toFixed(2)}%)</div></div>
+      <div class="md-row-acts">
+        <button class="nw-act" data-ticker="${s.ticker}" onclick="openEditDetails(this.dataset.ticker)" title="แก้ไขจำนวน/ต้นทุน">✏️</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function renderValueChart() {
@@ -2677,6 +2799,282 @@ async function doImportJSON() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// PASTE PORTFOLIO — bulk shares / avg cost / market price / date
+// One line per stock, pasted straight from a Claude-converted screenshot.
+// ═══════════════════════════════════════════════════════════════
+const PP_HEADER_RE = /ticker|symbol|ชื่อย่อ|หลักทรัพย์|shares|จำนวน|volume|คงเหลือ|cost|ต้นทุน|price|ราคา|market|date|วันที่/i;
+const PP_TICKER_RE = /^[A-Z0-9][A-Z0-9.\-&]{0,14}$/;
+
+function ppNum(v) {
+  const c = String(v == null ? '' : v).replace(/[,\s฿%]/g, '');
+  if (!c || !/^-?\d*\.?\d+$/.test(c)) return null;
+  const n = parseFloat(c);
+  return isFinite(n) ? n : null;
+}
+
+// YYYY-MM-DD, DD/MM/YYYY, and Thai Buddhist years (2569 → 2026).
+function ppDate(v) {
+  const s = String(v == null ? '' : v).trim();
+  let y, mo, d, m;
+  if ((m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/))) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+  else if ((m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/))) { d = +m[1]; mo = +m[2]; y = +m[3]; }
+  else return null;
+  if (y > 2400) y -= 543;
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const iso = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  return isNaN(Date.parse(iso)) ? null : iso;
+}
+
+// Thousands separators must die before commas can be treated as delimiters.
+// Only strip commas inside a *properly grouped* number (1,234,567) — in
+// "ADVANC,1500,245.5" the commas are delimiters and must survive.
+// (No lookbehind: old iOS Safari throws on it, which would kill the whole script.)
+function ppStripThousands(line) {
+  return line.replace(/(^|[^\d.,])(\d{1,3}(?:,\d{3})+)(?!\d)/g, (m, pre, num) => pre + num.replace(/,/g, ''));
+}
+
+function ppSplit(line) {
+  let parts;
+  if (line.includes('\t')) parts = line.split('\t');
+  else if (line.includes('|')) parts = line.split('|');
+  else if (line.includes(',')) parts = line.split(',');
+  else parts = line.split(/\s+/);
+  parts = parts.map(p => p.trim());
+  while (parts.length && parts[0] === '') parts.shift();       // markdown "| A | B |"
+  while (parts.length && parts[parts.length - 1] === '') parts.pop();
+  return parts;
+}
+
+function ppTodayISO() { return new Date().toISOString().split('T')[0]; }
+
+// → { rows:[{ticker,shares,avg_cost,price,date}], errors:[], defaultDate }
+function parsePortfolioPaste(text) {
+  const out = { rows: [], errors: [], defaultDate: null };
+  const raw = (text || '').trim();
+  if (!raw) return out;
+
+  // Claude sometimes answers with JSON instead of the table — take that too.
+  if (/^[[{]/.test(raw)) {
+    try {
+      const j = JSON.parse(raw);
+      const arr = Array.isArray(j) ? j : (Array.isArray(j.stocks) ? j.stocks : null);
+      if (arr) {
+        arr.forEach(o => {
+          if (!o || typeof o !== 'object') return;
+          const ticker = String(o.ticker || o.symbol || '').trim().toUpperCase();
+          const shares = ppNum(o.shares != null ? o.shares : (o.qty != null ? o.qty : o.amount));
+          const cost = ppNum(o.avg_cost != null ? o.avg_cost : o.cost);
+          const price = ppNum(o.price != null ? o.price : (o.current_price != null ? o.current_price : o.market_price));
+          if (!PP_TICKER_RE.test(ticker)) { out.errors.push(`ticker ไม่ถูกต้อง: ${ticker || '(ว่าง)'}`); return; }
+          if (shares == null || cost == null) { out.errors.push(`${ticker}: ต้องมีทั้งจำนวนหุ้นและต้นทุน`); return; }
+          out.rows.push({ ticker, shares, avg_cost: cost, price, date: ppDate(o.date) });
+        });
+        if (j && !Array.isArray(j) && j.date) out.defaultDate = ppDate(j.date);
+        return dedupePasteRows(out);
+      }
+    } catch (e) { /* not JSON after all — fall through to the line parser */ }
+  }
+
+  raw.split('\n').forEach(line0 => {
+    const line = ppStripThousands(line0.trim());
+    if (!line) return;
+    if (line.startsWith('```')) return;                          // stray code fence
+    if (/^\|?\s*:?-{2,}/.test(line)) return;                     // markdown separator row
+
+    // "#วันที่ 2026-08-12" (or any comment carrying a date) sets the default date.
+    if (line.startsWith('#')) {
+      const hit = line.slice(1).split(/\s+/).map(ppDate).find(Boolean);
+      if (hit) out.defaultDate = hit;
+      return;
+    }
+    const bare = ppDate(line);
+    if (bare) { out.defaultDate = bare; return; }
+
+    const f = ppSplit(line);
+    if (f.length < 2) { out.errors.push(`อ่านไม่ออก: "${line0.trim()}"`); return; }
+
+    const ticker = f[0].replace(/[*"']/g, '').trim().toUpperCase();
+    // Header rows ("หุ้น | จำนวน | ต้นทุน") have no numbers — skip, don't complain.
+    const rest = f.slice(1);
+    const nums = [], dates = [];
+    rest.forEach(v => { const d = ppDate(v); if (d) dates.push(d); else { const n = ppNum(v); if (n !== null) nums.push(n); } });
+    if (!nums.length && !dates.length) { if (!PP_HEADER_RE.test(line)) out.errors.push(`ไม่พบตัวเลขในบรรทัด: "${line0.trim()}"`); return; }
+
+    if (!PP_TICKER_RE.test(ticker)) { out.errors.push(`ticker ไม่ถูกต้อง: "${f[0]}"`); return; }
+    if (nums.length < 2) { out.errors.push(`${ticker}: ต้องมีทั้งจำนวนหุ้นและต้นทุนเฉลี่ย`); return; }
+    if (nums[0] < 0 || nums[1] < 0) { out.errors.push(`${ticker}: ตัวเลขติดลบ`); return; }
+
+    out.rows.push({ ticker, shares: nums[0], avg_cost: nums[1], price: nums.length > 2 ? nums[2] : null, date: dates[0] || null });
+  });
+
+  return dedupePasteRows(out);
+}
+
+// A ticker listed twice (e.g. two buy lots pasted) → last line wins, and say so.
+function dedupePasteRows(out) {
+  const seen = new Map();
+  out.rows.forEach(r => {
+    if (seen.has(r.ticker)) out.errors.push(`${r.ticker}: มีซ้ำหลายบรรทัด — ใช้บรรทัดสุดท้าย`);
+    seen.set(r.ticker, r);
+  });
+  out.rows = [...seen.values()];
+  return out;
+}
+
+function openPastePort() {
+  document.getElementById('pastePortText').value = '';
+  document.getElementById('pastePortPreview').innerHTML = '';
+  const m = document.getElementById('pastePortMsg');
+  m.textContent = ''; m.style.color = 'var(--tx3)';
+  document.getElementById('pastePortApply').disabled = true;
+  document.getElementById('pastePortModal').classList.remove('hidden');
+}
+
+function buildPastePortPrompt() {
+  const today = ppTodayISO();
+  const owned = (S.registry?.stocks || []).map(s => s.ticker).join(', ');
+  return [
+    'ฉันจะแนบรูปหน้าจอพอร์ตหุ้น / ใบยืนยันการซื้อขาย (ตลาดหุ้นไทย SET) มาให้',
+    'ช่วยอ่านตัวเลขจากรูป แล้วตอบกลับเป็น "ตาราง 1 บรรทัด = 1 หุ้น" ตามรูปแบบนี้เป๊ะๆ:',
+    '',
+    '```',
+    '#วันที่ ' + today,
+    'TICKER | จำนวนหุ้น | ต้นทุนเฉลี่ยต่อหุ้น | ราคาตลาดต่อหุ้น',
+    '```',
+    '',
+    'กติกา:',
+    '- TICKER = ชื่อย่อหุ้น ตัวพิมพ์ใหญ่ (เช่น ADVANC, BDMS, MSFT80)',
+    '- ตัวเลขห้ามมีคอมมาและห้ามมีสัญลักษณ์ ฿ (เช่น 1500 ไม่ใช่ 1,500)',
+    '- ต้นทุนเฉลี่ย = ราคาต่อ 1 หุ้น — ถ้ารูปให้เป็น "มูลค่าต้นทุนรวม" ให้หารด้วยจำนวนหุ้นก่อน',
+    '- ถ้าในรูปไม่มีราคาตลาด ให้ใส่แค่ 3 คอลัมน์ (ไม่ต้องเดาราคา)',
+    '- #วันที่ = วันที่ของข้อมูลในรูป ถ้าในรูปไม่มีวันที่ให้ใช้ ' + today,
+    '- ห้ามใส่หัวตาราง ห้ามใส่คำอธิบาย ตอบเป็นบล็อกโค้ดอันเดียวเท่านั้น',
+    '- ถ้าตัวเลขไหนอ่านไม่ชัด ให้บอกไว้เป็นบรรทัดขึ้นต้นด้วย # ใต้ตาราง',
+    owned ? '\nหุ้นที่มีอยู่ในพอร์ตแล้ว (สะกดให้ตรงกัน): ' + owned : ''
+  ].join('\n');
+}
+
+function openPasteTemplateInClaude() {
+  const p = buildPastePortPrompt();
+  try { navigator.clipboard?.writeText(p); } catch (e) {}
+  openClaudeWith(p);
+  toast('📋 คัดลอกคำสั่ง + เปิด Claude แล้ว — แนบรูปพอร์ตแล้วกดส่ง');
+}
+
+function previewPastePort() {
+  const msg = document.getElementById('pastePortMsg');
+  const box = document.getElementById('pastePortPreview');
+  const btn = document.getElementById('pastePortApply');
+  const res = parsePortfolioPaste(document.getElementById('pastePortText').value);
+  S.pasteParsed = res;
+
+  if (!res.rows.length) {
+    btn.disabled = true;
+    box.innerHTML = res.errors.length ? `<div class="pp-err">${res.errors.map(escHtml).join('<br>')}</div>` : '';
+    msg.style.color = 'var(--tx3)';
+    msg.textContent = res.errors.length ? '❌ ยังไม่มีแถวที่ใช้ได้' : '';
+    return;
+  }
+
+  const fallbackDate = res.defaultDate || ppTodayISO();
+  let nNew = 0, nUpd = 0, nSame = 0;
+  const body = res.rows.map(r => {
+    const cur = S.registry?.stocks?.find(s => s.ticker === r.ticker);
+    const date = r.date || fallbackDate;
+    let tag = 'new', tagT = 'ใหม่';
+    if (cur) {
+      const same = cur.shares === r.shares && cur.avg_cost === r.avg_cost && (r.price == null || cur.current_price === r.price);
+      tag = same ? 'same' : 'upd'; tagT = same ? 'เท่าเดิม' : 'แก้ไข';
+    }
+    if (tag === 'new') nNew++; else if (tag === 'upd') nUpd++; else nSame++;
+    const was = (oldV, newV, fmt) => (cur && oldV !== newV && oldV ? `<span class="pp-old">${fmt(oldV)}</span>` : '') + fmt(newV);
+    const q = n => Number(n).toLocaleString();
+    const p = n => Number(n).toLocaleString(undefined, { maximumFractionDigits: 4 });
+    return `<tr>
+      <td><b>${escHtml(r.ticker)}</b> <span class="pp-tag ${tag}">${tagT}</span></td>
+      <td>${was(cur?.shares, r.shares, q)}</td>
+      <td>${was(cur?.avg_cost, r.avg_cost, p)}</td>
+      <td>${r.price == null ? '<span style="color:var(--tx3)">—</span>' : was(cur?.current_price, r.price, p)}</td>
+      <td style="color:var(--tx3)">${date}</td>
+    </tr>`;
+  }).join('');
+
+  box.innerHTML = `<div class="pp-scroll"><table class="pp-tbl">
+    <thead><tr><th>หุ้น</th><th>จำนวน</th><th>ต้นทุน/หุ้น</th><th>ราคาตลาด</th><th>วันที่</th></tr></thead>
+    <tbody>${body}</tbody></table></div>` +
+    (res.errors.length ? `<div class="pp-err">⚠️ ${res.errors.map(escHtml).join('<br>⚠️ ')}</div>` : '');
+
+  msg.style.color = 'var(--c1)';
+  msg.textContent = `พร้อมใส่ ${res.rows.length} ตัว — ใหม่ ${nNew} · แก้ไข ${nUpd} · เท่าเดิม ${nSame}`;
+  btn.disabled = false;
+}
+
+// Upsert a portfolio-value point at an arbitrary date (pasting an old statement
+// backfills the chart), keeping value_history sorted by date.
+function recordValueSnapshotFor(date) {
+  if (!S.kb) return;
+  if (!Array.isArray(S.kb.value_history)) S.kb.value_history = [];
+  const t = portfolioTotals();
+  if (!t.priced) return;
+  const arr = S.kb.value_history;
+  const entry = { date, value: Math.round(t.value), cost: Math.round(t.cost) };
+  const i = arr.findIndex(e => e.date === date);
+  if (i >= 0) arr[i] = entry; else arr.push(entry);
+  arr.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+async function applyPastePort() {
+  const res = S.pasteParsed;
+  if (!res || !res.rows.length) return;
+  if (!S.registry) S.registry = FALLBACK.registry;
+  if (!Array.isArray(S.registry.stocks)) S.registry.stocks = [];
+  if (!S.kb) S.kb = FALLBACK.kb;
+
+  const today = ppTodayISO();
+  const fallbackDate = res.defaultDate || today;
+  let added = 0, updated = 0;
+
+  res.rows.forEach(r => {
+    const date = r.date || fallbackDate;
+    let stock = S.registry.stocks.find(s => s.ticker === r.ticker);
+    if (!stock) {
+      stock = {
+        ticker: r.ticker, company: '', sector: '—',
+        avg_cost: 0, shares: 0,
+        thesis_score: 70, thesis_status: scoreEmoji(70),
+        notes: 'เพิ่มจากการวางพอร์ต ' + date,
+        last_review_date: date, catalysts: [], thesis_breakers: []
+      };
+      S.registry.stocks.push(stock);
+      S.kb.score_history = S.kb.score_history || {};
+      S.kb.catalyst_log = S.kb.catalyst_log || {};
+      S.kb.guidance_tracker = S.kb.guidance_tracker || {};
+      S.kb.score_history[r.ticker] = [{ date, score: 70, delta: 0, reason: 'initial entry (วางพอร์ต)' }];
+      S.kb.catalyst_log[r.ticker] = [];
+      S.kb.guidance_tracker[r.ticker] = [];
+      added++;
+    } else updated++;
+
+    stock.shares = r.shares;
+    stock.avg_cost = r.avg_cost;
+    stock.position_date = date;           // when this holding was last confirmed
+    if (r.price != null && r.price > 0) {
+      stock.current_price = r.price;
+      // Keep price_updated a real timestamp; a past-dated statement gets that day's noon.
+      stock.price_updated = date === today ? new Date().toISOString() : date + 'T12:00:00.000Z';
+    }
+  });
+
+  recordValueSnapshotFor(fallbackDate);
+  S.kb.last_updated = today;
+
+  closeM('pastePortModal');
+  renderDashboard();
+  toast(`✅ วางพอร์ตแล้ว: เพิ่ม ${added} · อัพเดต ${updated} — กำลังบันทึก…`);
+  await persistRegistryKB();
+}
+
 function confirmDeleteStock(ticker) {
   if (!confirm(`ลบ ${ticker} ออกจาก portfolio?\n\nข้อมูลทั้งหมดของ ${ticker} จะถูกลบออก`)) return;
   deleteStock(ticker);
@@ -2732,6 +3130,7 @@ function showSetup() {
   document.getElementById('btnSync').classList.add('hidden');
   document.getElementById('btnReports').classList.add('hidden');
   document.getElementById('btnAddStock').classList.add('hidden');
+  document.getElementById('btnPastePort').classList.add('hidden');
   document.getElementById('btnSignOut').classList.add('hidden');
 }
 
@@ -2745,6 +3144,7 @@ function showSignIn() {
   document.getElementById('btnSync').classList.add('hidden');
   document.getElementById('btnReports').classList.add('hidden');
   document.getElementById('btnAddStock').classList.add('hidden');
+  document.getElementById('btnPastePort').classList.add('hidden');
   document.getElementById('btnSignOut').classList.add('hidden');
 }
 
@@ -2756,6 +3156,7 @@ function showDashboard() {
   document.getElementById('btnPrices').classList.remove('hidden');
   document.getElementById('btnReports').classList.remove('hidden');
   document.getElementById('btnAddStock').classList.remove('hidden');
+  document.getElementById('btnPastePort').classList.remove('hidden');
   document.getElementById('btnImport').classList.remove('hidden');
   document.getElementById('btnSignOut').classList.remove('hidden');
   applyView(); // shows #dashboard or #nwView per current tab
