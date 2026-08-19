@@ -425,10 +425,101 @@
     ok('no element in the list is wider than the viewport', wide.length === 0, wide.join(' | '));
   } catch (e) { fail++; L.push('  FAIL layout check threw → ' + e.message); }
 
+
+  // ══════════════════ XD watch ══════════════════
+  sec('xdSymbolFor / xdDaysUntil');
+  eq('SET ticker gets .BK', xdSymbolFor('BDMS'), { sym: 'BDMS.BK', isDR: false });
+  eq('DR maps to underlying', xdSymbolFor('XIAOMI80'), { sym: '1810.HK', isDR: true });
+  eq('DR MSFT80 -> MSFT', xdSymbolFor('MSFT80'), { sym: 'MSFT', isDR: true });
+  eq('symbol with dot passes through', xdSymbolFor('MC.PA'), { sym: 'MC.PA', isDR: false });
+  eq('days ahead', xdDaysUntil('2026-08-26', '2026-08-19'), 7);
+  eq('days today', xdDaysUntil('2026-08-19', '2026-08-19'), 0);
+  eq('days past is negative', xdDaysUntil('2026-03-09', '2026-08-19'), -163);
+  eq('days null date', xdDaysUntil(null, '2026-08-19'), null);
+  eq('days garbage date', xdDaysUntil('not-a-date', '2026-08-19'), null);
+
+  sec('xdProjectNext');
+  eq('empty history', xdProjectNext([], '2026-08-19'), null);
+  eq('annual payer rolls to next year',
+     xdProjectNext(['2024-03-09', '2025-03-10', '2026-03-09'], '2026-08-19').date, '2027-03-09');
+  {
+    // twice-yearly payer: Sep slot is nearer than the Mar slot
+    const p = xdProjectNext(['2025-03-12', '2025-09-09', '2026-03-10'], '2026-08-19');
+    eq('twice-yearly picks the nearer slot', p.date, '2026-09-09');
+    eq('basis cites the matching slot', p.basis, ['2025-09-09']);
+  }
+  eq('slot later this year is kept, not pushed a year',
+     xdProjectNext(['2025-12-01'], '2026-08-19').date, '2026-12-01');
+  eq('slot already passed this year rolls forward',
+     xdProjectNext(['2026-03-09'], '2026-08-19').date, '2027-03-09');
+
+  sec('xdEstCash — DR must never produce a baht figure');
+  eq('plain stock multiplies out', xdEstCash(0.45, 6500, false), 2925);
+  eq('DR returns null', xdEstCash(0.91, 63000, true), null);
+  eq('no dps', xdEstCash(null, 6500, false), null);
+  eq('zero shares', xdEstCash(0.45, 0, false), null);
+
+  sec('buildXdRows');
+  {
+    const stocks = [
+      { ticker: 'CPF', shares: 6500 }, { ticker: 'M', shares: 8700 },
+      { ticker: 'CPN', shares: 1000 }, { ticker: 'XIAOMI80', shares: 14554 },
+      { ticker: 'NOSHARES', shares: 0 }
+    ];
+    const items = {
+      CPF: { xd: '2026-08-31', dps: 0.45, conf: 'confirmed', pay: '2026-09-11' },
+      M:   { xd: '2026-08-26', dps: 0.40, conf: 'confirmed' },
+      CPN: { xd: '2026-03-09', dps: 2.40, conf: 'estimated' },   // already past
+      XIAOMI80: { xd: '2026-09-01', dps: 0.5, conf: 'estimated', isDR: true, sym: '1810.HK' },
+      NOSHARES: { xd: '2026-08-20', dps: 1, conf: 'confirmed' }
+    };
+    const r = buildXdRows(stocks, items, '2026-08-19');
+    eq('upcoming sorted by nearest', r.up.map(x => x.ticker), ['M', 'CPF', 'XIAOMI80']);
+    eq('past XD moved out of upcoming', r.none.map(x => x.ticker), ['CPN']);
+    eq('zero-share holding excluded entirely',
+       r.up.concat(r.none).some(x => x.ticker === 'NOSHARES'), false);
+    eq('cash uses share count', r.up[0].cash, 3480);
+    eq('CPF cash', r.up[1].cash, 2925);
+    eq('DR row carries no cash', r.up[2].cash, null);
+    eq('DR row shows no per-share baht', r.up[2].dps, null);
+    eq('total excludes the DR', r.total, 6405);
+    eq('days computed', r.up[0].days, 7);
+  }
+  {
+    const r = buildXdRows([{ ticker: 'AAA', shares: 100 }], {}, '2026-08-19');
+    eq('missing item degrades to none bucket', r.none.map(x => x.ticker), ['AAA']);
+    eq('missing item total is zero', r.total, 0);
+  }
+  eq('no stocks at all', buildXdRows([], {}, '2026-08-19').total, 0);
+
+  sec('renderXD');
+  {
+    const prevReg = S.registry, prevXd = S.xd;
+    S.registry = { stocks: [{ ticker: 'CPF', shares: 6500 }, { ticker: 'MSFT80', shares: 63000 }] };
+    S.xd = { fetched_at: '2026-08-19T10:00:00.000Z', items: {
+      CPF: { xd: '2099-08-31', dps: 0.45, conf: 'confirmed' },
+      MSFT80: { xd: '2099-08-20', conf: 'confirmed', isDR: true, sym: 'MSFT',
+                note: 'อ้างอิง MSFT' }
+    } };
+    renderXD();
+    const h = document.getElementById('xdContent').innerHTML;
+    ok('renders the ticker', h.indexOf('CPF') !== -1);
+    ok('renders the confirmed badge', h.indexOf('ยืนยันแล้ว') !== -1);
+    ok('renders a baht total', h.indexOf('฿2,925') !== -1);
+    ok('DR row renders without a baht amount', h.indexOf('฿28,530') === -1);
+    ok('DR caveat is shown', h.indexOf('หุ้นแม่') !== -1);
+    S.xd = null;
+    renderXD();
+    ok('empty state when never fetched',
+       document.getElementById('xdContent').innerHTML.indexOf('ยังไม่ได้ดึงข้อมูล') !== -1);
+    S.registry = prevReg; S.xd = prevXd;
+  }
+
   L.push('');
   L.push('PASS ' + pass + '   FAIL ' + fail);
   const pre = document.createElement('pre');
   pre.id = 'testout';
   pre.textContent = L.join('\n');
   document.body.appendChild(pre);
+
 })();

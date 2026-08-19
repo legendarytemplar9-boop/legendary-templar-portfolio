@@ -229,6 +229,18 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 .rpt td.up{color:var(--green);font-weight:700}.rpt td.dn{color:var(--red);font-weight:700}
 .rpt-empty{text-align:center;color:var(--tx3);padding:30px 14px;font-size:13px;line-height:1.6}
 .rpt-meta{font-size:11px;color:var(--tx3);margin-bottom:6px}
+/* ── XD Watch ── */
+.xd-b{display:inline-block;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:700;white-space:nowrap}
+.xd-c{background:rgba(34,197,94,.15);color:var(--green)}
+.xd-e{background:rgba(234,179,8,.15);color:var(--yellow)}
+.xd-n{background:var(--bg2);color:var(--tx3)}
+.xd-soon td{background:rgba(34,197,94,.07)}
+.xd-d{font-weight:800;white-space:nowrap}
+.xd-note{font-size:10.5px;color:var(--tx3);margin-top:3px;line-height:1.45}
+.xd-tot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:none}
+.xd-cash{font-weight:800;color:var(--green);white-space:nowrap}
+.xd-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.xd-warn{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:11.5px;color:var(--tx2);line-height:1.55;margin-top:12px}
 /* ── Money Dashboard ── */
 .md-wrap{margin-bottom:20px}
 .md-hero{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;background:linear-gradient(135deg,var(--bg2),var(--bg3));border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-bottom:14px}
@@ -311,6 +323,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
     <span class="sync-ts hidden" id="syncTs"></span>
     <button class="btn btn-s btn-sm hidden" id="btnSync" onclick="syncData()">⟳ Sync</button>
     <button class="btn btn-p btn-sm hidden" id="btnPrices" onclick="updatePrices()">💰 ราคา</button>
+    <button class="btn btn-s btn-sm hidden" id="btnXD" onclick="openXD()">💵 XD</button>
     <button class="btn btn-s btn-sm hidden" id="btnReports" onclick="openReports()">📊 Reports</button>
     <button class="btn btn-p btn-sm hidden" id="btnAddStock" onclick="openAddStock()">+ Add Stock</button>
     <button class="btn btn-s btn-sm hidden" id="btnPastePort" onclick="openPastePort()">📋 วางพอร์ต</button>
@@ -695,6 +708,23 @@ HANA   | 2000 | 38 | 35.75"></textarea>
     <div class="mb">
       <div class="rpt-pills" id="rptPills"></div>
       <div id="rptContent"><div class="rpt-empty">Loading…</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="mbg center hidden" id="xdModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">
+      <div class="mt-t">💵 XD ที่กำลังจะถึง</div>
+      <button class="btn btn-g btn-sm" onclick="closeM('xdModal')">✕</button>
+    </div>
+    <div class="mb">
+      <div class="xd-head">
+        <button class="btn btn-p btn-sm" onclick="updateXD()">🔄 ดึงข้อมูล XD</button>
+        <span class="rpt-meta" id="xdMeta" style="margin:0"></span>
+      </div>
+      <div id="xdContent"><div class="rpt-empty">Loading…</div></div>
     </div>
   </div>
 </div>
@@ -1323,6 +1353,7 @@ function applyView() {
   document.getElementById('btnAddStock').classList.toggle('hidden', !onStocks);
   document.getElementById('btnPastePort').classList.toggle('hidden', !onStocks);
   document.getElementById('btnPrices').classList.toggle('hidden', !onStocks);
+  document.getElementById('btnXD').classList.toggle('hidden', !onStocks);
 }
 
 function switchView(v) {
@@ -1830,6 +1861,281 @@ async function updatePrices() {
   await persistRegistryKB();
   if (fail.length) toast(`✅ อัพเดต ${ok} ตัว · ❌ ไม่ได้: ${fail.join(', ')} (ใช้ราคาเดิม)`);
   else toast(`✅ อัพเดตราคา ${ok} ตัวสำเร็จ`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// XD WATCH — next ex-dividend date per holding, fetched on demand
+// Same proxy chain as prices. Two tiers of certainty, never mixed:
+//   CONFIRMED  Yahoo calendarEvents carries a FUTURE ex-dividend date
+//   ESTIMATED  nothing announced — projected from this stock's own
+//              ex-date history, showing the dates it was based on
+// Thai DRs (LVMH01 / MSFT80 / XIAOMI80 / ASML01 …) have no DR-level
+// corporate action on Yahoo, so we read the UNDERLYING and label it.
+// The DR issuer sets its own XD and its own per-unit amount, so we
+// deliberately show NO baht figure for a DR — multiplying a foreign
+// per-share dividend by DR units would be a wrong number, not an
+// approximate one.
+// Cached in localStorage only: deliberately NOT written to the
+// registry, whose schema is shared with the cloud routine.
+// ═══════════════════════════════════════════════════════════════
+const XD_KEY = 'lt_xd_v1';
+const DR_UNDERLYING = {
+  LVMH01: 'MC.PA', MSFT80: 'MSFT', MSFT90: 'MSFT',
+  XIAOMI80: '1810.HK', ASML01: 'ASML'
+};
+
+function xdSymbolFor(ticker) {
+  if (DR_UNDERLYING[ticker]) return { sym: DR_UNDERLYING[ticker], isDR: true };
+  if (ticker.includes('.') || ticker.includes('=')) return { sym: ticker, isDR: false };
+  return { sym: ticker + '.BK', isDR: false };
+}
+
+function xdToday() { return new Date().toISOString().split('T')[0]; }
+
+function xdFromEpoch(sec) {
+  if (typeof sec !== 'number' || !sec) return null;
+  const d = new Date(sec * 1000);
+  return isNaN(d.getTime()) ? null : d.toISOString().split('T')[0];
+}
+
+function xdDaysUntil(dateStr, today) {
+  if (!dateStr) return null;
+  const a = Date.parse(dateStr + 'T00:00:00Z');
+  const b = Date.parse((today || xdToday()) + 'T00:00:00Z');
+  if (isNaN(a) || isNaN(b)) return null;
+  return Math.round((a - b) / 86400000);
+}
+
+// Project the next ex-date from history. A twice-yearly payer has two
+// recurring month/day slots, so consider every distinct slot in recent
+// history and take whichever comes round first — not just the latest.
+function xdProjectNext(dates, today) {
+  const t = today || xdToday();
+  const past = (dates || []).filter(Boolean).slice().sort();
+  if (!past.length) return null;
+  const recent = past.slice(-6);
+  const seen = {}, cands = [];
+  recent.forEach(function (d) {
+    const mmdd = d.slice(5);
+    if (seen[mmdd]) return;
+    seen[mmdd] = 1;
+    const y = Number(t.slice(0, 4));
+    let c = y + '-' + mmdd;
+    if (c <= t) c = (y + 1) + '-' + mmdd;
+    cands.push(c);
+  });
+  cands.sort();
+  const pick = cands[0];
+  return { date: pick, basis: recent.filter(function (d) { return d.slice(5) === pick.slice(5); }).slice(-3) };
+}
+
+function xdEstCash(dps, shares, isDR) {
+  if (isDR) return null;                       // wrong currency + wrong ratio
+  if (!(dps > 0) || !(shares > 0)) return null;
+  return dps * shares;
+}
+
+function buildXdRows(stocks, items, today) {
+  const t = today || xdToday();
+  const rows = [];
+  (stocks || []).forEach(function (s) {
+    if (!(s.shares > 0)) return;
+    const it = (items || {})[s.ticker] || {};
+    const days = it.xd ? xdDaysUntil(it.xd, t) : null;
+    rows.push({
+      ticker: s.ticker, shares: s.shares,
+      dps: it.isDR ? null : (it.dps != null ? it.dps : null),
+      xd: it.xd || null, pay: it.pay || null, days: days,
+      cash: xdEstCash(it.dps, s.shares, it.isDR),
+      conf: it.conf || 'none', isDR: !!it.isDR, sym: it.sym || null,
+      basis: it.basis || null, note: it.note || ''
+    });
+  });
+  const up = rows.filter(function (r) { return r.xd && r.days >= 0; })
+    .sort(function (a, b) { return a.days - b.days || a.ticker.localeCompare(b.ticker); });
+  const none = rows.filter(function (r) { return !(r.xd && r.days >= 0); })
+    .sort(function (a, b) { return a.ticker.localeCompare(b.ticker); });
+  const total = up.reduce(function (n, r) { return n + (r.cash || 0); }, 0);
+  return { up: up, none: none, total: total };
+}
+
+async function xdFetchJSON(url, tries) {
+  for (const wrap of PRICE_PROXIES) {
+    for (let attempt = 0; attempt < (tries || 2); attempt++) {
+      try {
+        const r = await fetch(wrap(url));
+        if (!r.ok) continue;
+        return await r.json();
+      } catch (e) { /* try next proxy/attempt */ }
+    }
+  }
+  return null;
+}
+
+async function fetchXdFor(ticker) {
+  const info = xdSymbolFor(ticker);
+  const out = { sym: info.sym, isDR: info.isDR, dps: null, xd: null, pay: null,
+                conf: 'none', basis: null, note: '' };
+  const today = xdToday();
+
+  // 1 — announced upcoming ex-date
+  // One shot per proxy: this endpoint is sometimes gated for every symbol,
+  // and 13 holdings x 4 doomed attempts is a slow way to learn that.
+  const qs = await xdFetchJSON('https://query1.finance.yahoo.com/v10/finance/quoteSummary/' +
+    encodeURIComponent(info.sym) + '?modules=calendarEvents,summaryDetail', 1);
+  const res = qs && qs.quoteSummary && qs.quoteSummary.result && qs.quoteSummary.result[0];
+  const ex = xdFromEpoch(res && res.calendarEvents && res.calendarEvents.exDividendDate &&
+                         res.calendarEvents.exDividendDate.raw);
+  const pay = xdFromEpoch(res && res.calendarEvents && res.calendarEvents.dividendDate &&
+                          res.calendarEvents.dividendDate.raw);
+  const sd = (res && res.summaryDetail) || {};
+  const rate = (sd.dividendRate && sd.dividendRate.raw) != null ? sd.dividendRate.raw
+             : ((sd.trailingAnnualDividendRate && sd.trailingAnnualDividendRate.raw) != null
+                ? sd.trailingAnnualDividendRate.raw : null);
+  if (ex && ex >= today) {
+    out.xd = ex;
+    out.pay = (pay && pay >= ex) ? pay : null;
+    out.conf = 'confirmed';
+    if (!info.isDR && typeof rate === 'number' && rate > 0) out.dps = rate;
+  }
+
+  // 2 — nothing announced → project from this stock's own history
+  if (!out.xd) {
+    const ch = await xdFetchJSON('https://query1.finance.yahoo.com/v8/finance/chart/' +
+      encodeURIComponent(info.sym) + '?interval=1d&range=5y&events=div');
+    const r0 = ch && ch.chart && ch.chart.result && ch.chart.result[0];
+    const divs = r0 && r0.events && r0.events.dividends;
+    if (divs) {
+      const list = Object.keys(divs).map(function (k) {
+        return { date: xdFromEpoch(divs[k].date), amount: divs[k].amount };
+      }).filter(function (d) { return d.date; })
+        .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+      const proj = xdProjectNext(list.map(function (d) { return d.date; }), today);
+      if (proj) {
+        out.xd = proj.date; out.conf = 'estimated'; out.basis = proj.basis;
+        const same = list.filter(function (d) { return d.date.slice(5) === proj.date.slice(5); });
+        const ref = same.length ? same[same.length - 1] : list[list.length - 1];
+        if (!info.isDR && ref && ref.amount > 0) out.dps = ref.amount;
+      }
+    }
+  }
+
+  if (info.isDR) {
+    out.dps = null;
+    out.note = 'อ้างอิง ' + info.sym + ' — DR กำหนด XD และจำนวนต่อหน่วยเอง ตรวจที่ SET';
+  }
+  if (!out.xd && !out.note) out.note = 'ไม่พบข้อมูลวัน XD';
+  return out;
+}
+
+function xdLoadCache() {
+  if (S.xd) return S.xd;
+  try {
+    const raw = localStorage.getItem(XD_KEY);
+    if (raw) S.xd = JSON.parse(raw);
+  } catch (e) { /* ignore a corrupt cache */ }
+  return S.xd;
+}
+
+async function updateXD() {
+  if (!S.registry) return;
+  const held = S.registry.stocks.filter(function (s) { return s.shares > 0; });
+  if (!held.length) { toast('ยังไม่มีหุ้นที่กรอกจำนวน'); return; }
+  showLoading('กำลังดึงวัน XD…');
+  const items = {};
+  for (const s of held) {
+    setLoadMsg('XD ' + s.ticker + '…');
+    try { items[s.ticker] = await fetchXdFor(s.ticker); }
+    catch (e) { items[s.ticker] = { conf: 'none', note: 'ดึงข้อมูลไม่สำเร็จ' }; }
+  }
+  S.xd = { fetched_at: new Date().toISOString(), items: items };
+  try { localStorage.setItem(XD_KEY, JSON.stringify(S.xd)); } catch (e) { /* quota */ }
+  hideLoading();
+  renderXD();
+  const n = buildXdRows(held, items).up.length;
+  toast(n ? ('✅ พบ XD ที่กำลังจะถึง ' + n + ' ตัว') : 'ไม่พบวัน XD ที่กำลังจะถึง');
+}
+
+function openXD() {
+  document.getElementById('xdModal').classList.remove('hidden');
+  xdLoadCache();
+  renderXD();
+  if (!S.xd) updateXD();          // first tap does the fetch for you
+}
+
+function xdConfBadge(c) {
+  if (c === 'confirmed') return '<span class="xd-b xd-c">ยืนยันแล้ว</span>';
+  if (c === 'estimated') return '<span class="xd-b xd-e">คาดการณ์</span>';
+  return '<span class="xd-b xd-n">ไม่พบ</span>';
+}
+
+function xdDaysLabel(d) {
+  if (d === 0) return 'วันนี้';
+  if (d === 1) return 'พรุ่งนี้';
+  return d + ' วัน';
+}
+
+function renderXD() {
+  const box = document.getElementById('xdContent');
+  const meta = document.getElementById('xdMeta');
+  if (!box) return;
+  const held = ((S.registry && S.registry.stocks) || []).filter(function (s) { return s.shares > 0; });
+  if (meta) {
+    meta.textContent = (S.xd && S.xd.fetched_at)
+      ? 'ดึงล่าสุด ' + new Date(S.xd.fetched_at).toLocaleString('th-TH')
+      : '';
+  }
+  if (!S.xd) {
+    box.innerHTML = '<div class="rpt-empty">ยังไม่ได้ดึงข้อมูล<br>กด “🔄 ดึงข้อมูล XD” ด้านบน</div>';
+    return;
+  }
+  const r = buildXdRows(held, S.xd.items);
+  let h = '<div class="rpt">';
+  if (!r.up.length) {
+    h += '<div class="rpt-empty">ไม่พบวัน XD ที่กำลังจะถึงสำหรับหุ้นในพอร์ต</div>';
+  } else {
+    h += '<table><thead><tr><th>หุ้น</th><th style="text-align:right">฿/หุ้น</th>' +
+         '<th>วัน XD</th><th style="text-align:right">อีก</th>' +
+         '<th style="text-align:right">จำนวน</th><th style="text-align:right">ได้รับ</th>' +
+         '<th>สถานะ</th></tr></thead><tbody>';
+    r.up.forEach(function (x) {
+      const soon = x.days <= 7 ? ' class="xd-soon"' : '';
+      let note = '';
+      if (x.note) note += escHtml(x.note);
+      if (x.conf === 'estimated' && x.basis && x.basis.length) {
+        note += (note ? '<br>' : '') + 'อิงจากปีก่อน: ' + escHtml(x.basis.join(', '));
+      }
+      if (x.pay) note += (note ? '<br>' : '') + 'จ่าย ' + escHtml(x.pay);
+      h += '<tr' + soon + '>' +
+        '<td><strong>' + escHtml(x.ticker) + '</strong>' +
+          (note ? '<div class="xd-note">' + note + '</div>' : '') + '</td>' +
+        '<td style="text-align:right">' + (x.dps != null ? x.dps.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '<span style="color:var(--tx3)">—</span>') + '</td>' +
+        '<td class="xd-d">' + escHtml(x.xd) + '</td>' +
+        '<td style="text-align:right" class="xd-d">' + xdDaysLabel(x.days) + '</td>' +
+        '<td style="text-align:right">' + x.shares.toLocaleString() + '</td>' +
+        '<td style="text-align:right" class="' + (x.cash != null ? 'xd-cash' : '') + '">' +
+          (x.cash != null ? fmtBaht(x.cash) : '<span style="color:var(--tx3)">—</span>') + '</td>' +
+        '<td>' + xdConfBadge(x.conf) + '</td></tr>';
+    });
+    h += '<tr class="xd-tot"><td colspan="5">รวมที่คาดว่าจะได้รับ</td>' +
+         '<td style="text-align:right" class="xd-cash">' + fmtBaht(r.total) + '</td><td></td></tr>';
+    h += '</tbody></table>';
+  }
+  if (r.none.length) {
+    h += '<h2>ไม่มี XD ที่กำลังจะถึง</h2><ul>';
+    r.none.forEach(function (x) {
+      h += '<li><strong>' + escHtml(x.ticker) + '</strong>' +
+           (x.note ? ' — ' + escHtml(x.note) : '') + '</li>';
+    });
+    h += '</ul>';
+  }
+  h += '<div class="xd-warn">' +
+    '<strong>ยืนยันแล้ว</strong> = Yahoo มีวัน XD ล่วงหน้าที่ประกาศแล้ว · ' +
+    '<strong>คาดการณ์</strong> = ยังไม่ประกาศ คำนวณจากรอบปีก่อนของหุ้นตัวนั้นเอง — อย่าใช้ตัดสินใจซื้อขาย ให้ตรวจที่ SET อีกครั้ง<br>' +
+    'DR (LVMH01 / MSFT80 / XIAOMI80 / ASML01) แสดงวัน ex-dividend ของ<em>หุ้นแม่</em> ' +
+    'ผู้ออก DR กำหนดวัน XD และจำนวนต่อหน่วยเอง จึงไม่คำนวณเป็นบาทให้ (คนละสกุลเงินและคนละอัตราส่วน)' +
+    '</div></div>';
+  box.innerHTML = h;
 }
 
 function portfolioTotals() {
@@ -3182,6 +3488,7 @@ function showDashboard() {
   document.getElementById('viewTabs').classList.remove('hidden');
   document.getElementById('btnSync').classList.remove('hidden');
   document.getElementById('btnPrices').classList.remove('hidden');
+  document.getElementById('btnXD').classList.remove('hidden');
   document.getElementById('btnReports').classList.remove('hidden');
   document.getElementById('btnAddStock').classList.remove('hidden');
   document.getElementById('btnPastePort').classList.remove('hidden');
