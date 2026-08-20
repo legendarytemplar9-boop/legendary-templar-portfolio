@@ -6,6 +6,14 @@
 <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <title>Legendary Templar · Portfolio</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#070809">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Templar">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <style>
 :root{
   --bg:#070809;--bg2:#0e1012;--bg3:#161a1d;
@@ -88,6 +96,8 @@ hr.div{border:none;height:1px;background:var(--border);margin:20px 0}
 .st-val{font-weight:800;font-size:15px}
 .st-pl{font-size:12px;font-weight:700;margin-top:1px}
 .st-qty{font-size:10.5px;color:var(--tx3);margin-top:2px}
+.st-day{font-size:11px;font-weight:700;margin-top:2px}
+.st-stale{display:inline-block;font-size:10px;font-weight:700;color:var(--orange);background:var(--oranged);border-radius:5px;padding:1px 6px;margin-top:3px}
 .st-watch{font-size:12px;color:var(--tx3);font-style:italic}
 .st-acts{flex:0 0 auto;display:flex;gap:4px;margin-top:2px}
 .st-act{padding:3px 7px;font-size:11px;background:transparent;color:var(--tx3);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:color .15s,border-color .15s}
@@ -247,6 +257,19 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 .md-label{font-size:11px;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
 .md-value{font-size:34px;font-weight:900;letter-spacing:-1px;line-height:1}
 .md-pl{font-size:16px;font-weight:800;margin-top:6px}
+.md-day{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;margin-top:7px;padding:3px 10px;border-radius:12px;background:var(--bg3);border:1px solid var(--border)}
+.md-day .md-day-l{color:var(--tx3);font-weight:600;font-size:11px}
+/* ── Contribution bars ── */
+.cb{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--border);cursor:pointer}
+.cb:last-child{border-bottom:0}
+.cb:hover{background:var(--bg3)}
+.cb-nm{width:74px;flex:0 0 auto;font-weight:700;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cb-track{flex:1 1 auto;min-width:40px;height:16px;position:relative;background:var(--bg);border-radius:4px;overflow:hidden}
+.cb-track i{position:absolute;top:0;bottom:0;border-radius:3px}
+.cb-mid{position:absolute;top:0;bottom:0;width:1px;background:var(--border2)}
+.cb-v{flex:0 0 auto;text-align:right;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;min-width:92px}
+.cb-p{flex:0 0 auto;text-align:right;font-size:11px;color:var(--tx3);font-variant-numeric:tabular-nums;width:62px}
+@media(max-width:520px){.cb-p{display:none}.cb-nm{width:58px}}
 .md-sub{font-size:11px;color:var(--tx3);margin-top:8px;line-height:1.5}
 .md-charts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
 @media(max-width:720px){.md-charts{grid-template-columns:1fr}.md-value{font-size:28px}}
@@ -852,6 +875,8 @@ let S = {
   plSort: { key: 'value', dir: 'desc' },
   nwOpen: {},          // net-worth groups the user left expanded, by group key
   nwSort: { key: 'value', dir: 'desc' },
+  plRange: 'all',      // time range on the หุ้น value chart
+  nwRange: 'all',      // …and on the Net Worth chart
   stClosed: {},        // stock groups the user collapsed (they start expanded)
   stGroup: 'sector',   // how the stock list is grouped: sector|status|held|none
   editData: {}
@@ -877,6 +902,8 @@ function saveLS() {
       plSort: S.plSort,
       nwOpen: S.nwOpen,
       nwSort: S.nwSort,
+      plRange: S.plRange,
+      nwRange: S.nwRange,
       stClosed: S.stClosed,
       stGroup: S.stGroup,
       // Recovery buffer ONLY — Google Drive is the source of truth. This lets a
@@ -900,6 +927,8 @@ function loadLS() {
     if (d.plSort && d.plSort.key) S.plSort = { key: d.plSort.key, dir: d.plSort.dir === 'asc' ? 'asc' : 'desc' };
     if (d.nwOpen && typeof d.nwOpen === 'object') S.nwOpen = d.nwOpen;
     if (d.nwSort && d.nwSort.key) S.nwSort = { key: d.nwSort.key, dir: d.nwSort.dir === 'asc' ? 'asc' : 'desc' };
+    if (d.plRange && CHART_RANGES.some(r => r.key === d.plRange)) S.plRange = d.plRange;
+    if (d.nwRange && CHART_RANGES.some(r => r.key === d.nwRange)) S.nwRange = d.nwRange;
     if (d.stClosed && typeof d.stClosed === 'object') S.stClosed = d.stClosed;
     if (d.stGroup && ST_GROUPS.some(g => g.key === d.stGroup)) S.stGroup = d.stGroup;
     if (d.registry) S.cachedRegistry = d.registry; // recovery buffer
@@ -1330,23 +1359,29 @@ async function fetchFxRate() {
 }
 
 // ── Crypto prices (USD) via Binance, proxy fallback ──
-async function fetchCryptoPrice(ticker) {
+async function fetchCryptoQuote(ticker) {
   const t = (ticker || '').toUpperCase().trim();
   if (!t) return null;
-  if (t === 'USDT') return 1;
+  if (t === 'USDT') return { price: 1, prev: 1 };
   const sym = t.endsWith('USDT') ? t : t + 'USDT';
-  const url = `https://api.binance.com/api/v3/ticker/price?symbol=${sym}`;
+  // /ticker/24hr costs the same as /ticker/price but also carries prevClosePrice
+  const url = `https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}`;
   const attempts = [u => u, ...PRICE_PROXIES];
   for (const wrap of attempts) {
     try {
       const r = await fetch(wrap(url));
       if (!r.ok) continue;
       const j = await r.json();
-      const p = parseFloat(j.price);
-      if (p > 0) return p;
+      const p = parseFloat(j.lastPrice);
+      if (p > 0) return { price: p, prev: parseFloat(j.prevClosePrice) || 0 };
     } catch(e) {}
   }
   return null;
+}
+
+async function fetchCryptoPrice(ticker) {
+  const q = await fetchCryptoQuote(ticker);
+  return q ? q.price : null;
 }
 
 // ── Value math ──
@@ -1398,8 +1433,8 @@ async function nwUpdateAll() {
     let stockFail = [];
     for (const s of held) {
       setLoadMsg('ราคาหุ้น ' + s.ticker + '…');
-      const p = await fetchYahooPrice(s.ticker);
-      if (p != null) { s.current_price = p; s.price_updated = new Date().toISOString(); }
+      const q = await fetchYahooQuote(s.ticker);
+      if (q) applyQuote(s, q);
       else stockFail.push(s.ticker);
     }
     if (held.length) recordValueSnapshot();
@@ -1407,8 +1442,8 @@ async function nwUpdateAll() {
     let cryptoFail = [];
     for (const a of autos) {
       setLoadMsg('ราคา ' + a.ticker + '…');
-      const p = await fetchCryptoPrice(a.ticker);
-      if (p != null) { a.fetched_price = p; a.price_updated = new Date().toISOString(); }
+      const q = await fetchCryptoQuote(a.ticker);
+      if (q) { a.fetched_price = q.price; if (q.prev > 0) a.prev_close = q.prev; a.price_updated = new Date().toISOString(); }
       else cryptoFail.push(a.ticker);
     }
     recordNwSnapshot();
@@ -1722,6 +1757,7 @@ function renderNetWorth() {
   fxInit();
   const t = netWorthTotals();
   const items = S.assetReg.assets || [];
+  const nwDay = dayStats();
   const fxStr = fxRate.usdthb.toFixed(2);
   const fxSub = fxRate.source === 'manual' ? 'ล็อคเอง' : fxRate.updated ? new Date(fxRate.updated).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : 'ค่าเริ่มต้น';
 
@@ -1732,6 +1768,7 @@ function renderNetWorth() {
       <div class="md-value">${fmtBaht(t.net)}</div>
       <div class="md-sub" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
         <span class="nw-chip tap" onclick="switchView('stocks')" title="ไปที่แท็บหุ้น">⚔️ หุ้น ${fmtBaht(t.stocksValue)}</span>
+        ${nwDay.has ? `<span class="nw-chip" style="color:${nwDay.chg >= 0 ? 'var(--green)' : 'var(--red)'}" title="เฉพาะส่วนหุ้น">📈 วันนี้ ${nwDay.chg >= 0 ? '+' : '−'}${fmtBaht(Math.abs(nwDay.chg))}</span>` : ''}
         <span class="nw-chip tap" onclick="openNwBreakdown('assets')" title="ดูทรัพย์สินทุกประเภท">💎 ทรัพย์สินอื่น ${fmtBaht(t.assets)}</span>
         <span class="nw-chip tap" style="color:var(--red)" onclick="openNwBreakdown('liab')" title="ดูหนี้สินทั้งหมด">💳 หนี้สิน −${fmtBaht(t.liab)}</span>
         <span class="nw-chip" style="cursor:pointer" onclick="openFxModal()" title="ตั้งค่าอัตราแลกเปลี่ยน">💱 $1 = ฿${fxStr} <span style="color:var(--tx3)">(${fxSub})</span></span>
@@ -1743,7 +1780,11 @@ function renderNetWorth() {
     </div>
   </div>
   <div class="md-charts">
-    <div class="md-card"><div class="md-card-t">📈 Net Worth ตามเวลา</div><div class="md-canvas-wrap"><canvas id="nwValueChart"></canvas></div><div class="md-note" id="nwChartNote"></div></div>
+    <div class="md-card">
+      <div class="md-card-head"><div class="md-card-t">📈 Net Worth ตามเวลา</div><div class="sort-bar" id="nwRangeBar"></div></div>
+      <div class="md-canvas-wrap"><canvas id="nwValueChart"></canvas></div>
+      <div class="md-note" id="nwChartNote"></div>
+    </div>
     <div class="md-card"><div class="md-card-t">🍩 สัดส่วนทรัพย์สิน</div><div class="md-canvas-wrap"><canvas id="nwAllocChart"></canvas></div><div class="dn-legend" id="nwAllocLegend"></div></div>
   </div>`;
 
@@ -1778,6 +1819,7 @@ function renderNetWorth() {
   renderNwSortBar();
   grpSyncBtn('nw');
 
+  renderRangeBar('nw');
   renderNwValueChart();
   renderNwAllocChart(t, assets);
 }
@@ -1806,16 +1848,19 @@ function nwRowHtml(a) {
 function renderNwValueChart() {
   const canvas = document.getElementById('nwValueChart');
   if (!canvas) return;
-  const hist = (S.assetReg?.snapshots || []).slice(-120);
+  const all = S.assetReg?.snapshots || [];
+  const hist = filterByRange(all, S.nwRange).slice(-400);
   const note = document.getElementById('nwChartNote');
   if (hist.length < 2) {
-    if (note) note.textContent = hist.length === 1
-      ? 'มี snapshot แล้ว 1 วัน — เส้นกราฟจะเริ่มขึ้นเมื่อกด "อัพเดตทั้งหมด" อีกวัน'
-      : 'ยังไม่มีข้อมูลย้อนหลัง — กด "💰 อัพเดตทั้งหมด" เพื่อเริ่มเก็บ Net Worth รายวัน';
+    if (note) note.textContent = all.length >= 2
+      ? `ช่วงนี้มีข้อมูล ${hist.length} จุด — เลือกช่วงที่กว้างขึ้นเพื่อดูเส้นกราฟ`
+      : all.length === 1
+        ? 'มี snapshot แล้ว 1 วัน — เส้นกราฟจะเริ่มขึ้นเมื่อกด "อัพเดตทั้งหมด" อีกวัน'
+        : 'ยังไม่มีข้อมูลย้อนหลัง — กด "💰 อัพเดตทั้งหมด" เพื่อเริ่มเก็บ Net Worth รายวัน';
     if (canvas._chart) { canvas._chart.destroy(); canvas._chart = null; }
     return;
   }
-  if (note) note.textContent = '';
+  if (note) note.innerHTML = rangeNoteHtml(hist, 'net');
   const labels = hist.map(h => h.date.slice(5));
   ensureChartJs(() => {
     if (canvas._chart) canvas._chart.destroy();
@@ -2204,6 +2249,43 @@ function getAlerts() {
       }
     }
   });
+
+  // Concentration: one stock, or one sector, carrying too much of the portfolio
+  const tot = portfolioTotals();
+  if (tot.value > 0) {
+    tot.held.forEach(s => {
+      const w = plRowStats(s).value / tot.value * 100;
+      if (w >= CONC_STOCK_PCT) {
+        alerts.push({ type:'warn', title: `⚖️ ${s.ticker} คิดเป็น ${w.toFixed(0)}% ของพอร์ต`,
+                      desc: `กระจุกตัวสูง — ตัวเดียวเกิน ${CONC_STOCK_PCT}% ของมูลค่าทั้งพอร์ต`, ticker: s.ticker });
+      }
+    });
+    const bySec = {};
+    tot.held.forEach(s => {
+      const sec = (s.sector && s.sector !== '—') ? s.sector : 'ไม่ระบุกลุ่ม';
+      bySec[sec] = (bySec[sec] || 0) + plRowStats(s).value;
+    });
+    // One sector is only a warning when there is more than one to compare with.
+    if (Object.keys(bySec).length > 1) {
+      Object.keys(bySec).forEach(sec => {
+        const w = bySec[sec] / tot.value * 100;
+        if (w >= CONC_SECTOR_PCT) {
+          alerts.push({ type:'warn', title: `⚖️ กลุ่ม ${sec} คิดเป็น ${w.toFixed(0)}% ของพอร์ต`,
+                        desc: `กระจุกตัวรายกลุ่ม — เกิน ${CONC_SECTOR_PCT}% ในกลุ่มเดียว` });
+        }
+      });
+    }
+  }
+
+  // Prices drifting out of date — the whole dashboard is wrong without saying so
+  const lastUpd = tot.held.map(s => s.price_updated).filter(Boolean).sort().pop();
+  const stale = daysSinceISO(lastUpd);
+  if (tot.held.length && (lastUpd == null || (stale != null && stale >= STALE_ALERT_DAYS))) {
+    alerts.push({ type:'warn',
+      title: lastUpd == null ? '🕒 ยังไม่เคยดึงราคาตลาด' : `🕒 ราคายังไม่ได้อัพเดต ${stale} วัน`,
+      desc: 'มูลค่าที่เห็นอาจไม่ตรงตลาด — กด "💰 ราคา" เพื่ออัพเดต' });
+  }
+
   return alerts;
 }
 
@@ -2262,7 +2344,9 @@ const PRICE_PROXIES = [
   u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u)
 ];
 
-async function fetchYahooPrice(ticker) {
+// The same chart response already carries yesterday's close, so one call gives
+// both the price and today's move — no extra request, no extra proxy quota.
+async function fetchYahooQuote(ticker) {
   // SET tickers get .BK; symbols with '.' or '=' (FX like THB=X) pass through as-is
   const sym = (ticker.includes('.') || ticker.includes('=')) ? ticker : ticker + '.BK';
   const yurl = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d`;
@@ -2272,12 +2356,21 @@ async function fetchYahooPrice(ticker) {
         const r = await fetch(wrap(yurl));
         if (!r.ok) continue;
         const j = await r.json();
-        const p = j?.chart?.result?.[0]?.meta?.regularMarketPrice;
-        if (typeof p === 'number' && p > 0) return p;
+        const meta = j?.chart?.result?.[0]?.meta || {};
+        const p = meta.regularMarketPrice;
+        if (typeof p === 'number' && p > 0) {
+          const prev = [meta.previousClose, meta.chartPreviousClose].find(v => typeof v === 'number' && v > 0);
+          return { price: p, prev: prev || 0 };
+        }
       } catch (e) { /* try next proxy/attempt */ }
     }
   }
   return null;
+}
+
+async function fetchYahooPrice(ticker) {
+  const q = await fetchYahooQuote(ticker);
+  return q ? q.price : null;
 }
 
 async function updatePrices() {
@@ -2288,8 +2381,8 @@ async function updatePrices() {
   let ok = 0; const fail = [];
   for (const s of held) {
     setLoadMsg('ดึงราคา ' + s.ticker + '…');
-    const p = await fetchYahooPrice(s.ticker);
-    if (p != null) { s.current_price = p; s.price_updated = new Date().toISOString(); ok++; }
+    const q = await fetchYahooQuote(s.ticker);
+    if (q) { applyQuote(s, q); ok++; }
     else fail.push(s.ticker);
   }
   recordValueSnapshot();
@@ -2575,6 +2668,112 @@ function renderXD() {
   box.innerHTML = h;
 }
 
+// ── Today's move, price freshness, chart ranges ─────────────────────────
+// A quote carries yesterday's close, so "วันนี้" is (price − prev) × shares.
+// Everything degrades quietly: no prev_close yet → the day line is hidden
+// rather than showing a wrong 0%.
+function applyQuote(s, q) {
+  s.current_price = q.price;
+  if (q.prev > 0) s.prev_close = q.prev;
+  s.price_updated = new Date().toISOString();
+}
+
+function stockDay(s) {
+  const price = +s.current_price || 0, prev = +s.prev_close || 0;
+  if (!(price > 0) || !(prev > 0)) return null;
+  return { pct: (price / prev - 1) * 100, chg: (price - prev) * (+s.shares || 0), per: price - prev };
+}
+
+function dayStats() {
+  let value = 0, prevValue = 0, n = 0;
+  (S.registry?.stocks || []).forEach(s => {
+    const d = stockDay(s);
+    if (!d || !(s.shares > 0)) return;
+    value += s.current_price * s.shares;
+    prevValue += s.prev_close * s.shares;
+    n++;
+  });
+  const chg = value - prevValue;
+  return { n, chg, pct: prevValue ? chg / prevValue * 100 : 0, has: n > 0 && prevValue > 0 };
+}
+
+function daysSinceISO(iso, now) {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (isNaN(t)) return null;
+  return Math.floor(((now == null ? Date.now() : now) - t) / 86400000);
+}
+
+const CONC_STOCK_PCT = 25;   // one stock over this share of the portfolio → warn
+const CONC_SECTOR_PCT = 40;  // …or one sector
+const STALE_ROW_DAYS = 3;    // badge on the row
+const STALE_ALERT_DAYS = 5;  // alert on the dashboard
+function staleDays(s) {
+  if (!(s.current_price > 0)) return null;
+  const d = daysSinceISO(s.price_updated);
+  return d != null && d >= STALE_ROW_DAYS ? d : null;
+}
+
+const CHART_RANGES = [
+  { key: '1m',  label: '1 เดือน', days: 30  },
+  { key: '3m',  label: '3 เดือน', days: 90  },
+  { key: 'ytd', label: 'ปีนี้'                },
+  { key: '1y',  label: '1 ปี',    days: 365 },
+  { key: 'all', label: 'ทั้งหมด'              }
+];
+
+function rangeStartDate(key, todayISO) {
+  const today = todayISO || new Date().toISOString().split('T')[0];
+  if (key === 'ytd') return today.slice(0, 4) + '-01-01';
+  const r = CHART_RANGES.find(x => x.key === key);
+  if (!r || !r.days) return null;                     // 'all' → no lower bound
+  const d = new Date(today + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - r.days);
+  return d.toISOString().split('T')[0];
+}
+
+function filterByRange(hist, key, todayISO) {
+  const start = rangeStartDate(key, todayISO);
+  const arr = (hist || []).filter(h => h && h.date);
+  return start ? arr.filter(h => h.date >= start) : arr.slice();
+}
+
+// First → last change over whatever the range kept, for the caption under it.
+function rangeDelta(hist, field) {
+  if (!hist || hist.length < 2) return null;
+  const a = +hist[0][field] || 0, b = +hist[hist.length - 1][field] || 0;
+  return { from: a, to: b, chg: b - a, pct: a ? (b - a) / a * 100 : 0, days: hist.length };
+}
+
+function setChartRange(which, key) {
+  if (which === 'nw') { S.nwRange = key; } else { S.plRange = key; }
+  saveLS();
+  if (which === 'nw') { renderRangeBar('nw'); renderNwValueChart(); }
+  else { renderRangeBar('pl'); renderValueChart(); }
+}
+
+function renderRangeBar(which) {
+  const bar = document.getElementById(which === 'nw' ? 'nwRangeBar' : 'plRangeBar');
+  if (!bar) return;
+  const cur = which === 'nw' ? S.nwRange : S.plRange;
+  bar.innerHTML = CHART_RANGES.map(r =>
+    `<button class="sort-chip${cur === r.key ? ' on' : ''}" data-k="${r.key}" data-w="${which}" onclick="setChartRange(this.dataset.w, this.dataset.k)">${r.label}</button>`
+  ).join('');
+}
+
+// ── Contribution: who actually moved the portfolio ──────────────────────
+// Baht P/L per holding, plus its effect on the whole portfolio's return in
+// percentage points (pl ÷ total cost) — the number that adds up to the
+// portfolio's own return, unlike each stock's individual %.
+function contributionRows() {
+  const t = portfolioTotals();
+  if (!t.cost) return [];
+  return t.held.map(s => {
+    const st = plRowStats(s);
+    return { ticker: s.ticker, pl: st.pl, pts: st.pl / t.cost * 100 };
+  }).filter(r => Math.round(r.pl) !== 0).sort((a, b) => b.pl - a.pl);
+}
+
 function portfolioTotals() {
   const held = (S.registry?.stocks || []).filter(s => s.avg_cost > 0 && s.shares > 0);
   let cost = 0, value = 0, priced = 0;
@@ -2621,20 +2820,32 @@ function renderMoneyDashboard() {
 
   // Hero + charts need at least one position; the list itself always renders
   // (watch-only stocks live there too, and they used to have their own cards).
+  const day = dayStats();
+  const dayCol = day.chg >= 0 ? 'var(--green)' : 'var(--red)';
+  const daySg = day.chg >= 0 ? '+' : '−';
+  const staleAll = daysSinceISO(lastUpd);
+  const staleStr = staleAll != null && staleAll >= STALE_ALERT_DAYS ? ` · <span style="color:var(--orange)">ราคาเก่า ${staleAll} วัน</span>` : '';
+
   const heroHtml = t.held.length ? `
   <div class="md-hero">
     <div>
       <div class="md-label">มูลค่าพอร์ตรวม${anyPriced ? '' : ' (ยังไม่มีราคา · ใช้ต้นทุน)'}</div>
       <div class="md-value">${fmtBaht(t.value)}</div>
       <div class="md-pl" style="color:${plColor}">${sign}${fmtBaht(Math.abs(t.pl))} (${sign}${Math.abs(t.plPct).toFixed(2)}%)</div>
-      <div class="md-sub">ต้นทุนรวม ${fmtBaht(t.cost)} · ราคาล่าสุด ${lastStr}</div>
+      ${day.has ? `<div class="md-day" style="color:${dayCol}"><span class="md-day-l">วันนี้</span>${daySg}${fmtBaht(Math.abs(day.chg))} (${daySg}${Math.abs(day.pct).toFixed(2)}%)</div>` : ''}
+      <div class="md-sub">ต้นทุนรวม ${fmtBaht(t.cost)} · ราคาล่าสุด ${lastStr}${staleStr}</div>
     </div>
     <button class="btn btn-p btn-sm" onclick="updatePrices()">💰 อัพเดตราคา</button>
   </div>
   <div class="md-charts">
-    <div class="md-card"><div class="md-card-t">📈 มูลค่าพอร์ตตามเวลา</div><div class="md-canvas-wrap"><canvas id="valueChart"></canvas></div><div class="md-note" id="valueChartNote"></div></div>
+    <div class="md-card">
+      <div class="md-card-head"><div class="md-card-t">📈 มูลค่าพอร์ตตามเวลา</div><div class="sort-bar" id="plRangeBar"></div></div>
+      <div class="md-canvas-wrap"><canvas id="valueChart"></canvas></div>
+      <div class="md-note" id="valueChartNote"></div>
+    </div>
     <div class="md-card"><div class="md-card-t">🍩 สัดส่วนพอร์ต (Allocation)</div><div class="md-canvas-wrap"><canvas id="allocChart"></canvas></div><div class="dn-legend" id="allocLegend"></div></div>
-  </div>` : `
+  </div>
+  ${contribCardHtml()}` : `
   <div class="md-card" style="text-align:center;color:var(--tx3);font-size:13px">
     ยังไม่มีหุ้นที่กรอกจำนวน/ต้นทุน — ใส่ Shares + Avg Cost (ปุ่ม ✏️ ในแถว) เพื่อดูมูลค่าพอร์ตและกราฟ
   </div>`;
@@ -2658,7 +2869,7 @@ function renderMoneyDashboard() {
   renderPlSortBar();
   renderStGroupBar();
   renderStockRows();
-  if (t.held.length) { renderValueChart(); renderAllocChart(t.held); }
+  if (t.held.length) { renderRangeBar('pl'); renderValueChart(); renderAllocChart(t.held); renderContribution(); }
 }
 
 // ── The unified stock list ───────────────────────────────────────
@@ -2849,11 +3060,20 @@ function stockRowHtml(s) {
   const sg = st.pl >= 0 ? '+' : '−';
   const sub = [s.company, s.sector && s.sector !== '—' ? s.sector : ''].filter(Boolean).join(' · ');
 
+  const day = stockDay(s);
+  const dayHtml = day
+    ? `<div class="st-day" style="color:${day.pct >= 0 ? 'var(--green)' : 'var(--red)'}">วันนี้ ${day.pct >= 0 ? '+' : '−'}${Math.abs(day.pct).toFixed(2)}%${held ? ` · ${day.chg >= 0 ? '+' : '−'}${fmtBaht(Math.abs(day.chg))}` : ''}</div>`
+    : '';
+  const stale = staleDays(s);
+  const staleHtml = stale ? `<div class="st-stale">ราคาเก่า ${stale} วัน</div>` : '';
+
   const money = held
     ? `<div class="st-val">${fmtBaht(st.value)}</div>
        <div class="st-pl" style="color:${col}">${sg}${fmtBaht(Math.abs(st.pl))} (${sg}${Math.abs(st.pct).toFixed(2)}%)</div>
-       <div class="st-qty">${s.shares.toLocaleString()} × ${st.hasP ? '฿' + s.current_price : 'ยังไม่มีราคา'} · ทุน ${fmtBaht(st.cost)}</div>`
-    : `<div class="st-watch">Watch only</div>`;
+       ${dayHtml}
+       <div class="st-qty">${s.shares.toLocaleString()} × ${st.hasP ? '฿' + s.current_price : 'ยังไม่มีราคา'} · ทุน ${fmtBaht(st.cost)}</div>
+       ${staleHtml}`
+    : `<div class="st-watch">Watch only</div>${dayHtml}`;
 
   return `<div class="st-row" data-ticker="${escHtml(tk)}" onclick="openDetail(this.dataset.ticker)">
     <div class="st-id">
@@ -2883,19 +3103,64 @@ function stockRowHtml(s) {
   </div>`;
 }
 
+// Caption under a value chart: what the visible range actually did.
+function rangeNoteHtml(hist, field) {
+  const d = rangeDelta(hist, field);
+  if (!d) return '';
+  const up = d.chg >= 0;
+  const col = up ? 'var(--green)' : 'var(--red)';
+  const sg = up ? '+' : '−';
+  const label = (CHART_RANGES.find(r => r.key === (field === 'net' ? S.nwRange : S.plRange)) || {}).label || '';
+  return `<b style="color:${col}">${sg}${fmtBaht(Math.abs(d.chg))} (${sg}${Math.abs(d.pct).toFixed(2)}%)</b> ใน${label} · ${hist[0].date} → ${hist[hist.length - 1].date}`;
+}
+
+function contribCardHtml() {
+  if (!contributionRows().length) return '';
+  return `<div class="md-card">
+    <div class="md-card-head">
+      <div class="md-card-t">🎯 ใครลาก ใครถ่วง</div>
+      <div style="font-size:11px;color:var(--tx3)">“จุด” = ผลต่อผลตอบแทนรวมของพอร์ต (บวกกันได้ = ${(portfolioTotals().plPct).toFixed(2)}%)</div>
+    </div>
+    <div id="contribRows"></div>
+  </div>`;
+}
+
+function renderContribution() {
+  const el = document.getElementById('contribRows');
+  if (!el) return;
+  const rows = contributionRows();
+  const max = rows.reduce((m, r) => Math.max(m, Math.abs(r.pl)), 0) || 1;
+  el.innerHTML = rows.map(r => {
+    const up = r.pl >= 0;
+    const col = up ? 'var(--green)' : 'var(--red)';
+    const w = (Math.abs(r.pl) / max * 50).toFixed(1);   // centre line = zero
+    const bar = up ? `left:50%;width:${w}%;background:var(--green)`
+                   : `right:50%;width:${w}%;background:var(--red)`;
+    return `<div class="cb" data-ticker="${escHtml(r.ticker)}" onclick="openDetail(this.dataset.ticker)" title="แตะเพื่อดูรายละเอียด">
+      <div class="cb-nm">${escHtml(r.ticker)}</div>
+      <div class="cb-track"><span class="cb-mid" style="left:50%"></span><i style="${bar}"></i></div>
+      <div class="cb-v" style="color:${col}">${up ? '+' : '−'}${fmtBaht(Math.abs(r.pl))}</div>
+      <div class="cb-p">${up ? '+' : '−'}${Math.abs(r.pts).toFixed(2)} จุด</div>
+    </div>`;
+  }).join('');
+}
+
 function renderValueChart() {
   const canvas = document.getElementById('valueChart');
   if (!canvas) return;
-  const hist = (S.kb?.value_history || []).slice(-90);
+  const all = S.kb?.value_history || [];
+  const hist = filterByRange(all, S.plRange).slice(-400);
   const note = document.getElementById('valueChartNote');
   if (hist.length < 2) {
-    if (note) note.textContent = hist.length === 1
-      ? 'มี snapshot แล้ว 1 วัน — เส้นกราฟจะเริ่มขึ้นเมื่อกด "อัพเดตราคา" อีกวัน'
-      : 'ยังไม่มีข้อมูลย้อนหลัง — กด "💰 อัพเดตราคา" เพื่อเริ่มเก็บมูลค่าพอร์ตรายวัน';
+    if (note) note.textContent = all.length >= 2
+      ? `ช่วงนี้มีข้อมูล ${hist.length} จุด — เลือกช่วงที่กว้างขึ้นเพื่อดูเส้นกราฟ`
+      : all.length === 1
+        ? 'มี snapshot แล้ว 1 วัน — เส้นกราฟจะเริ่มขึ้นเมื่อกด "อัพเดตราคา" อีกวัน'
+        : 'ยังไม่มีข้อมูลย้อนหลัง — กด "💰 อัพเดตราคา" เพื่อเริ่มเก็บมูลค่าพอร์ตรายวัน';
     if (canvas._chart) { canvas._chart.destroy(); canvas._chart = null; }
     return;
   }
-  if (note) note.textContent = '';
+  if (note) note.innerHTML = rangeNoteHtml(hist, 'value');
   const labels = hist.map(h => h.date.slice(5));
   const values = hist.map(h => h.value);
   const costs = hist.map(h => h.cost);

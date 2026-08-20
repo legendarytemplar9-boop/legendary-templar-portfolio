@@ -838,6 +838,199 @@
     document.getElementById('nwDash').innerHTML = '';
   }
 
+  // ══════════════════ today's move ══════════════════
+  sec('stockDay / dayStats');
+  {
+    const daysAgo = d => new Date(Date.now() - d * 86400000).toISOString();
+    eq('no previous close → no day move', stockDay({ current_price: 10, shares: 5 }), null);
+    eq('no price yet → no day move', stockDay({ prev_close: 10, shares: 5 }), null);
+    eq('zero prev close is not a divide', stockDay({ current_price: 10, prev_close: 0, shares: 5 }), null);
+    let d = stockDay({ current_price: 10.5, prev_close: 10, shares: 100 });
+    ok('percent up', Math.abs(d.pct - 5) < 1e-9, d.pct);
+    ok('baht change uses shares', Math.abs(d.chg - 50) < 1e-9, d.chg);
+    d = stockDay({ current_price: 9, prev_close: 10, shares: 100 });
+    ok('percent down is negative', Math.abs(d.pct + 10) < 1e-9, d.pct);
+    ok('baht change down', Math.abs(d.chg + 100) < 1e-9, d.chg);
+    eq('watch-only still gets a percent, zero baht', stockDay({ current_price: 11, prev_close: 10, shares: 0 }).chg, 0);
+
+    const prevReg = S.registry;
+    S.registry = { stocks: [
+      { ticker: 'AAA', shares: 100, avg_cost: 9, current_price: 10.5, prev_close: 10 },   // +50
+      { ticker: 'BBB', shares: 50,  avg_cost: 20, current_price: 18,  prev_close: 20 },   // −100
+      { ticker: 'NOP', shares: 10,  avg_cost: 5,  current_price: 6 },                     // no prev → skipped
+      { ticker: 'WWW', shares: 0,   avg_cost: 0,  current_price: 3, prev_close: 2 }       // no shares → skipped
+    ] };
+    const ds = dayStats();
+    eq('only holdings with both prices count', ds.n, 2);
+    ok('portfolio day change in baht', Math.abs(ds.chg + 50) < 1e-9, ds.chg);
+    ok('portfolio day percent off yesterday value', Math.abs(ds.pct - (-50 / 2000 * 100)) < 1e-9, ds.pct);
+    ok('has a day move', ds.has);
+    S.registry = { stocks: [{ ticker: 'AAA', shares: 100, avg_cost: 9, current_price: 10 }] };
+    ok('no prev closes anywhere → nothing to show', !dayStats().has);
+    S.registry = { stocks: [] };
+    ok('empty portfolio is safe', !dayStats().has && dayStats().chg === 0);
+
+    // applyQuote is what the price refresh writes
+    const st = { ticker: 'AAA' };
+    applyQuote(st, { price: 12, prev: 11 });
+    eq('quote writes price', st.current_price, 12);
+    eq('quote writes previous close', st.prev_close, 11);
+    ok('quote stamps the time', !!st.price_updated);
+    applyQuote(st, { price: 13, prev: 0 });
+    eq('a quote without a prev close keeps the old one', st.prev_close, 11);
+    eq('…but still updates the price', st.current_price, 13);
+    S.registry = prevReg;
+  }
+
+  sec('price freshness');
+  {
+    const daysAgo = d => new Date(Date.now() - d * 86400000 - 60000).toISOString();
+    eq('no timestamp', daysSinceISO(null), null);
+    eq('garbage timestamp', daysSinceISO('not a date'), null);
+    eq('same day', daysSinceISO(new Date().toISOString()), 0);
+    eq('four days', daysSinceISO(daysAgo(4)), 4);
+    eq('fresh price gets no badge', staleDays({ current_price: 10, price_updated: daysAgo(1) }), null);
+    eq('three days old gets a badge', staleDays({ current_price: 10, price_updated: daysAgo(3) }), 3);
+    eq('no price at all → no badge', staleDays({ price_updated: daysAgo(9) }), null);
+  }
+
+  // ══════════════════ chart ranges ══════════════════
+  sec('rangeStartDate / filterByRange');
+  eq('1 month back', rangeStartDate('1m', '2026-08-20'), '2026-07-21');
+  eq('3 months back', rangeStartDate('3m', '2026-08-20'), '2026-05-22');
+  eq('1 year back', rangeStartDate('1y', '2026-08-20'), '2025-08-20');
+  eq('year to date', rangeStartDate('ytd', '2026-08-20'), '2026-01-01');
+  eq('all time has no lower bound', rangeStartDate('all', '2026-08-20'), null);
+  eq('unknown key behaves like all', rangeStartDate('zzz', '2026-08-20'), null);
+  {
+    const H = [
+      { date: '2025-12-30', value: 100 }, { date: '2026-01-05', value: 110 },
+      { date: '2026-07-25', value: 120 }, { date: '2026-08-19', value: 130 }
+    ];
+    eq('all keeps everything', filterByRange(H, 'all', '2026-08-20').length, 4);
+    eq('ytd drops last year', filterByRange(H, 'ytd', '2026-08-20').map(h => h.date),
+       ['2026-01-05', '2026-07-25', '2026-08-19']);
+    eq('1m keeps only the last month', filterByRange(H, '1m', '2026-08-20').map(h => h.date),
+       ['2026-07-25', '2026-08-19']);
+    eq('filtering never mutates the source', H.length, 4);
+    eq('empty history is safe', filterByRange([], '1m', '2026-08-20'), []);
+    eq('entries without a date are dropped', filterByRange([{ value: 5 }], 'all', '2026-08-20'), []);
+
+    const d = rangeDelta(filterByRange(H, 'ytd', '2026-08-20'), 'value');
+    eq('range delta baht', d.chg, 20);
+    ok('range delta percent', Math.abs(d.pct - (20 / 110 * 100)) < 1e-9, d.pct);
+    eq('one point is not a delta', rangeDelta([{ date: 'x', value: 1 }], 'value'), null);
+    eq('no points is not a delta', rangeDelta([], 'value'), null);
+  }
+
+  sec('range chips on the charts');
+  {
+    const prevReg = S.registry, prevKb = S.kb, prevRange = S.plRange, prevMode = S.stGroup;
+    const iso = d => new Date(Date.now() - d * 86400000).toISOString().split('T')[0];
+    S.stGroup = 'none';
+    S.registry = { stocks: [{ ticker: 'AAA', company: 'A', sector: 'Tech', shares: 100, avg_cost: 10, current_price: 12, prev_close: 11, thesis_score: 70, catalysts: [], thesis_breakers: [] }] };
+    S.kb = { score_history: {}, catalyst_log: {}, guidance_tracker: {}, evidence_clips: [],
+             value_history: [
+               { date: iso(200), value: 800, cost: 1000 },
+               { date: iso(40),  value: 900, cost: 1000 },
+               { date: iso(5),   value: 1100, cost: 1000 },
+               { date: iso(0),   value: 1200, cost: 1000 }
+             ] };
+    S.plRange = 'all';
+    renderMoneyDashboard();
+    ok('hero shows today’s move', /วันนี้/.test(document.getElementById('moneyDash').textContent));
+    ok('row shows today’s move', document.querySelector('.st-day') !== null);
+    const bar = () => document.getElementById('plRangeBar');
+    eq('a chip per range', bar().querySelectorAll('.sort-chip').length, 5);
+    eq('active chip is the saved range', bar().querySelector('.sort-chip.on').dataset.k, 'all');
+    const note = () => document.getElementById('valueChartNote');
+    ok('all-time note spans the oldest point', note().textContent.indexOf(iso(200)) !== -1);
+
+    setChartRange('pl', '1m');
+    eq('choice is remembered', S.plRange, '1m');
+    eq('chip follows the choice', bar().querySelector('.sort-chip.on').dataset.k, '1m');
+    ok('note now starts inside the month', note().textContent.indexOf(iso(5)) !== -1);
+    ok('note shows the change over the range', /\+฿100|\+฿100/.test(note().textContent), note().textContent);
+
+    setChartRange('pl', '1y');
+    ok('a year back reaches the older point', note().textContent.indexOf(iso(200)) !== -1);
+    // a range with too few points explains itself instead of drawing a line
+    S.kb.value_history = [{ date: iso(300), value: 800, cost: 1000 }, { date: iso(290), value: 850, cost: 1000 }];
+    setChartRange('pl', '1m');
+    ok('thin range says so', /เลือกช่วงที่กว้างขึ้น/.test(note().textContent), note().textContent);
+    S.kb.value_history = [];
+    setChartRange('pl', 'all');
+    ok('no history at all keeps the old message', /ยังไม่มีข้อมูลย้อนหลัง/.test(note().textContent));
+
+    S.registry = prevReg; S.kb = prevKb; S.plRange = prevRange; S.stGroup = prevMode;
+  }
+
+  // ══════════════════ contribution + warnings ══════════════════
+  sec('contributionRows');
+  {
+    const prevReg = S.registry;
+    S.registry = { stocks: [
+      { ticker: 'WIN',  shares: 100, avg_cost: 10, current_price: 15 },  // +500 on cost 1000
+      { ticker: 'LOSE', shares: 100, avg_cost: 20, current_price: 17 },  // −300 on cost 2000
+      { ticker: 'FLAT', shares: 100, avg_cost: 10, current_price: 10 },  // 0 → dropped
+      { ticker: 'WATCH', shares: 0,  avg_cost: 0 }                       // not held
+    ] };
+    const rows = contributionRows();
+    eq('winners first, losers last', rows.map(r => r.ticker), ['WIN', 'LOSE']);
+    eq('baht contribution', rows.map(r => Math.round(r.pl)), [500, -300]);
+    // points are measured against total cost, so they add up to the portfolio return
+    const tot = portfolioTotals();
+    const sum = rows.reduce((a, r) => a + r.pts, 0);
+    ok('points add up to the portfolio return', Math.abs(sum - tot.plPct) < 1e-9, sum + ' vs ' + tot.plPct);
+    S.registry = { stocks: [] };
+    eq('no holdings → no rows', contributionRows(), []);
+    S.registry = prevReg;
+  }
+
+  sec('concentration + stale alerts');
+  {
+    const prevReg = S.registry, prevKb = S.kb;
+    S.kb = { score_history: {}, catalyst_log: {}, guidance_tracker: {}, evidence_clips: [] };
+    const fresh = new Date().toISOString();
+    S.registry = { stocks: [
+      { ticker: 'BIG', sector: 'Tech', shares: 100, avg_cost: 10, current_price: 10, thesis_score: 70, price_updated: fresh, catalysts: [] },
+      { ticker: 'SM1', sector: 'Bank', shares: 10, avg_cost: 10, current_price: 10, thesis_score: 70, price_updated: fresh, catalysts: [] },
+      { ticker: 'SM2', sector: 'Food', shares: 10, avg_cost: 10, current_price: 10, thesis_score: 70, price_updated: fresh, catalysts: [] }
+    ] };
+    let titles = getAlerts().map(a => a.title).join(' | ');
+    ok('warns when one stock dominates', /BIG คิดเป็น 83%/.test(titles), titles);
+    ok('warns when one sector dominates', /กลุ่ม Tech คิดเป็น 83%/.test(titles), titles);
+    ok('fresh prices raise no clock alert', titles.indexOf('🕒') === -1, titles);
+
+    S.registry.stocks = [
+      { ticker: 'A', sector: 'Tech', shares: 10, avg_cost: 10, current_price: 10, thesis_score: 70, price_updated: fresh, catalysts: [] },
+      { ticker: 'B', sector: 'Bank', shares: 10, avg_cost: 10, current_price: 10, thesis_score: 70, price_updated: fresh, catalysts: [] },
+      { ticker: 'C', sector: 'Food', shares: 10, avg_cost: 10, current_price: 10, thesis_score: 70, price_updated: fresh, catalysts: [] },
+      { ticker: 'D', sector: 'Energy', shares: 10, avg_cost: 10, current_price: 10, thesis_score: 70, price_updated: fresh, catalysts: [] },
+      { ticker: 'E', sector: 'Retail', shares: 10, avg_cost: 10, current_price: 10, thesis_score: 70, price_updated: fresh, catalysts: [] }
+    ];
+    titles = getAlerts().map(a => a.title).join(' | ');
+    ok('an evenly spread portfolio is quiet', titles.indexOf('⚖️') === -1, titles);
+
+    // one sector only — nothing to compare against, so no sector warning
+    S.registry.stocks = [
+      { ticker: 'A', sector: 'Tech', shares: 10, avg_cost: 10, current_price: 10, thesis_score: 70, price_updated: fresh, catalysts: [] },
+      { ticker: 'B', sector: 'Tech', shares: 10, avg_cost: 10, current_price: 10, thesis_score: 70, price_updated: fresh, catalysts: [] },
+      { ticker: 'C', sector: 'Tech', shares: 10, avg_cost: 10, current_price: 10, thesis_score: 70, price_updated: fresh, catalysts: [] },
+      { ticker: 'D', sector: 'Tech', shares: 10, avg_cost: 10, current_price: 10, thesis_score: 70, price_updated: fresh, catalysts: [] },
+      { ticker: 'E', sector: 'Tech', shares: 10, avg_cost: 10, current_price: 10, thesis_score: 70, price_updated: fresh, catalysts: [] }
+    ];
+    ok('a single-sector portfolio does not warn about that sector',
+       getAlerts().map(a => a.title).join(' | ').indexOf('กลุ่ม Tech') === -1);
+
+    S.registry.stocks.forEach(s => { s.price_updated = new Date(Date.now() - 9 * 86400000).toISOString(); });
+    titles = getAlerts().map(a => a.title).join(' | ');
+    ok('old prices raise a clock alert', /🕒 ราคายังไม่ได้อัพเดต 9 วัน/.test(titles), titles);
+    S.registry.stocks.forEach(s => { delete s.price_updated; });
+    ok('never-fetched prices say so', /ยังไม่เคยดึงราคาตลาด/.test(getAlerts().map(a => a.title).join(' | ')));
+    S.registry = prevReg; S.kb = prevKb;
+  }
+
   L.push('');
   L.push('PASS ' + pass + '   FAIL ' + fail);
   const pre = document.createElement('pre');
