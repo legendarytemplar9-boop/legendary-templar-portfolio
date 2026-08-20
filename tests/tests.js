@@ -1643,6 +1643,125 @@
     S.tradeLog = prevLog;
   }
 
+  // ══════════════════ monthly insights ══════════════════
+  sec('monthBounds / monthStats');
+  {
+    eq('month start and end', monthBounds('2026-02'), { start: '2026-02-01', end: '2026-02-28' });
+    eq('a 31-day month', monthBounds('2026-08').end, '2026-08-31');
+    eq('a leap February', monthBounds('2024-02').end, '2024-02-29');
+
+    const prevKb = S.kb, prevLog = S.tradeLog, prevBench = S.bench;
+    S.kb = { score_history: {
+        AAA: [{ date: '2026-02-10', score: 80, delta: 10, reason: 'งบดี' },
+              { date: '2026-03-10', score: 78, delta: -2, reason: 'ราคาแพง' }],
+        BBB: [{ date: '2026-02-20', score: 60, delta: 0, reason: 'ไม่เปลี่ยน' }]
+      },
+      value_history: [
+        { date: '2026-01-30', value: 100000, cost: 90000 },
+        { date: '2026-02-15', value: 105000, cost: 90000 },
+        { date: '2026-02-27', value: 110000, cost: 90000 }
+      ] };
+    S.tradeLog = { version: 1, trades: [
+      { id: '1', date: '2026-02-05', ticker: 'AAA', type: 'buy',  qty: 100, price: 10, fee: 20 },
+      { id: '2', date: '2026-02-25', ticker: 'AAA', type: 'sell', qty: 50,  price: 14, fee: 10 },
+      { id: '3', date: '2026-03-05', ticker: 'AAA', type: 'div',  qty: 50,  price: 1, tax: 5 }
+    ] };
+    S.bench = { symbol: 'x', points: [
+      { date: '2026-01-30', close: 1000 }, { date: '2026-02-27', close: 1020 }
+    ] };
+    const m = monthStats('2026-02');
+    near('value change over the month', m.chgPct, 10);
+    near('index change over the same span', m.benchPct, 2);
+    eq('only that month’s trades', m.trades.length, 2);
+    near('bought in the month', m.bought, 1020);
+    near('sold in the month', m.sold, 690);
+    near('realised in the month', m.realized, 50 * (14 - 10.2) - 10);
+    eq('dividends land in their own month', m.dividends, 0);
+    near('march dividend shows up in march', monthStats('2026-03').dividends, 45);
+    eq('score moves in the month', m.scoreMoves.map(x => x.ticker), ['AAA']);
+    ok('a zero-delta score entry is not a move', m.scoreMoves.length === 1);
+    eq('a quiet month is empty but safe', monthStats('2026-06').trades.length, 0);
+
+    openInsights('2026-02');
+    const body = document.getElementById('insightsBody');
+    ok('shows the month’s value change', /\+10\.00%/.test(body.textContent), body.textContent.slice(0, 200));
+    ok('compares with the index', /ชนะดัชนี 8\.00%/.test(body.textContent));
+    ok('lists the month’s trades', /AAA/.test(body.textContent));
+    ok('lists the score moves', /งบดี/.test(body.textContent));
+    ok('a month chip per month', document.querySelectorAll('#insightsBody .sort-chip').length === 12);
+    closeM('insightsModal');
+    S.kb = prevKb; S.tradeLog = prevLog; S.bench = prevBench;
+  }
+
+  // ══════════════════ alert rules ══════════════════
+  sec('evalAlertRules');
+  {
+    const prevReg = S.registry, prevAlerts = S.alerts, prevXd = S.xd, prevKb = S.kb, prevOff = S.offline;
+    S.offline = true;
+    S.kb = { score_history: {}, catalyst_log: {}, guidance_tracker: {}, evidence_clips: [] };
+    S.registry = { stocks: [
+      { ticker: 'AAA', sector: 'Tech', shares: 100, avg_cost: 10, current_price: 12, thesis_score: 70, catalysts: [], price_updated: new Date().toISOString() },
+      { ticker: 'BBB', sector: 'Bank', shares: 100, avg_cost: 20, current_price: 15, thesis_score: 70, catalysts: [], price_updated: new Date().toISOString() },
+      { ticker: 'NOP', sector: 'Food', shares: 100, avg_cost: 10, thesis_score: 70, catalysts: [], price_updated: new Date().toISOString() }
+    ] };
+    S.xd = { fetched_at: 'x', items: { AAA: { xd: xdToday(), dps: 1, conf: 'confirmed' } } };
+    S.alerts = { version: 1, rules: [
+      { id: 'r1', ticker: 'AAA', type: 'price_above', value: 11, enabled: true },
+      { id: 'r2', ticker: 'AAA', type: 'price_above', value: 20, enabled: true },
+      { id: 'r3', ticker: 'BBB', type: 'price_below', value: 16, enabled: true },
+      { id: 'r4', ticker: 'BBB', type: 'below_cost_pct', value: 20, enabled: true },
+      { id: 'r5', ticker: 'AAA', type: 'gain_pct', value: 15, enabled: true },
+      { id: 'r6', ticker: '',    type: 'xd_within', value: 7, enabled: true },
+      { id: 'r7', ticker: 'NOP', type: 'price_below', value: 5, enabled: true },
+      { id: 'r8', ticker: 'ZZZ', type: 'price_above', value: 5, enabled: true },
+      { id: 'r9', ticker: 'AAA', type: 'price_above', value: 1, enabled: false }
+    ] };
+    const res = evalAlertRules();
+    const hit = id => res.find(x => x.rule.id === id).hit;
+    eq('disabled rules are not evaluated at all', res.length, 8);
+    ok('price target reached', hit('r1'));
+    ok('price target not reached', !hit('r2'));
+    ok('price floor reached', hit('r3'));
+    ok('down 25% trips a 20% stop', hit('r4'));
+    ok('up 20% trips a 15% gain rule', hit('r5'));
+    ok('XD within 7 days', hit('r6'));
+    ok('a stock with no market price cannot trip', !hit('r7'));
+    eq('…and says why', res.find(x => x.rule.id === 'r7').detail, 'ยังไม่มีราคาตลาด');
+    ok('an unknown ticker cannot trip', !hit('r8'));
+    ok('…and says so', /ไม่พบ ZZZ/.test(res.find(x => x.rule.id === 'r8').detail));
+
+    // hits appear on the dashboard alerts panel
+    const titles = getAlerts().map(a => a.title).join(' | ');
+    ok('a tripped rule becomes an alert card', /🔔 AAA ราคาขึ้นถึง 11/.test(titles), titles);
+    ok('an untripped rule stays quiet', titles.indexOf('ราคาขึ้นถึง 20') === -1);
+
+    // the screen + the routine handoff
+    openAlertRules();
+    ok('rules are listed', /AAA ราคาขึ้นถึง 11/.test(document.getElementById('rulesBody').textContent));
+    ok('counts what is tripped now', /เข้าเงื่อนไขตอนนี้/.test(document.getElementById('rulesBody').textContent));
+    const prompt = routinePromptText();
+    ok('routine prompt names the file', prompt.indexOf('alert_rules.json') !== -1);
+    ok('routine prompt carries the folder id', prompt.indexOf(S.folderId) !== -1);
+    ok('routine prompt lists the rules', /AAA ราคาขึ้นถึง 11/.test(prompt));
+    ok('routine prompt says not to mail when nothing trips', /ไม่ต้องส่งอีเมล/.test(prompt));
+
+    // add + delete through the form
+    document.getElementById('rlTicker').value = 'aaa';
+    document.getElementById('rlType').value = 'price_below';
+    document.getElementById('rlValue').value = '9';
+    addAlertRule();
+    eq('rule added and uppercased', S.alerts.rules[S.alerts.rules.length - 1].ticker, 'AAA');
+    const newId = S.alerts.rules[S.alerts.rules.length - 1].id;
+    deleteAlertRule(newId);
+    ok('rule deleted', !S.alerts.rules.find(r => r.id === newId));
+    document.getElementById('rlValue').value = '';
+    addAlertRule();
+    eq('a rule with no value is refused', S.alerts.rules.length, 9);
+    closeM('rulesModal');
+
+    S.registry = prevReg; S.alerts = prevAlerts; S.xd = prevXd; S.kb = prevKb; S.offline = prevOff;
+  }
+
   L.push('');
   L.push('PASS ' + pass + '   FAIL ' + fail);
   const pre = document.createElement('pre');

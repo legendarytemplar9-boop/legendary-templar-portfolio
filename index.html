@@ -268,6 +268,10 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 .tl-form{background:var(--bg3);border:1px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px}
 .tl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(max-width:520px){.tl-grid{grid-template-columns:1fr}}
+.ins-ev{display:flex;align-items:baseline;gap:8px;font-size:12.5px;color:var(--tx2);padding:6px 2px;border-bottom:1px solid var(--border)}
+.ins-ev:last-child{border-bottom:0}
+.ins-ev b{color:var(--tx)}
+.ins-ev .dim{color:var(--tx3);font-size:11px}
 .tg-row{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--border)}
 .tg-row:last-child{border-bottom:0}
 .tg-nm{width:118px;flex:0 0 auto;font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -451,6 +455,8 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
     <button class="btn btn-p btn-sm hidden" id="btnPrices" onclick="updatePrices()">💰 ราคา</button>
     <button class="btn btn-s btn-sm hidden" id="btnXD" onclick="openXD()">💵 XD</button>
     <button class="btn btn-s btn-sm hidden" id="btnTrades" onclick="openTrades()">📒 สมุด</button>
+    <button class="btn btn-s btn-sm hidden" id="btnInsights" onclick="openInsights()">📈 สรุปเดือน</button>
+    <button class="btn btn-s btn-sm hidden" id="btnRules" onclick="openAlertRules()">🔔 เตือน</button>
     <button class="btn btn-s btn-sm hidden" id="btnReports" onclick="openReports()">📊 Reports</button>
     <button class="btn btn-p btn-sm hidden" id="btnAddStock" onclick="openAddStock()">+ Add Stock</button>
     <button class="btn btn-s btn-sm hidden" id="btnPastePort" onclick="openPastePort()">📋 วางพอร์ต</button>
@@ -841,6 +847,28 @@ HANA   | 2000 | 38 | 35.75"></textarea>
 
 <iframe id="printFrame" style="position:fixed;width:0;height:0;border:0;left:-9999px" title="print"></iframe>
 
+<div class="mbg center hidden" id="rulesModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">
+      <div class="mt-t">🔔 เงื่อนไขเตือน</div>
+      <button class="btn btn-g btn-sm" onclick="closeM('rulesModal')">✕</button>
+    </div>
+    <div class="mb" id="rulesBody"></div>
+  </div>
+</div>
+
+<div class="mbg center hidden" id="insightsModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">
+      <div class="mt-t">📈 สรุปรายเดือน</div>
+      <button class="btn btn-g btn-sm" onclick="closeM('insightsModal')">✕</button>
+    </div>
+    <div class="mb" id="insightsBody"></div>
+  </div>
+</div>
+
 <div class="mbg center hidden" id="targetModal">
   <div class="modal">
     <div class="mh"></div>
@@ -962,6 +990,8 @@ let S = {
   tradeLog: null,
   bench: null,        // cached index series (localStorage only)
   tradeFileId: null,
+  alerts: null,
+  alertFileId: null,
   lastSync: null,
   offline: false,
   view: 'stocks',
@@ -981,6 +1011,10 @@ const ASSET_FILE = 'asset_registry.json';
 // know about must not live in there.
 const TRADE_FILE = 'trade_log.json';
 function emptyTradeLog() { return { version: 1, last_updated: '', trades: [] }; }
+// Alert rules live in their own Drive file so the Sun/Wed cloud routine can read
+// the same file and send the email the browser cannot.
+const ALERT_FILE = 'alert_rules.json';
+function emptyAlertRules() { return { version: 1, last_updated: '', email: '', rules: [] }; }
 function emptyAssetReg() {
   return { version: 1, last_updated: '', assets: [], snapshots: [], settings: { usdthb_override: 0, last_fx: null } };
 }
@@ -999,6 +1033,8 @@ function saveLS() {
       assetFileId: S.assetFileId,
       tradeFileId: S.tradeFileId,
       tradeLog: S.tradeLog,
+      alertFileId: S.alertFileId,
+      alerts: S.alerts,
       plSort: S.plSort,
       nwOpen: S.nwOpen,
       nwSort: S.nwSort,
@@ -1024,6 +1060,7 @@ function loadLS() {
     if (d.kbFileId) S.kbFileId = d.kbFileId;
     if (d.assetFileId) S.assetFileId = d.assetFileId;
     if (d.tradeFileId) S.tradeFileId = d.tradeFileId;
+    if (d.alertFileId) S.alertFileId = d.alertFileId;
     if (d.lastSync) S.lastSync = d.lastSync;
     if (d.plSort && d.plSort.key) S.plSort = { key: d.plSort.key, dir: d.plSort.dir === 'asc' ? 'asc' : 'desc' };
     if (d.nwOpen && typeof d.nwOpen === 'object') S.nwOpen = d.nwOpen;
@@ -1036,6 +1073,7 @@ function loadLS() {
     if (d.kb) S.cachedKb = d.kb;
     if (d.assetReg) S.cachedAssetReg = d.assetReg;
     if (d.tradeLog) S.cachedTradeLog = d.tradeLog;
+    if (d.alerts) S.cachedAlerts = d.alerts;
     // Migrate a previously-cached typo'd folder ID so old sessions self-heal.
     if (S.folderId === BAD_FOLDER_ID) {
       S.folderId = GOOD_FOLDER_ID;
@@ -1106,7 +1144,7 @@ function signOut() {
   if (S.accessToken) {
     try { google.accounts.oauth2.revoke(S.accessToken, () => {}); } catch(e) {}
   }
-  S.accessToken = null; S.registry = null; S.kb = null; S.assetReg = null; S.tradeLog = null;
+  S.accessToken = null; S.registry = null; S.kb = null; S.assetReg = null; S.tradeLog = null; S.alerts = null;
   showSignIn();
   toast('Signed out');
 }
@@ -1335,6 +1373,17 @@ async function syncData() {
       S.tradeLog = S.cachedTradeLog || emptyTradeLog();
     }
     syncPositionsFromTrades();
+    // Alert rules — same pattern, created on first save
+    if (!S.alertFileId) {
+      const rf = await driveSearch(ALERT_FILE, S.folderId);
+      if (rf) S.alertFileId = rf.id;
+    }
+    if (S.alertFileId) {
+      S.alerts = await driveGetMedia(S.alertFileId);
+      if (!Array.isArray(S.alerts.rules)) S.alerts.rules = [];
+    } else {
+      S.alerts = S.cachedAlerts || emptyAlertRules();
+    }
     S.lastSync = new Date().toLocaleTimeString('th-TH');
     saveLS();
     renderDashboard();
@@ -1347,6 +1396,7 @@ async function syncData() {
     if (!S.kb) S.kb = S.cachedKb || FALLBACK.kb;
     if (!S.assetReg) S.assetReg = S.cachedAssetReg || emptyAssetReg();
     if (!S.tradeLog) S.tradeLog = S.cachedTradeLog || emptyTradeLog();
+    if (!S.alerts) S.alerts = S.cachedAlerts || emptyAlertRules();
     renderDashboard();
     toast('⚠️ Drive error — ใช้ข้อมูลสำรองในเครื่อง');
   }
@@ -1421,6 +1471,26 @@ async function saveRegistry() {
 // no double entry. Crypto prices via Binance, FX via open.er-api
 // with Yahoo THB=X fallback and a manual override.
 // ═══════════════════════════════════════════════════════════════
+async function saveAlertRules() {
+  saveLS();
+  if (S.offline) { toast('💾 บันทึกเงื่อนไขเตือน offline (เก็บในเครื่อง)'); return; }
+  try {
+    await ensureTokenAsync();
+    if (!S.accessToken) throw new Error('ยังไม่ได้เข้าสู่ระบบ / token หมดอายุ');
+    S.alerts.last_updated = new Date().toISOString().split('T')[0];
+    if (!S.alertFileId) {
+      const rf = await driveSearch(ALERT_FILE, S.folderId);
+      if (rf) S.alertFileId = rf.id;
+    }
+    if (S.alertFileId) await drivePatch(S.alertFileId, S.alerts);
+    else S.alertFileId = await driveCreate(ALERT_FILE, S.folderId, S.alerts);
+    saveLS();
+    clearSaveErrorBanner();
+  } catch(err) {
+    saveErrorBanner('บันทึกเงื่อนไขเตือนไป Drive ไม่สำเร็จ: ' + err.message + ' — เก็บในเครื่องไว้แล้ว', saveAlertRules);
+  }
+}
+
 async function saveTradeLog() {
   saveLS(); // recovery buffer first — nothing is lost if Drive fails
   if (S.offline) { toast('💾 บันทึกสมุด offline (เก็บในเครื่อง)'); return; }
@@ -1608,6 +1678,8 @@ function applyView() {
   document.getElementById('btnPrices').classList.toggle('hidden', !onStocks);
   document.getElementById('btnXD').classList.toggle('hidden', !onStocks);
   document.getElementById('btnTrades').classList.toggle('hidden', !onStocks);
+  document.getElementById('btnInsights').classList.toggle('hidden', !onStocks);
+  document.getElementById('btnRules').classList.toggle('hidden', !onStocks);
 }
 
 function switchView(v) {
@@ -2718,6 +2790,12 @@ function getAlerts() {
     }
   }
 
+  // Rules the user set themselves
+  evalAlertRules().forEach(x => {
+    if (!x.hit) return;
+    alerts.push({ type: 'warn', title: '🔔 ' + ruleLabel(x.rule), desc: x.detail + (x.rule.note ? ' · ' + x.rule.note : ''), ticker: x.rule.ticker });
+  });
+
   // Prices drifting out of date — the whole dashboard is wrong without saying so
   const lastUpd = tot.held.map(s => s.price_updated).filter(Boolean).sort().pop();
   const stale = daysSinceISO(lastUpd);
@@ -2882,6 +2960,308 @@ function benchNoteHtml(hist) {
   const win = v.diff >= 0;
   return `<div style="margin-top:5px">พอร์ต <b>${fmtPct(v.port)}</b> · ${BENCH_LABEL} <b style="color:var(--yellow)">${fmtPct(v.bench)}</b> →
     <b style="color:${win ? 'var(--green)' : 'var(--red)'}">${win ? 'ชนะ' : 'แพ้'}ดัชนี ${Math.abs(v.diff).toFixed(2)}%</b></div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// เงื่อนไขเตือน — ประเมินในแอป, ส่งอีเมลด้วย routine ที่มีอยู่
+// A page on GitHub Pages cannot push a notification, but the rules live in a
+// Drive file the Sun/Wed cloud routine can read, so the same conditions can be
+// mailed out. In the app itself they show up in the alerts panel.
+// ═══════════════════════════════════════════════════════════════
+const RULE_TYPES = [
+  { key: 'price_above',    label: 'ราคาขึ้นถึง',        unit: '฿',   needsTicker: true  },
+  { key: 'price_below',    label: 'ราคาลงถึง',          unit: '฿',   needsTicker: true  },
+  { key: 'below_cost_pct', label: 'ต่ำกว่าต้นทุนเกิน',   unit: '%',   needsTicker: true  },
+  { key: 'gain_pct',       label: 'กำไรเกิน',            unit: '%',   needsTicker: true  },
+  { key: 'xd_within',      label: 'XD ภายใน',            unit: 'วัน', needsTicker: false }
+];
+function ruleTypeOf(k) { return RULE_TYPES.find(r => r.key === k) || RULE_TYPES[0]; }
+function ruleGenId() { return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
+
+// [{rule, hit, detail}] — evaluated against whatever the app knows right now
+function evalAlertRules() {
+  const rules = (S.alerts && S.alerts.rules) || [];
+  const stocks = (S.registry && S.registry.stocks) || [];
+  const today = xdToday();
+  return rules.filter(r => r.enabled !== false).map(r => {
+    const tk = String(r.ticker || '').toUpperCase();
+    const s = stocks.find(x => String(x.ticker).toUpperCase() === tk);
+    const v = +r.value || 0;
+    let hit = false, detail = '';
+    if (r.type === 'xd_within') {
+      const items = (S.xd && S.xd.items) || {};
+      const soon = Object.keys(items).filter(k => {
+        if (tk && k !== tk) return false;
+        const it = items[k];
+        if (!it || !it.xd) return false;
+        const d = xdDaysUntil(it.xd, today);
+        return d != null && d >= 0 && d <= v;
+      });
+      hit = soon.length > 0;
+      detail = hit ? `${soon.join(', ')} มี XD ภายใน ${v} วัน` : `ยังไม่มีตัวไหน XD ภายใน ${v} วัน`;
+    } else if (!s) {
+      detail = `ไม่พบ ${tk} ในพอร์ต`;
+    } else {
+      const price = +s.current_price || 0;
+      const cost = +s.avg_cost || 0;
+      if (!(price > 0)) {
+        detail = 'ยังไม่มีราคาตลาด';
+      } else if (r.type === 'price_above') {
+        hit = price >= v; detail = `ราคาตอนนี้ ฿${price.toLocaleString()} (เป้า ฿${v.toLocaleString()})`;
+      } else if (r.type === 'price_below') {
+        hit = price <= v; detail = `ราคาตอนนี้ ฿${price.toLocaleString()} (เป้า ฿${v.toLocaleString()})`;
+      } else if (r.type === 'below_cost_pct') {
+        const pct = cost > 0 ? (price - cost) / cost * 100 : 0;
+        hit = cost > 0 && pct <= -Math.abs(v);
+        detail = cost > 0 ? `ตอนนี้ ${fmtPct(pct)} เทียบต้นทุน` : 'ยังไม่มีต้นทุน';
+      } else if (r.type === 'gain_pct') {
+        const pct = cost > 0 ? (price - cost) / cost * 100 : 0;
+        hit = cost > 0 && pct >= Math.abs(v);
+        detail = cost > 0 ? `ตอนนี้ ${fmtPct(pct)} เทียบต้นทุน` : 'ยังไม่มีต้นทุน';
+      }
+    }
+    return { rule: r, hit, detail };
+  });
+}
+
+function ruleLabel(r) {
+  const t = ruleTypeOf(r.type);
+  return `${r.ticker ? String(r.ticker).toUpperCase() + ' ' : ''}${t.label} ${(+r.value || 0).toLocaleString()}${t.unit}`;
+}
+
+function openAlertRules() {
+  if (!S.alerts) S.alerts = S.cachedAlerts || emptyAlertRules();
+  renderAlertRules();
+  document.getElementById('rulesModal').classList.remove('hidden');
+}
+
+function renderAlertRules() {
+  const el = document.getElementById('rulesBody');
+  if (!el) return;
+  const res = evalAlertRules();
+  const hits = res.filter(r => r.hit).length;
+  const tickers = [...new Set(((S.registry && S.registry.stocks) || []).map(s => s.ticker))].sort();
+  el.innerHTML = `
+    <div class="tl-sum">
+      <div class="tl-stat"><div class="tl-stat-l">เงื่อนไขทั้งหมด</div><div class="tl-stat-v">${((S.alerts && S.alerts.rules) || []).length}</div></div>
+      <div class="tl-stat"><div class="tl-stat-l">เข้าเงื่อนไขตอนนี้</div><div class="tl-stat-v" style="color:${hits ? 'var(--yellow)' : 'var(--tx3)'}">${hits}</div></div>
+    </div>
+    <div class="tl-form" style="margin-top:12px">
+      <div class="tl-grid">
+        <div class="form-group"><label class="form-label">หุ้น (เว้นว่าง = ทุกตัว สำหรับ XD)</label>
+          <input class="form-input" id="rlTicker" list="rlTickerList" placeholder="เช่น CPF">
+          <datalist id="rlTickerList">${tickers.map(t => `<option value="${escHtml(t)}"></option>`).join('')}</datalist></div>
+        <div class="form-group"><label class="form-label">เงื่อนไข</label>
+          <select class="form-input" id="rlType">${RULE_TYPES.map(t => `<option value="${t.key}">${t.label} (${t.unit})</option>`).join('')}</select></div>
+        <div class="form-group"><label class="form-label">ค่า</label>
+          <input class="form-input" id="rlValue" type="number" step="any" min="0" placeholder="เช่น 25"></div>
+        <div class="form-group"><label class="form-label">บันทึกย่อ</label>
+          <input class="form-input" id="rlNote" placeholder="ไม่ใส่ก็ได้"></div>
+      </div>
+      <button class="btn btn-p btn-sm" style="margin-top:8px" onclick="addAlertRule()">+ เพิ่มเงื่อนไข</button>
+    </div>
+    ${res.length ? res.map(x => `<div class="tl-row">
+      <div class="tl-ic">${x.hit ? '🔔' : '🔕'}</div>
+      <div class="tl-l">
+        <div class="tl-nm">${escHtml(ruleLabel(x.rule))}</div>
+        <div class="tl-sub">${escHtml(x.detail)}${x.rule.note ? ' · ' + escHtml(x.rule.note) : ''}</div>
+      </div>
+      <div class="tl-acts">
+        <button class="nw-act del" data-id="${escHtml(x.rule.id)}" onclick="deleteAlertRule(this.dataset.id)" title="ลบ">✕</button>
+      </div>
+    </div>`).join('') : '<div class="tl-empty">ยังไม่มีเงื่อนไข — เช่น “CPF ราคาลงถึง 22” หรือ “XD ภายใน 7 วัน”</div>'}
+    <div class="tl-note" style="margin-top:14px">
+      เงื่อนไขที่เข้าจะขึ้นเป็นการ์ดเตือนบนหน้าแรกทันที · เว็บบน GitHub Pages ส่ง push เองไม่ได้
+      แต่ไฟล์ <b>${ALERT_FILE}</b> อยู่ในโฟลเดอร์ Drive เดียวกัน ให้ routine รายสัปดาห์อ่านแล้วส่งอีเมลได้
+      <div style="margin-top:9px"><button class="btn btn-g btn-sm" onclick="copyRoutinePrompt()">📋 คัดลอกคำสั่งสำหรับ routine</button></div>
+    </div>`;
+}
+
+async function addAlertRule() {
+  const ticker = (document.getElementById('rlTicker').value || '').toUpperCase().trim();
+  const type = document.getElementById('rlType').value;
+  const value = +document.getElementById('rlValue').value || 0;
+  const note = (document.getElementById('rlNote').value || '').trim();
+  if (ruleTypeOf(type).needsTicker && !ticker) { toast('⚠️ เงื่อนไขนี้ต้องระบุหุ้น'); return; }
+  if (!(value > 0)) { toast('⚠️ ใส่ค่าที่มากกว่า 0'); return; }
+  if (!S.alerts) S.alerts = emptyAlertRules();
+  S.alerts.rules.push({ id: ruleGenId(), ticker, type, value, note, enabled: true });
+  document.getElementById('rlValue').value = '';
+  document.getElementById('rlNote').value = '';
+  renderAlertRules();
+  renderDashboard();
+  toast('✅ เพิ่มเงื่อนไขแล้ว — กำลังบันทึก…');
+  await saveAlertRules();
+}
+
+async function deleteAlertRule(id) {
+  if (!S.alerts) return;
+  S.alerts.rules = S.alerts.rules.filter(r => r.id !== id);
+  renderAlertRules();
+  renderDashboard();
+  await saveAlertRules();
+}
+
+// The routine is a prompt the user owns — hand them the exact wording to paste.
+function routinePromptText() {
+  const rules = ((S.alerts && S.alerts.rules) || []).map(r => '- ' + ruleLabel(r) + (r.note ? ' (' + r.note + ')' : '')).join('\n');
+  return [
+    'เพิ่มงานนี้เข้าไปใน routine ติดตามหุ้นของผม:',
+    '',
+    `1) อ่านไฟล์ ${ALERT_FILE} จากโฟลเดอร์ Google Drive: ${S.folderId}`,
+    '   (โครงสร้าง: {"rules":[{"ticker","type","value","note"}]} — type = price_above | price_below | below_cost_pct | gain_pct | xd_within)',
+    `2) อ่าน stock_registry.json จากโฟลเดอร์เดียวกัน เพื่อเอาราคาปัจจุบัน (current_price) และต้นทุน (avg_cost)`,
+    '3) ตรวจว่าเงื่อนไขไหนเข้าเกณฑ์ แล้วส่งอีเมลเฉพาะข้อที่เข้า พร้อมบอกราคาปัจจุบันกับเป้าหมาย',
+    '4) ถ้าไม่มีข้อไหนเข้าเลย ไม่ต้องส่งอีเมล',
+    '',
+    'เงื่อนไขตอนนี้:',
+    rules || '- (ยังไม่มี)'
+  ].join('\n');
+}
+
+function copyRoutinePrompt() {
+  const text = routinePromptText();
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => toast('📋 คัดลอกแล้ว — เอาไปวางใน routine ได้เลย'),
+      () => toast('⚠️ คัดลอกไม่ได้ — เปิด console แล้วคัดลอกเอง')
+    );
+  } else {
+    toast('⚠️ เบราว์เซอร์นี้คัดลอกอัตโนมัติไม่ได้');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INSIGHTS รายเดือน — เดือนที่ผ่านมาเกิดอะไรขึ้น
+// Only what the app actually knows: portfolio value (snapshots), the index,
+// the book, and thesis scores. Per-stock price history is not stored, so the
+// month's best/worst comes from realised trades, not from paper moves.
+// ═══════════════════════════════════════════════════════════════
+function monthBounds(ym) {
+  const start = ym + '-01';
+  const [y, m] = ym.split('-').map(Number);
+  const end = new Date(Date.UTC(y, m, 0)).toISOString().split('T')[0];   // day 0 = last of month
+  return { start, end };
+}
+
+function monthStats(ym) {
+  const b = monthBounds(ym);
+  const hist = (S.kb && S.kb.value_history) || [];
+  const before = valueOn(new Date(new Date(b.start + 'T00:00:00Z').getTime() - 86400000).toISOString().split('T')[0], hist);
+  const startVal = before || (hist.find(h => h.date >= b.start && h.date <= b.end) || null);
+  const endVal = valueOn(b.end, hist);
+  const inMonth = endVal && endVal.date >= b.start ? endVal : null;
+  const chgPct = startVal && inMonth && startVal.value > 0 ? (inMonth.value - startVal.value) / startVal.value * 100 : null;
+
+  let benchPct = null;
+  if (startVal && inMonth) {
+    const a = benchCloseOn(startVal.date), z = benchCloseOn(inMonth.date);
+    if (a > 0 && z > 0) benchPct = (z - a) / a * 100;
+  }
+
+  const trades = sortedTrades(((S.tradeLog && S.tradeLog.trades) || [])
+    .filter(t => String(t.date || '') >= b.start && String(t.date || '') <= b.end));
+  let bought = 0, sold = 0, dividends = 0, fees = 0, realized = 0;
+  const realizedBy = realizedByTradeId();
+  trades.forEach(t => {
+    const q = Math.abs(+t.qty || 0), pr = +t.price || 0, fee = +t.fee || 0, tax = +t.tax || 0;
+    if (t.type === 'buy') { bought += q * pr + fee; fees += fee; }
+    else if (t.type === 'sell') { sold += q * pr - fee; fees += fee; realized += realizedBy[t.id] || 0; }
+    else if (t.type === 'div') dividends += q * pr - tax;
+  });
+
+  const scoreMoves = [];
+  const sh = (S.kb && S.kb.score_history) || {};
+  Object.keys(sh).forEach(tk => {
+    (sh[tk] || []).forEach(h => {
+      if (h.date >= b.start && h.date <= b.end && (h.delta || 0) !== 0) {
+        scoreMoves.push({ ticker: tk, score: h.score, delta: h.delta, reason: h.reason || '', date: h.date });
+      }
+    });
+  });
+  scoreMoves.sort((a, b2) => Math.abs(b2.delta) - Math.abs(a.delta));
+
+  return { ym, startVal, endVal: inMonth, chgPct, benchPct, trades, bought, sold, dividends, fees, realized, scoreMoves };
+}
+
+function insMonths() { return last12Months(new Date().toISOString().split('T')[0]).slice().reverse(); }
+
+let insMonth = null;
+
+function openInsights(ym) {
+  insMonth = ym || insMonths()[0];
+  renderInsights();
+  document.getElementById('insightsModal').classList.remove('hidden');
+}
+
+function setInsMonth(ym) { insMonth = ym; renderInsights(); }
+
+function renderInsights() {
+  const el = document.getElementById('insightsBody');
+  if (!el) return;
+  benchLoadCache();
+  const m = monthStats(insMonth);
+  const chips = insMonths().map(ym =>
+    `<button class="sort-chip${ym === insMonth ? ' on' : ''}" data-m="${ym}" onclick="setInsMonth(this.dataset.m)">${ym}</button>`
+  ).join('');
+
+  const val = m.chgPct == null
+    ? '<span style="color:var(--tx3)">ไม่มี snapshot ในเดือนนี้</span>'
+    : `<span style="color:${m.chgPct >= 0 ? 'var(--green)' : 'var(--red)'}">${fmtPct(m.chgPct)}</span>`;
+  const vs = (m.chgPct != null && m.benchPct != null)
+    ? `<div class="tl-note" style="margin-top:6px">ดัชนี SET เดือนนี้ <b style="color:var(--yellow)">${fmtPct(m.benchPct)}</b> →
+       <b style="color:${m.chgPct - m.benchPct >= 0 ? 'var(--green)' : 'var(--red)'}">${m.chgPct - m.benchPct >= 0 ? 'ชนะ' : 'แพ้'}ดัชนี ${Math.abs(m.chgPct - m.benchPct).toFixed(2)}%</b></div>`
+    : '';
+
+  const events = m.trades.length ? m.trades.slice().reverse().map(t => {
+    const q = Math.abs(+t.qty || 0), pr = +t.price || 0;
+    const icon = (TRADE_TYPES.find(x => x.key === t.type) || TRADE_TYPES[0]).icon;
+    return `<div class="ins-ev"><span>${icon}</span><b>${escHtml(tradeTicker(t))}</b> ${TRADE_LABEL[t.type]} ${fmtQty(q)} × ฿${pr.toLocaleString()} <span class="dim">${escHtml(t.date)}</span></div>`;
+  }).join('') : '<div class="tl-note">ไม่มีการซื้อขายหรือปันผลในเดือนนี้</div>';
+
+  const moves = m.scoreMoves.length ? m.scoreMoves.map(x =>
+    `<div class="ins-ev"><span>${x.delta > 0 ? '⬆️' : '⬇️'}</span><b>${escHtml(x.ticker)}</b>
+      ${x.delta > 0 ? '+' : ''}${x.delta} → ${x.score} <span class="dim">${escHtml(x.reason)}</span></div>`
+  ).join('') : '<div class="tl-note">คะแนน thesis ไม่ขยับในเดือนนี้</div>';
+
+  el.innerHTML = `<div class="sort-bar" style="margin-bottom:12px">${chips}</div>
+    <div class="tl-sum">
+      <div class="tl-stat"><div class="tl-stat-l">มูลค่าพอร์ต</div><div class="tl-stat-v">${val}</div></div>
+      <div class="tl-stat"><div class="tl-stat-l">กำไรที่ขายจริง</div><div class="tl-stat-v" style="color:${m.realized >= 0 ? 'var(--green)' : 'var(--red)'}">${m.realized >= 0 ? '+' : '−'}${fmtBaht(Math.abs(m.realized))}</div></div>
+      <div class="tl-stat"><div class="tl-stat-l">ปันผลรับ</div><div class="tl-stat-v" style="color:var(--c1)">${fmtBaht(m.dividends)}</div></div>
+      <div class="tl-stat"><div class="tl-stat-l">ซื้อ − ขาย</div><div class="tl-stat-v">${fmtBaht(m.bought - m.sold)}</div></div>
+    </div>
+    ${vs}
+    ${m.startVal && m.endVal ? `<div class="tl-note">${escHtml(m.startVal.date)} ${fmtBaht(m.startVal.value)} → ${escHtml(m.endVal.date)} ${fmtBaht(m.endVal.value)} · ค่าคอมเดือนนี้ ${fmtBaht(m.fees)}</div>` : ''}
+    <div class="sec-title" style="margin-top:16px">รายการในเดือน (${m.trades.length})</div>${events}
+    <div class="sec-title" style="margin-top:16px">คะแนน thesis ที่ขยับ (${m.scoreMoves.length})</div>${moves}
+    <div class="sec-title" style="margin-top:16px">ถามต่อ</div>
+    <button class="btn btn-s btn-sm" onclick="askWhyMonth()">🤔 ทำไมเดือนนี้ถึงเป็นแบบนี้ (ถาม Claude)</button>
+    <div class="tl-note">เปิด claude.ai พร้อมสรุปพอร์ตเดือนนี้ให้แล้ว — ใช้บัญชีที่คุณสมัครอยู่ ไม่มีค่า API</div>`;
+}
+
+// Hands Claude the month's own numbers instead of asking it to guess them.
+function askWhyMonth() {
+  const m = monthStats(insMonth);
+  const held = portfolioTotals().held.map(s => `${s.ticker} (${s.sector || '—'}) ${fmtBaht(plRowStats(s).value)}`).join(', ');
+  const lines = [
+    `ช่วยวิเคราะห์พอร์ตหุ้นไทยของผมสำหรับเดือน ${m.ym} หน่อยครับ`,
+    ``,
+    `ผลของเดือน:`,
+    `- มูลค่าพอร์ต ${m.chgPct == null ? 'ไม่มีข้อมูล' : fmtPct(m.chgPct)}${m.benchPct != null ? ` (SET ${fmtPct(m.benchPct)})` : ''}`,
+    `- กำไรที่ขายจริง ${fmtBaht(m.realized)} · ปันผลรับ ${fmtBaht(m.dividends)} · ค่าคอม ${fmtBaht(m.fees)}`,
+    `- ซื้อ ${fmtBaht(m.bought)} · ขาย ${fmtBaht(m.sold)}`,
+    ``,
+    `หุ้นที่ถืออยู่: ${held || '—'}`,
+    m.trades.length ? `รายการเดือนนี้: ${m.trades.map(t => `${t.date} ${TRADE_LABEL[t.type]} ${tradeTicker(t)} ${Math.abs(+t.qty || 0)} @ ${+t.price || 0}`).join(' | ')}` : '',
+    m.scoreMoves.length ? `คะแนน thesis ที่ขยับ: ${m.scoreMoves.map(x => `${x.ticker} ${x.delta > 0 ? '+' : ''}${x.delta} (${x.reason})`).join(' | ')}` : '',
+    ``,
+    `ช่วยตอบ 3 ข้อ:`,
+    `1) อะไรน่าจะเป็นสาเหตุหลักที่ทำให้เดือนนี้ออกมาแบบนี้ (ข่าว/ผลประกอบการ/ภาพรวมตลาดไทยในเดือนนั้น)`,
+    `2) มีสัญญาณอะไรที่ควรระวังในพอร์ตนี้บ้าง`,
+    `3) เดือนหน้าควรจับตาอะไรเป็นพิเศษ`
+  ].filter(x => x !== null);
+  window.open(CLAUDE_AI_URL + '?q=' + encodeURIComponent(lines.join('\n')), '_blank', 'noopener');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -5520,6 +5900,7 @@ function useOffline() {
   S.kb = S.cachedKb || FALLBACK.kb;
   S.assetReg = S.cachedAssetReg || emptyAssetReg();
   S.tradeLog = S.cachedTradeLog || emptyTradeLog();
+  S.alerts = S.cachedAlerts || emptyAlertRules();
   syncPositionsFromTrades();
   S.lastSync = 'Offline mode';
   renderDashboard();
@@ -5563,6 +5944,8 @@ function showDashboard() {
   document.getElementById('btnPrices').classList.remove('hidden');
   document.getElementById('btnXD').classList.remove('hidden');
   document.getElementById('btnTrades').classList.remove('hidden');
+  document.getElementById('btnInsights').classList.remove('hidden');
+  document.getElementById('btnRules').classList.remove('hidden');
   document.getElementById('btnReports').classList.remove('hidden');
   document.getElementById('btnAddStock').classList.remove('hidden');
   document.getElementById('btnPastePort').classList.remove('hidden');
