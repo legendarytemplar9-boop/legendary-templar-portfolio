@@ -515,6 +515,150 @@
     S.registry = prevReg; S.xd = prevXd;
   }
 
+  // ══════════════════ net worth: icons, groups, donut legend ══════════════════
+  sec('nwIconFor');
+  eq('crypto category', nwIconFor('Crypto'), '🪙');
+  eq('thai crypto', nwIconFor('คริปโต'), '🪙');
+  eq('cash', nwIconFor('Cash / เงินฝาก'), '💵');
+  eq('gold', nwIconFor('Gold / ทอง'), '🥇');
+  eq('fund', nwIconFor('Fund / กองทุน'), '📊');
+  eq('property', nwIconFor('Property / อสังหาฯ'), '🏠');
+  eq('insurance', nwIconFor('ประกันชีวิต'), '🛡️');
+  eq('car', nwIconFor('รถยนต์'), '🚗');
+  eq('loan', nwIconFor('Loan / สินเชื่อ'), '💳');
+  // Debt keywords win over the noun they attach to — a housing loan is a debt.
+  eq('housing loan is not a house', nwIconFor('สินเชื่อบ้าน'), '💳');
+  eq('case insensitive', nwIconFor('BITCOIN'), '🪙');
+  eq('unknown asset falls back', nwIconFor('ของอย่างอื่น'), '💎');
+  eq('unknown liability falls back', nwIconFor('อย่างอื่น', 'liability'), '💳');
+  eq('empty', nwIconFor(''), '💎');
+  eq('asset icon reads name too', nwAssetIcon({ name: 'ทองคำแท่ง', cat: 'อื่นๆ' }), '🥇');
+  eq('asset icon reads ticker too', nwAssetIcon({ name: 'เหรียญ A', cat: 'อื่นๆ', ticker: 'ETH' }), '🪙');
+  eq('asset icon prefers category match', nwAssetIcon({ name: 'ก้อนที่ 1', cat: 'Crypto' }), '🪙');
+
+  sec('nwByCat');
+  {
+    const A = [
+      { id: 'x1', cat: 'Crypto', qty: 2, manual_price: 100, price_mode: 'manual' },
+      { id: 'x2', cat: 'Cash', qty: 1, manual_price: 900, price_mode: 'manual' },
+      { id: 'x3', cat: 'Crypto', qty: 1, manual_price: 500, price_mode: 'manual' },
+      { id: 'x4', qty: 1, manual_price: 50, price_mode: 'manual' }
+    ];
+    const g = nwByCat(A);
+    eq('biggest category first', g.map(c => c.cat), ['Cash', 'Crypto', 'อื่นๆ']);
+    eq('category sums', g.map(c => c.sum), [900, 700, 50]);
+    eq('items inside sorted by value', g[1].list.map(a => a.id), ['x3', 'x1']);
+    eq('blank category buckets to อื่นๆ', g[2].list.length, 1);
+    eq('no assets', nwByCat([]), []);
+  }
+
+  sec('renderNetWorth — collapsible groups');
+  {
+    const prevReg = S.registry, prevAsset = S.assetReg, prevOpen = S.nwOpen, prevView = S.view;
+    S.registry = { stocks: [{ ticker: 'CPF', shares: 1000, avg_cost: 20, current_price: 25, thesis_status: '🟢' }] };
+    S.assetReg = {
+      version: 1, snapshots: [], settings: { usdthb_override: 35 },
+      assets: [
+        { id: 'a1', kind: 'asset', cat: 'Crypto', name: 'Bitcoin', ticker: 'BTC', price_mode: 'auto', fetched_price: 100, qty: 10, price_cur: 'USD' },
+        { id: 'a2', kind: 'asset', cat: 'Cash / เงินฝาก', name: 'บัญชีออมทรัพย์', price_mode: 'manual', manual_price: 50000, qty: 1, price_cur: 'THB' },
+        { id: 'a3', kind: 'asset', cat: 'Cash / เงินฝาก', name: 'ฝากประจำ', price_mode: 'manual', manual_price: 25000, qty: 1, price_cur: 'THB' },
+        { id: 'a4', kind: 'liability', cat: 'Loan / สินเชื่อ', name: 'สินเชื่อบ้าน', price_mode: 'manual', manual_price: 20000, qty: 1, price_cur: 'THB' }
+      ]
+    };
+    S.nwOpen = {};
+    renderNetWorth();
+    const lists = document.getElementById('nwLists');
+    const grps = () => [...lists.querySelectorAll('.nw-grp')];
+
+    eq('one group per kind', grps().length, 4);
+    eq('groups ordered: stocks, biggest category first, debts last',
+       grps().map(g => g.dataset.key), ['stocks', 'cat:Cash / เงินฝาก', 'cat:Crypto', 'liab']);
+    eq('everything starts collapsed', grps().filter(g => g.classList.contains('open')).length, 0);
+
+    const cash = grps()[1];
+    ok('group header shows the group value', cash.innerHTML.indexOf('฿75,000') !== -1);
+    ok('group header shows how many items', cash.innerHTML.indexOf('2 รายการ') !== -1);
+    ok('group header shows a percent', cash.innerHTML.indexOf('>56%<') !== -1);
+    ok('group header shows the category icon', cash.innerHTML.indexOf('💵') !== -1);
+    ok('debt group is marked and negative', grps()[3].className.indexOf('liab') !== -1 && grps()[3].innerHTML.indexOf('−฿20,000') !== -1);
+    ok('rows carry a per-asset icon', grps()[2].innerHTML.indexOf('nw-row-ic">🪙') !== -1);
+
+    // one tap on a header opens just that group
+    cash.querySelector('.nw-grp-h').click();
+    eq('tap expands only that group', grps().filter(g => g.classList.contains('open')).map(g => g.dataset.key), ['cat:Cash / เงินฝาก']);
+    eq('open state is remembered', Object.keys(S.nwOpen), ['cat:Cash / เงินฝาก']);
+    ok('expanded group lists its items', cash.querySelectorAll('.nw-grp-b .nw-row').length === 2);
+    cash.querySelector('.nw-grp-h').click();
+    eq('tapping again collapses it', S.nwOpen, {});
+
+    // expand all / collapse all
+    const btn = document.getElementById('nwExpandBtn');
+    eq('button starts as expand-all', btn.textContent, '⊕ ขยายทั้งหมด');
+    btn.click();
+    eq('expand all opens every group', grps().filter(g => g.classList.contains('open')).length, 4);
+    eq('button flips to collapse-all', btn.textContent, '⊖ ยุบทั้งหมด');
+    btn.click();
+    eq('collapse all closes every group', grps().filter(g => g.classList.contains('open')).length, 0);
+    eq('button flips back', btn.textContent, '⊕ ขยายทั้งหมด');
+
+    // a half-open list still offers "expand all"
+    grps()[0].querySelector('.nw-grp-h').click();
+    eq('partly open still offers expand-all', btn.textContent, '⊕ ขยายทั้งหมด');
+    renderNetWorth();
+    eq('re-render keeps what was expanded', grps().filter(g => g.classList.contains('open')).map(g => g.dataset.key), ['stocks']);
+    S.nwOpen = {};
+    renderNetWorth();
+
+    sec('donut legend — value + percent + icon');
+    const parts = nwAllocParts(netWorthTotals(), S.assetReg.assets.filter(a => a.kind !== 'liability'));
+    eq('slices are stock + one per category, biggest first', parts.map(p => p.label), ['Cash / เงินฝาก', 'Crypto', 'หุ้น (พอร์ต SET/DR)']);
+    eq('slice values', parts.map(p => p.v), [75000, 35000, 25000]);
+    eq('slices carry icons', parts.map(p => p.icon), ['💵', '🪙', '⚔️']);
+    eq('slices know where they point', parts.map(p => p.act), ['cat:Cash / เงินฝาก', 'cat:Crypto', 'stocks']);
+    const leg = document.getElementById('nwAllocLegend');
+    ok('legend renders a row per slice', leg.querySelectorAll('.dn-li').length === 3);
+    ok('legend prints baht values', leg.innerHTML.indexOf('฿75,000') !== -1 && leg.innerHTML.indexOf('฿25,000') !== -1);
+    ok('legend prints percents', leg.innerHTML.indexOf('55.6%') !== -1);
+    ok('legend prints icons', leg.innerHTML.indexOf('💵') !== -1 && leg.innerHTML.indexOf('⚔️') !== -1);
+    ok('legend percents add up to 100', (() => {
+      const ps = [...leg.querySelectorAll('.dn-pct')].map(e => parseFloat(e.textContent));
+      return Math.abs(ps.reduce((a, b) => a + b, 0) - 100) < 0.2;
+    })());
+    ok('legend entries are tappable', leg.querySelector('.dn-li').getAttribute('data-act') !== null);
+    // the stock donut on the หุ้น tab uses the same legend
+    eq('stock slices', allocParts(portfolioTotals().held).map(p => [p.label, p.v, p.icon, p.act]), [['CPF', 25000, '🟢', 'CPF']]);
+    eq('legend html carries value and percent',
+       donutLegendHtml([{ label: 'A', icon: '🪙', v: 25 }, { label: 'B', icon: '💵', v: 75 }], 100, 'x')
+         .match(/(฿25|฿75|25\.0%|75\.0%)/g), ['฿25', '25.0%', '฿75', '75.0%']);
+
+    sec('ทรัพย์สินอื่น breakdown');
+    renderNwBreakdown('assets');
+    let bh = document.getElementById('nwBreakBody').innerHTML;
+    ok('title names the summary', document.getElementById('nwBreakTitle').textContent.indexOf('ทรัพย์สินอื่น') !== -1);
+    ok('total of ทรัพย์สินอื่น (stocks excluded)', bh.indexOf('฿110,000') !== -1);
+    ok('every kind is listed', bh.indexOf('Cash / เงินฝาก') !== -1 && bh.indexOf('Crypto') !== -1);
+    ok('kind values', bh.indexOf('฿75,000') !== -1 && bh.indexOf('฿35,000') !== -1);
+    ok('kind share of ทรัพย์สินอื่น', bh.indexOf('68.2%') !== -1);
+    ok('items inside each kind', bh.indexOf('บัญชีออมทรัพย์') !== -1 && bh.indexOf('฿50,000') !== -1);
+    ok('debts are not counted here', bh.indexOf('สินเชื่อบ้าน') === -1);
+    ok('footer puts it next to หุ้น', bh.indexOf('฿135,000') !== -1);
+    // 110k of 135k gross — measured against total assets, so it can never top 100%
+    ok('header shares against total assets', bh.indexOf('81.5%') !== -1);
+    ok('items link back to editing', bh.indexOf('nwBreakEdit') !== -1);
+    renderNwBreakdown('liab');
+    bh = document.getElementById('nwBreakBody').innerHTML;
+    ok('debt view totals debts', bh.indexOf('−฿20,000') !== -1);
+    ok('debt view lists the debt', bh.indexOf('สินเชื่อบ้าน') !== -1);
+    ok('debt view drops assets', bh.indexOf('บัญชีออมทรัพย์') === -1);
+    S.assetReg.assets = [];
+    renderNwBreakdown('assets');
+    ok('empty state', document.getElementById('nwBreakBody').innerHTML.indexOf('ยังไม่มี') !== -1);
+
+    S.registry = prevReg; S.assetReg = prevAsset; S.nwOpen = prevOpen; S.view = prevView;
+    document.getElementById('nwLists').innerHTML = '';
+    document.getElementById('nwDash').innerHTML = '';
+  }
+
   L.push('');
   L.push('PASS ' + pass + '   FAIL ' + fail);
   const pre = document.createElement('pre');

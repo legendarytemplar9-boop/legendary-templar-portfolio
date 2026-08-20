@@ -257,9 +257,9 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 .vtab{flex:0 0 auto;padding:9px 18px;border-radius:22px;font-size:14px;font-weight:700;background:var(--bg2);border:1px solid var(--border);color:var(--tx2);cursor:pointer;transition:.15s;font-family:var(--fn)}
 .vtab.active{background:var(--c1d);border-color:rgba(0,229,204,.4);color:var(--c1)}
 /* ── Net worth rows ── */
-.nw-group-t{font-size:12px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px;display:flex;align-items:center;gap:8px}
 .nw-row{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:8px}
-.nw-row-l{min-width:0}
+.nw-row-l{min-width:0;flex:1 1 auto}
+.nw-row-ic{font-size:17px;flex:0 0 auto;width:22px;text-align:center}
 .nw-row-nm{font-weight:700;font-size:14px}
 .nw-row-sub{font-size:11.5px;color:var(--tx3);margin-top:2px}
 .nw-row-r{text-align:right;font-weight:700;font-size:14px;flex:0 0 auto}
@@ -268,6 +268,58 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 .nw-act:hover{color:var(--c1);border-color:var(--c1)}
 .nw-act.del:hover{color:var(--red);border-color:var(--red)}
 .nw-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:14px;font-size:12px;font-weight:600;background:var(--bg3);border:1px solid var(--border);color:var(--tx2)}
+.nw-chip.tap{cursor:pointer;transition:.15s}
+.nw-chip.tap:hover{border-color:var(--c1);color:var(--c1)}
+.nw-chip.tap::after{content:'›';margin-left:1px;color:var(--tx3);font-weight:700}
+/* ── Collapsible net-worth groups ── */
+.nw-tools{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 0 10px}
+.nw-tools-n{font-size:11.5px;color:var(--tx3)}
+.nw-grp{margin-bottom:8px}
+.nw-grp-h{display:flex;align-items:center;gap:9px;width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;cursor:pointer;font-family:var(--fn);color:var(--tx);text-align:left;transition:.15s}
+.nw-grp-h:hover{border-color:var(--border2)}
+.nw-grp.open .nw-grp-h{border-radius:10px 10px 0 0;background:var(--bg3)}
+.nw-caret{flex:0 0 auto;color:var(--tx3);font-size:10px;transition:transform .15s;display:inline-block}
+.nw-grp.open .nw-caret{transform:rotate(90deg);color:var(--c1)}
+.nw-grp-ic{font-size:17px;flex:0 0 auto}
+.nw-grp-nm{font-weight:700;font-size:13.5px;flex:0 1 auto;min-width:0;max-width:44%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nw-grp-n{font-size:11px;color:var(--tx3);flex:0 0 auto}
+.nw-grp-bar{flex:1 1 auto;height:5px;min-width:26px;border-radius:3px;background:var(--bg);overflow:hidden}
+.nw-grp-bar i{display:block;height:100%;border-radius:3px;background:var(--c1)}
+.nw-grp-p{font-size:11px;color:var(--tx2);flex:0 0 auto;width:36px;text-align:right;font-variant-numeric:tabular-nums}
+.nw-grp-v{font-weight:800;font-size:13.5px;flex:0 0 auto;font-variant-numeric:tabular-nums}
+.nw-grp-b{display:none;border:1px solid var(--border);border-top:0;border-radius:0 0 10px 10px;padding:8px 8px 0}
+.nw-grp.open .nw-grp-b{display:block}
+.nw-grp-b .nw-row{margin-bottom:8px}
+.nw-grp.liab .nw-grp-v{color:var(--red)}
+.nw-grp.liab .nw-grp-bar i{background:var(--red)}
+@media(max-width:600px){.nw-grp-n{display:none}.nw-grp-bar{min-width:14px}.nw-grp-nm{max-width:38%}}
+/* ── Donut legend (icon · name · value · %) ── */
+.dn-legend{display:flex;flex-direction:column;gap:1px;margin-top:10px;max-height:212px;overflow-y:auto}
+.dn-li{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;border:0;border-radius:8px;padding:5px 6px;cursor:pointer;font-family:var(--fn);font-size:12px;color:var(--tx2)}
+.dn-li:hover{background:var(--bg3)}
+.dn-sw{width:9px;height:9px;border-radius:3px;flex:0 0 auto}
+.dn-ic{font-size:13px;flex:0 0 auto}
+.dn-nm{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx);font-weight:600}
+.dn-val{flex:0 0 auto;font-weight:700;color:var(--tx);font-variant-numeric:tabular-nums}
+.dn-pct{flex:0 0 auto;width:44px;text-align:right;color:var(--tx2);font-variant-numeric:tabular-nums}
+/* ── ทรัพย์สินอื่น breakdown modal ── */
+.nwb-h{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+.nwb-h-l{font-size:11px;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px}
+.nwb-h-v{font-size:24px;font-weight:900;letter-spacing:-.5px;margin-top:4px}
+.nwb-h-r{font-size:11.5px;color:var(--tx3);text-align:right;line-height:1.6}
+.nwb-cat{background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:8px}
+.nwb-cat-h{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700}
+.nwb-cat-n{font-size:11px;color:var(--tx3);font-weight:600}
+.nwb-cat-v{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:800}
+.nwb-cat-p{width:44px;text-align:right;color:var(--tx2);font-size:11.5px;font-variant-numeric:tabular-nums}
+.nwb-bar{height:5px;border-radius:3px;background:var(--bg);margin:9px 0 7px;overflow:hidden}
+.nwb-bar i{display:block;height:100%;border-radius:3px;background:var(--c1)}
+.nwb-it{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;border:0;border-radius:7px;padding:4px 6px;font-family:var(--fn);font-size:12px;color:var(--tx2);cursor:pointer}
+.nwb-it:hover{background:var(--bg3)}
+.nwb-it-nm{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tx);font-weight:600}
+.nwb-it-q{flex:0 0 auto;color:var(--tx3);font-size:11px}
+.nwb-it-v{flex:0 0 auto;font-variant-numeric:tabular-nums;font-weight:700;color:var(--tx)}
+.nwb-foot{font-size:11.5px;color:var(--tx3);line-height:1.6;border-top:1px solid var(--border);margin-top:12px;padding-top:10px;display:flex;justify-content:space-between;gap:10px}
 .md-card-t{font-size:11px;font-weight:700;color:var(--tx2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
 .md-canvas-wrap{position:relative;height:200px}
 .md-note{font-size:11px;color:var(--tx3);margin-top:8px;text-align:center;line-height:1.5}
@@ -712,6 +764,17 @@ HANA   | 2000 | 38 | 35.75"></textarea>
   </div>
 </div>
 
+<div class="mbg center hidden" id="nwBreakModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">
+      <div class="mt-t" id="nwBreakTitle">💎 ทรัพย์สินอื่น</div>
+      <button class="btn btn-g btn-sm" onclick="closeM('nwBreakModal')">✕</button>
+    </div>
+    <div class="mb" id="nwBreakBody"></div>
+  </div>
+</div>
+
 <div class="mbg center hidden" id="xdModal">
   <div class="modal">
     <div class="mh"></div>
@@ -781,6 +844,7 @@ let S = {
   offline: false,
   view: 'stocks',
   plSort: { key: 'value', dir: 'desc' },
+  nwOpen: {},          // net-worth groups the user left expanded, by group key
   editData: {}
 };
 
@@ -802,6 +866,7 @@ function saveLS() {
       lastSync: S.lastSync,
       assetFileId: S.assetFileId,
       plSort: S.plSort,
+      nwOpen: S.nwOpen,
       // Recovery buffer ONLY — Google Drive is the source of truth. This lets a
       // failed Drive save be retried/recovered instead of lost on reload.
       registry: S.registry,
@@ -821,6 +886,7 @@ function loadLS() {
     if (d.assetFileId) S.assetFileId = d.assetFileId;
     if (d.lastSync) S.lastSync = d.lastSync;
     if (d.plSort && d.plSort.key) S.plSort = { key: d.plSort.key, dir: d.plSort.dir === 'asc' ? 'asc' : 'desc' };
+    if (d.nwOpen && typeof d.nwOpen === 'object') S.nwOpen = d.nwOpen;
     if (d.registry) S.cachedRegistry = d.registry; // recovery buffer
     if (d.kb) S.cachedKb = d.kb;
     if (d.assetReg) S.cachedAssetReg = d.assetReg;
@@ -1370,6 +1436,211 @@ function fmtQty(n) {
   return v.toLocaleString(undefined, { maximumFractionDigits: 8 });
 }
 
+// ── Icons ────────────────────────────────────────────────────────────────
+// A category/asset name is free text (the user types it), so the icon is
+// picked by keyword instead of a fixed enum. First match wins, so the
+// debt keywords sit on top: "สินเชื่อบ้าน" is a loan, not a house.
+const NW_ICON_RULES = [
+  ['💳', ['loan', 'สินเชื่อ', 'หนี้', 'debt', 'credit', 'บัตรเครดิต', 'ผ่อน', 'mortgage', 'จำนอง', 'เงินกู้', 'กยศ']],
+  ['🪙', ['crypto', 'คริปโต', 'bitcoin', 'บิทคอย', 'btc', 'eth', 'usdt', 'bnb', 'coin', 'เหรียญ', 'binance']],
+  ['💵', ['cash', 'เงินสด', 'เงินฝาก', 'ออมทรัพย์', 'ฝากประจำ', 'bank', 'ธนาคาร', 'deposit', 'saving', 'บัญชี']],
+  ['🥇', ['gold', 'ทองคำ', 'ทอง', 'bullion']],
+  ['🥈', ['silver', 'เงินแท่ง']],
+  ['📊', ['fund', 'กองทุน', 'rmf', 'ssf', 'etf', 'บลจ', 'thaiesg']],
+  ['📜', ['bond', 'พันธบัตร', 'หุ้นกู้', 'debenture', 'สลาก']],
+  ['⚔️', ['stock', 'หุ้น', 'equity', 'พอร์ต', 'set']],
+  ['🏠', ['property', 'อสังหา', 'บ้าน', 'ที่ดิน', 'คอนโด', 'condo', 'land', 'house', 'ตึก', 'ห้องชุด', 'ทาวน์']],
+  ['🛡️', ['insurance', 'ประกัน', 'ยูนิตลิงค์', 'unit link']],
+  ['🚗', ['car', 'รถ', 'vehicle', 'มอเตอร์ไซค์', 'motor', 'auto']],
+  ['🏦', ['provident', 'สำรองเลี้ยงชีพ', 'กบข', 'pension', 'บำนาญ', 'ประกันสังคม', 'pvd']],
+  ['💼', ['business', 'ธุรกิจ', 'กิจการ', 'หุ้นส่วน', 'ร้าน']],
+  ['⌚', ['นาฬิกา', 'watch', 'rolex']],
+  ['🎨', ['art', 'ศิลป', 'ของสะสม', 'collect', 'พระเครื่อง']]
+];
+
+function nwIconFor(text, kind) {
+  const s = String(text || '').toLowerCase();
+  for (const [icon, keys] of NW_ICON_RULES) {
+    for (const k of keys) if (s.indexOf(k) !== -1) return icon;
+  }
+  return kind === 'liability' ? '💳' : '💎';
+}
+function nwCatIcon(cat, kind) { return nwIconFor(cat, kind); }
+function nwAssetIcon(a) {
+  return nwIconFor([a && a.name, a && a.cat, a && a.ticker].filter(Boolean).join(' '), a && a.kind);
+}
+
+// ── Collapsible groups ───────────────────────────────────────────────────
+function nwBuildGroups(t, assets, liabs) {
+  const groups = [];
+  if (t.stocksValue > 0 || t.stocksHeld) {
+    groups.push({
+      key: 'stocks', icon: '⚔️', name: 'หุ้น (พอร์ต SET/DR)', n: t.stocksHeld, sum: t.stocksValue,
+      body: `<div class="nw-row" style="cursor:pointer" data-view="stocks" onclick="switchView(this.dataset.view)">
+        <div class="nw-row-ic">📊</div>
+        <div class="nw-row-l"><div class="nw-row-nm">พอร์ตหุ้น SET/DR</div><div class="nw-row-sub">${t.stocksHeld} ตัว · มูลค่าดึงจาก stock registry อัตโนมัติ · แตะเพื่อไปแท็บหุ้น</div></div>
+        <div class="nw-row-r">${fmtBaht(t.stocksValue)}</div>
+      </div>`
+    });
+  }
+  nwByCat(assets).forEach(g => groups.push({
+    key: 'cat:' + g.cat, icon: nwCatIcon(g.cat), name: g.cat, n: g.list.length, sum: g.sum,
+    body: g.list.map(a => nwRowHtml(a)).join('')
+  }));
+  if (liabs.length) {
+    groups.push({
+      key: 'liab', cls: 'liab', neg: true, icon: '💳', name: 'หนี้สิน', n: liabs.length,
+      sum: liabs.reduce((acc, a) => acc + assetValueTHB(a), 0),
+      body: liabs.slice().sort((a, b) => assetValueTHB(b) - assetValueTHB(a)).map(a => nwRowHtml(a)).join('')
+    });
+  }
+  return groups;
+}
+
+// assets → [{cat, list (biggest first), sum}], biggest group first
+function nwByCat(assets) {
+  const by = {};
+  (assets || []).forEach(a => {
+    const c = a.cat || 'อื่นๆ';
+    (by[c] = by[c] || []).push(a);
+  });
+  return Object.keys(by).map(c => ({
+    cat: c,
+    list: by[c].slice().sort((a, b) => assetValueTHB(b) - assetValueTHB(a)),
+    sum: by[c].reduce((acc, a) => acc + assetValueTHB(a), 0)
+  })).sort((a, b) => b.sum - a.sum);
+}
+
+function nwPct(v, base) { return base > 0 ? (v / base * 100) : 0; }
+
+function nwGroupHtml(g, base) {
+  const open = !!S.nwOpen[g.key];
+  const pct = nwPct(g.sum, base);
+  const w = Math.max(1.5, Math.min(100, pct));
+  return `<div class="nw-grp ${g.cls || ''}${open ? ' open' : ''}" data-key="${escHtml(g.key)}">
+    <button class="nw-grp-h" onclick="nwToggleGroup(this)" aria-expanded="${open}">
+      <span class="nw-caret">▶</span>
+      <span class="nw-grp-ic">${g.icon}</span>
+      <span class="nw-grp-nm">${escHtml(g.name)}</span>
+      <span class="nw-grp-n">${g.n} รายการ</span>
+      <span class="nw-grp-bar"><i style="width:${w.toFixed(1)}%"></i></span>
+      <span class="nw-grp-p" title="${g.neg ? 'เทียบทรัพย์สินรวม' : 'สัดส่วนของทรัพย์สินรวม'}">${pct.toFixed(0)}%</span>
+      <span class="nw-grp-v">${g.neg ? '−' : ''}${fmtBaht(g.sum)}</span>
+    </button>
+    <div class="nw-grp-b">${g.body}</div>
+  </div>`;
+}
+
+function nwGroupEls() { return [...document.querySelectorAll('#nwLists .nw-grp')]; }
+
+function nwSetOpen(el, open) {
+  el.classList.toggle('open', open);
+  const h = el.querySelector('.nw-grp-h');
+  if (h) h.setAttribute('aria-expanded', String(open));
+  if (open) S.nwOpen[el.dataset.key] = true;
+  else delete S.nwOpen[el.dataset.key];
+}
+
+function nwToggleGroup(btn) {
+  const el = btn.closest('.nw-grp');
+  if (!el) return;
+  nwSetOpen(el, !el.classList.contains('open'));
+  nwSyncExpandBtn();
+  saveLS();
+}
+
+function nwToggleAll() {
+  const els = nwGroupEls();
+  const openAll = els.some(el => !el.classList.contains('open'));
+  els.forEach(el => nwSetOpen(el, openAll));
+  nwSyncExpandBtn();
+  saveLS();
+}
+
+function nwSyncExpandBtn() {
+  const b = document.getElementById('nwExpandBtn');
+  if (!b) return;
+  const els = nwGroupEls();
+  b.textContent = els.some(el => !el.classList.contains('open')) ? '⊕ ขยายทั้งหมด' : '⊖ ยุบทั้งหมด';
+}
+
+// Open one group and bring it into view (used by the donut legend).
+function nwOpenGroup(key) {
+  const el = nwGroupEls().find(x => x.dataset.key === key);
+  if (!el) return;
+  if (!el.classList.contains('open')) { nwSetOpen(el, true); nwSyncExpandBtn(); saveLS(); }
+  if (el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// ── ทรัพย์สินอื่น / หนี้สิน breakdown (tap a hero chip) ──────────────────
+function openNwBreakdown(which) {
+  renderNwBreakdown(which);
+  document.getElementById('nwBreakModal').classList.remove('hidden');
+}
+
+function renderNwBreakdown(which) {
+  const body = document.getElementById('nwBreakBody');
+  const title = document.getElementById('nwBreakTitle');
+  if (!body) return;
+  const isL = which === 'liab';
+  const items = (S.assetReg?.assets || []).filter(a => isL ? a.kind === 'liability' : a.kind !== 'liability');
+  const t = netWorthTotals();
+  const total = isL ? t.liab : t.assets;
+  const cats = nwByCat(items);
+  if (title) title.textContent = isL ? '💳 หนี้สินทั้งหมด' : '💎 ทรัพย์สินอื่น — แยกตามประเภท';
+
+  if (!items.length) {
+    body.innerHTML = `<div class="rpt-empty">ยังไม่มี${isL ? 'หนี้สิน' : 'ทรัพย์สินอื่น'}ในรายการ — กด <b>+ เพิ่มรายการ</b> ในแท็บ Net Worth</div>`;
+    return;
+  }
+
+  const head = `<div class="nwb-h">
+    <div>
+      <div class="nwb-h-l">${isL ? 'รวมหนี้สิน' : 'รวมทรัพย์สินอื่น'}</div>
+      <div class="nwb-h-v" style="${isL ? 'color:var(--red)' : ''}">${isL ? '−' : ''}${fmtBaht(total)}</div>
+    </div>
+    <div class="nwb-h-r">${cats.length} ประเภท · ${items.length} รายการ<br>${isL ? 'เทียบทรัพย์สินรวม' : 'ของทรัพย์สินรวม'} ${nwPct(total, t.stocksValue + t.assets).toFixed(1)}%</div>
+  </div>`;
+
+  const rows = cats.map(c => {
+    const pct = nwPct(c.sum, total);
+    return `<div class="nwb-cat">
+      <div class="nwb-cat-h">
+        <span>${nwCatIcon(c.cat, isL ? 'liability' : 'asset')}</span>
+        <span>${escHtml(c.cat)}</span>
+        <span class="nwb-cat-n">${c.list.length} รายการ</span>
+        <span class="nwb-cat-v" style="${isL ? 'color:var(--red)' : ''}">${isL ? '−' : ''}${fmtBaht(c.sum)}</span>
+        <span class="nwb-cat-p">${pct.toFixed(1)}%</span>
+      </div>
+      <div class="nwb-bar"><i style="width:${Math.max(1.5, Math.min(100, pct)).toFixed(1)}%;${isL ? 'background:var(--red)' : ''}"></i></div>
+      ${c.list.map(a => nwbItemHtml(a, isL)).join('')}
+    </div>`;
+  }).join('');
+
+  const foot = isL ? '' : `<div class="nwb-foot">
+    <span>⚔️ หุ้น ${fmtBaht(t.stocksValue)}</span>
+    <span>รวมทรัพย์สินทั้งหมด <b style="color:var(--tx)">${fmtBaht(t.stocksValue + t.assets)}</b></span>
+  </div>`;
+
+  body.innerHTML = head + rows + foot;
+}
+
+function nwbItemHtml(a, isL) {
+  const price = a.price_mode === 'auto' ? (parseFloat(a.fetched_price) || 0) : (parseFloat(a.manual_price) || 0);
+  const cur = a.price_cur === 'USD' ? '$' : '฿';
+  return `<button class="nwb-it" data-id="${escHtml(a.id)}" onclick="nwBreakEdit(this)" title="แก้ไขรายการนี้">
+    <span class="dn-ic">${nwAssetIcon(a)}</span>
+    <span class="nwb-it-nm">${escHtml(a.name)}</span>
+    <span class="nwb-it-q">${fmtQty(a.qty)} × ${cur}${price.toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
+    <span class="nwb-it-v" style="${isL ? 'color:var(--red)' : ''}">${isL ? '−' : ''}${fmtBaht(assetValueTHB(a))}</span>
+  </button>`;
+}
+
+function nwBreakEdit(el) {
+  closeM('nwBreakModal');
+  openEditAsset(el.dataset.id);
+}
+
 function renderNetWorth() {
   const dash = document.getElementById('nwDash');
   const lists = document.getElementById('nwLists');
@@ -1386,9 +1657,9 @@ function renderNetWorth() {
       <div class="md-label">🏦 ความมั่งคั่งสุทธิ (Net Worth)</div>
       <div class="md-value">${fmtBaht(t.net)}</div>
       <div class="md-sub" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
-        <span class="nw-chip">⚔️ หุ้น ${fmtBaht(t.stocksValue)}</span>
-        <span class="nw-chip">💎 ทรัพย์สินอื่น ${fmtBaht(t.assets)}</span>
-        <span class="nw-chip" style="color:var(--red)">💳 หนี้สิน −${fmtBaht(t.liab)}</span>
+        <span class="nw-chip tap" onclick="switchView('stocks')" title="ไปที่แท็บหุ้น">⚔️ หุ้น ${fmtBaht(t.stocksValue)}</span>
+        <span class="nw-chip tap" onclick="openNwBreakdown('assets')" title="ดูทรัพย์สินทุกประเภท">💎 ทรัพย์สินอื่น ${fmtBaht(t.assets)}</span>
+        <span class="nw-chip tap" style="color:var(--red)" onclick="openNwBreakdown('liab')" title="ดูหนี้สินทั้งหมด">💳 หนี้สิน −${fmtBaht(t.liab)}</span>
         <span class="nw-chip" style="cursor:pointer" onclick="openFxModal()" title="ตั้งค่าอัตราแลกเปลี่ยน">💱 $1 = ฿${fxStr} <span style="color:var(--tx3)">(${fxSub})</span></span>
       </div>
     </div>
@@ -1399,32 +1670,24 @@ function renderNetWorth() {
   </div>
   <div class="md-charts">
     <div class="md-card"><div class="md-card-t">📈 Net Worth ตามเวลา</div><div class="md-canvas-wrap"><canvas id="nwValueChart"></canvas></div><div class="md-note" id="nwChartNote"></div></div>
-    <div class="md-card"><div class="md-card-t">🍩 สัดส่วนทรัพย์สิน</div><div class="md-canvas-wrap"><canvas id="nwAllocChart"></canvas></div></div>
+    <div class="md-card"><div class="md-card-t">🍩 สัดส่วนทรัพย์สิน</div><div class="md-canvas-wrap"><canvas id="nwAllocChart"></canvas></div><div class="dn-legend" id="nwAllocLegend"></div></div>
   </div>`;
 
-  // ── Lists: stocks row + assets grouped by category + liabilities ──
-  let html = '';
-  html += `<div class="nw-group-t">⚔️ หุ้น (จากแท็บ หุ้น)</div>
-  <div class="nw-row" style="cursor:pointer" data-view="stocks" onclick="switchView(this.dataset.view)">
-    <div class="nw-row-l"><div class="nw-row-nm">พอร์ตหุ้น SET/DR</div><div class="nw-row-sub">${t.stocksHeld} ตัว · มูลค่าดึงจาก stock registry อัตโนมัติ · แตะเพื่อไปแท็บหุ้น</div></div>
-    <div class="nw-row-r">${fmtBaht(t.stocksValue)}</div>
-  </div>`;
-
+  // ── Lists: one collapsible group per kind (stocks · categories · หนี้สิน) ──
+  // Groups start collapsed so the page opens clean; what the user expands is
+  // remembered in S.nwOpen, and ⊕ ขยายทั้งหมด flips every group at once.
   const assets = items.filter(a => a.kind !== 'liability');
   const liabs = items.filter(a => a.kind === 'liability');
-  const cats = [...new Set(assets.map(a => a.cat || 'อื่นๆ'))];
+  const groups = nwBuildGroups(t, assets, liabs);
+  const gross = t.stocksValue + t.assets;
 
-  cats.forEach(cat => {
-    const group = assets.filter(a => (a.cat || 'อื่นๆ') === cat);
-    const sum = group.reduce((acc, a) => acc + assetValueTHB(a), 0);
-    html += `<div class="nw-group-t">💎 ${escHtml(cat)} <span style="color:var(--tx3);text-transform:none">· ${fmtBaht(sum)}</span></div>`;
-    html += group.map(a => nwRowHtml(a)).join('');
-  });
-
-  if (liabs.length) {
-    const sum = liabs.reduce((acc, a) => acc + assetValueTHB(a), 0);
-    html += `<div class="nw-group-t" style="color:var(--red)">💳 หนี้สิน <span style="color:var(--tx3);text-transform:none">· −${fmtBaht(sum)}</span></div>`;
-    html += liabs.map(a => nwRowHtml(a)).join('');
+  let html = '';
+  if (groups.length) {
+    html += `<div class="nw-tools">
+      <div class="nw-tools-n">${groups.length} กลุ่ม · ${items.length + (t.stocksHeld ? 1 : 0)} รายการ</div>
+      <button class="btn btn-g btn-sm" id="nwExpandBtn" onclick="nwToggleAll()">⊕ ขยายทั้งหมด</button>
+    </div>`;
+    html += groups.map(g => nwGroupHtml(g, gross)).join('');
   }
 
   if (!items.length) {
@@ -1434,6 +1697,7 @@ function renderNetWorth() {
     </div>`;
   }
   lists.innerHTML = html;
+  nwSyncExpandBtn();
 
   renderNwValueChart();
   renderNwAllocChart(t, assets);
@@ -1447,6 +1711,7 @@ function nwRowHtml(a) {
   const auto = a.price_mode === 'auto' ? ` · 🔄 ${escHtml((a.ticker || '').toUpperCase())}` : '';
   const noteStr = a.note ? ` · ${escHtml(a.note)}` : '';
   return `<div class="nw-row">
+    <div class="nw-row-ic">${nwAssetIcon(a)}</div>
     <div class="nw-row-l">
       <div class="nw-row-nm">${escHtml(a.name)}</div>
       <div class="nw-row-sub">${fmtQty(a.qty)} × ${curSym}${price.toLocaleString(undefined, { maximumFractionDigits: 6 })}${auto}${noteStr}</div>
@@ -1493,33 +1758,126 @@ function renderNwValueChart() {
   });
 }
 
-function renderNwAllocChart(t, assets) {
-  const canvas = document.getElementById('nwAllocChart');
-  if (!canvas) return;
-  const parts = [];
-  if (t.stocksValue > 0) parts.push({ label: '⚔️ หุ้น', v: t.stocksValue });
-  const byCat = {};
-  assets.forEach(a => {
-    const c = a.cat || 'อื่นๆ';
-    byCat[c] = (byCat[c] || 0) + assetValueTHB(a);
-  });
-  Object.entries(byCat).forEach(([c, v]) => { if (v > 0) parts.push({ label: c, v }); });
-  parts.sort((a, b) => b.v - a.v);
-  if (!parts.length) { if (canvas._chart) { canvas._chart.destroy(); canvas._chart = null; } return; }
+// ── Doughnut charts ──────────────────────────────────────────────────────
+// Chart.js legends can only print a label, so the legend here is plain HTML:
+// colour · icon · name · baht · percent, and each entry is tappable.
+const DONUT_PCT_PLUGIN = {
+  id: 'donutPct',
+  afterDatasetsDraw(chart) {
+    const ds = chart.data.datasets[0];
+    if (!ds) return;
+    const tot = ds.data.reduce((a, b) => a + b, 0);
+    if (!tot) return;
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.font = "700 11px -apple-system,BlinkMacSystemFont,sans-serif";
+    ctx.fillStyle = '#070809';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    chart.getDatasetMeta(0).data.forEach((arc, i) => {
+      const pct = ds.data[i] / tot * 100;
+      if (pct < 7 || arc.hidden) return;   // tiny slices have no room for text
+      const pos = arc.tooltipPosition();
+      ctx.fillText(pct.toFixed(0) + '%', pos.x, pos.y);
+    });
+    ctx.restore();
+  }
+};
+
+const DONUT_CENTER_PLUGIN = {
+  id: 'donutCenter',
+  afterDatasetsDraw(chart) {
+    const c = chart.options.plugins && chart.options.plugins.centerText;
+    if (!c) return;
+    const a = chart.chartArea;
+    const x = (a.left + a.right) / 2, y = (a.top + a.bottom) / 2;
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#445566';
+    ctx.font = "600 10px -apple-system,BlinkMacSystemFont,sans-serif";
+    ctx.fillText(c.label, x, y - 11);
+    ctx.fillStyle = '#f0f4f8';
+    ctx.font = "800 17px -apple-system,BlinkMacSystemFont,sans-serif";
+    ctx.fillText(c.value, x, y + 7);
+    ctx.restore();
+  }
+};
+
+function donutLegendHtml(parts, tot, onPick) {
+  return parts.map((p, i) => {
+    const color = p.color || ALLOC_COLORS[i % ALLOC_COLORS.length];
+    const pct = tot > 0 ? (p.v / tot * 100) : 0;
+    const act = p.act ? ` data-act="${escHtml(p.act)}" onclick="${onPick}(this.dataset.act)"` : '';
+    return `<button class="dn-li"${act}>
+      <span class="dn-sw" style="background:${color}"></span>
+      <span class="dn-ic">${p.icon || ''}</span>
+      <span class="dn-nm">${escHtml(p.label)}</span>
+      <span class="dn-val">${fmtBaht(p.v)}</span>
+      <span class="dn-pct">${pct.toFixed(1)}%</span>
+    </button>`;
+  }).join('');
+}
+
+// parts: [{label, icon, v, color?, act?}] — already sorted by the caller.
+function renderDonut(canvas, legendEl, parts, opts) {
+  opts = opts || {};
   const data = parts.map(p => p.v);
+  const tot = data.reduce((a, b) => a + b, 0);
+  const colors = parts.map((p, i) => p.color || ALLOC_COLORS[i % ALLOC_COLORS.length]);
+  // The legend is drawn straight away, so the numbers still show if Chart.js
+  // (loaded from a CDN) never arrives.
+  if (legendEl) legendEl.innerHTML = donutLegendHtml(parts, tot, opts.onPick || '');
   ensureChartJs(() => {
     if (canvas._chart) canvas._chart.destroy();
     canvas._chart = new Chart(canvas, {
       type: 'doughnut',
-      data: { labels: parts.map(p => p.label), datasets: [{ data, backgroundColor: parts.map((_, i) => ALLOC_COLORS[i % ALLOC_COLORS.length]), borderColor: '#0e1012', borderWidth: 2 }] },
+      data: {
+        labels: parts.map(p => (p.icon ? p.icon + ' ' : '') + p.label),
+        datasets: [{ data, backgroundColor: colors, borderColor: '#0e1012', borderWidth: 2, hoverOffset: 6 }]
+      },
       options: {
-        responsive: true, maintainAspectRatio: false, animation: false, cutout: '60%',
+        responsive: true, maintainAspectRatio: false, animation: false, cutout: '62%',
+        layout: { padding: 2 },
         plugins: {
-          legend: { position: 'right', labels: { color: '#8899aa', boxWidth: 12, padding: 8, font: { size: 11 } } },
-          tooltip: { callbacks: { label: c => { const tot = data.reduce((a,b)=>a+b,0); return `${c.label}: ฿${Math.round(c.raw).toLocaleString()} (${(c.raw/tot*100).toFixed(1)}%)`; } } }
+          legend: { display: false },
+          centerText: opts.center || null,
+          tooltip: { callbacks: { label: c => `${c.label}: ฿${Math.round(c.raw).toLocaleString()} (${tot > 0 ? (c.raw / tot * 100).toFixed(1) : '0.0'}%)` } }
         }
-      }
+      },
+      plugins: [DONUT_PCT_PLUGIN, DONUT_CENTER_PLUGIN]
     });
+  });
+}
+
+function nwAllocParts(t, assets) {
+  const parts = [];
+  if (t.stocksValue > 0) parts.push({ label: 'หุ้น (พอร์ต SET/DR)', icon: '⚔️', v: t.stocksValue, act: 'stocks' });
+  nwByCat(assets).forEach(c => { if (c.sum > 0) parts.push({ label: c.cat, icon: nwCatIcon(c.cat), v: c.sum, act: 'cat:' + c.cat }); });
+  return parts.sort((a, b) => b.v - a.v);
+}
+
+// Tapping a legend entry jumps to what it stands for.
+function nwAllocPick(act) {
+  if (act === 'stocks') switchView('stocks');
+  else if (act.slice(0, 4) === 'cat:') nwOpenGroup(act);
+}
+
+function renderNwAllocChart(t, assets) {
+  const canvas = document.getElementById('nwAllocChart');
+  if (!canvas) return;
+  const legend = document.getElementById('nwAllocLegend');
+  const parts = nwAllocParts(t, assets);
+  if (!parts.length) {
+    if (legend) legend.innerHTML = '';
+    if (canvas._chart) { canvas._chart.destroy(); canvas._chart = null; }
+    return;
+  }
+  const tot = parts.reduce((a, p) => a + p.v, 0);
+  renderDonut(canvas, legend, parts, {
+    onPick: 'nwAllocPick',
+    center: { label: 'รวมทรัพย์สิน', value: fmtBaht(tot) }
   });
 }
 
@@ -2196,7 +2554,7 @@ function renderMoneyDashboard() {
   </div>
   <div class="md-charts">
     <div class="md-card"><div class="md-card-t">📈 มูลค่าพอร์ตตามเวลา</div><div class="md-canvas-wrap"><canvas id="valueChart"></canvas></div><div class="md-note" id="valueChartNote"></div></div>
-    <div class="md-card"><div class="md-card-t">🍩 สัดส่วนพอร์ต (Allocation)</div><div class="md-canvas-wrap"><canvas id="allocChart"></canvas></div></div>
+    <div class="md-card"><div class="md-card-t">🍩 สัดส่วนพอร์ต (Allocation)</div><div class="md-canvas-wrap"><canvas id="allocChart"></canvas></div><div class="dn-legend" id="allocLegend"></div></div>
   </div>` : `
   <div class="md-card" style="text-align:center;color:var(--tx3);font-size:13px">
     ยังไม่มีหุ้นที่กรอกจำนวน/ต้นทุน — ใส่ Shares + Avg Cost (ปุ่ม ✏️ ในแถว) เพื่อดูมูลค่าพอร์ตและกราฟ
@@ -2362,27 +2720,25 @@ function renderValueChart() {
   });
 }
 
+function allocParts(held) {
+  return held.map(s => ({
+    label: s.ticker,
+    icon: s.thesis_status || '📈',
+    v: (s.current_price > 0 ? s.current_price : s.avg_cost) * s.shares,
+    act: s.ticker
+  })).filter(p => p.v > 0).sort((a, b) => b.v - a.v);
+}
+
 function renderAllocChart(held) {
   const canvas = document.getElementById('allocChart');
   if (!canvas) return;
-  const parts = held.map(s => ({ ticker: s.ticker, v: (s.current_price > 0 ? s.current_price : s.avg_cost) * s.shares }))
-    .filter(p => p.v > 0).sort((a,b) => b.v - a.v);
-  if (!parts.length) return;
-  const labels = parts.map(p => p.ticker);
-  const data = parts.map(p => p.v);
-  ensureChartJs(() => {
-    if (canvas._chart) canvas._chart.destroy();
-    canvas._chart = new Chart(canvas, {
-      type: 'doughnut',
-      data: { labels, datasets: [{ data, backgroundColor: labels.map((_, i) => ALLOC_COLORS[i % ALLOC_COLORS.length]), borderColor: '#0e1012', borderWidth: 2 }] },
-      options: {
-        responsive: true, maintainAspectRatio: false, animation: false, cutout: '60%',
-        plugins: {
-          legend: { position: 'right', labels: { color: '#8899aa', boxWidth: 12, padding: 8, font: { size: 11 } } },
-          tooltip: { callbacks: { label: c => { const tot = data.reduce((a,b)=>a+b,0); return `${c.label}: ฿${Math.round(c.raw).toLocaleString()} (${(c.raw/tot*100).toFixed(1)}%)`; } } }
-        }
-      }
-    });
+  const legend = document.getElementById('allocLegend');
+  const parts = allocParts(held);
+  if (!parts.length) { if (legend) legend.innerHTML = ''; return; }
+  const tot = parts.reduce((a, p) => a + p.v, 0);
+  renderDonut(canvas, legend, parts, {
+    onPick: 'openDetail',
+    center: { label: 'มูลค่าพอร์ต', value: fmtBaht(tot) }
   });
 }
 
