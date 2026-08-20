@@ -30,7 +30,11 @@ def main() -> int:
     if "</body>" not in page:
         print("!! index.html has no </body> to inject into", file=sys.stderr)
         return 3
-    OUT.write_text(page.replace("</body>", "<script>\n" + TESTJS.read_text() + "\n</script>\n</body>"))
+    # Inject before the LAST </body>: the app's own source contains that string
+    # inside a JS template (the printable report), and replacing every match
+    # would drop the harness into the middle of a string literal.
+    head, sep, tail = page.rpartition("</body>")
+    OUT.write_text(head + "<script>\n" + TESTJS.read_text() + "\n</script>\n" + sep + tail)
 
     proc = subprocess.run(
         [CHROME, "--headless", "--disable-gpu", "--no-sandbox",

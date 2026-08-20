@@ -268,6 +268,22 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 .tl-form{background:var(--bg3);border:1px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px}
 .tl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(max-width:520px){.tl-grid{grid-template-columns:1fr}}
+.tg-row{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--border)}
+.tg-row:last-child{border-bottom:0}
+.tg-nm{width:118px;flex:0 0 auto;font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tg-bar{flex:1 1 auto;min-width:40px;height:14px;position:relative;background:var(--bg);border-radius:4px;overflow:hidden}
+.tg-bar i{display:block;height:100%;background:var(--c1);opacity:.75;border-radius:4px}
+.tg-mark{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--yellow);border-radius:2px}
+.tg-pct{flex:0 0 auto;width:78px;text-align:right;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+.tg-act{flex:0 0 auto;width:112px;text-align:right;font-size:11.5px;font-weight:700}
+.tg-ok{color:var(--green)} .tg-over{color:var(--yellow)} .tg-under{color:var(--c1)} .tg-none{color:var(--tx3);font-weight:600}
+.tg-warn{font-size:11.5px;color:var(--yellow);margin-bottom:8px}
+.tg-edit{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.tg-edit-nm{flex:1 1 auto;min-width:0;font-size:13px;font-weight:600}
+.tg-edit-nm span{display:block;font-size:11px;color:var(--tx3);font-weight:400;margin-top:1px}
+.tg-input{width:88px;flex:0 0 auto;text-align:right}
+.tg-sum{margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:12.5px;color:var(--tx2)}
+@media(max-width:560px){.tg-nm{width:84px}.tg-act{width:88px;font-size:11px}.tg-pct{width:64px}}
 .dv-bars{display:flex;align-items:flex-end;gap:4px;margin:14px 0 4px}
 .dv-bar{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0}
 /* percentage heights need a definite parent height, so the track is fixed */
@@ -823,6 +839,22 @@ HANA   | 2000 | 38 | 35.75"></textarea>
   </div>
 </div>
 
+<iframe id="printFrame" style="position:fixed;width:0;height:0;border:0;left:-9999px" title="print"></iframe>
+
+<div class="mbg center hidden" id="targetModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">
+      <div class="mt-t" id="targetTitle">🎯 เป้าหมาย</div>
+      <button class="btn btn-g btn-sm" onclick="closeM('targetModal')">✕</button>
+    </div>
+    <div class="mb">
+      <div id="targetBody"></div>
+      <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:14px" onclick="saveTargets()">💾 บันทึกเป้าหมาย</button>
+    </div>
+  </div>
+</div>
+
 <div class="mbg center hidden" id="tradeModal">
   <div class="modal">
     <div class="mh"></div>
@@ -838,6 +870,9 @@ HANA   | 2000 | 38 | 35.75"></textarea>
         <div style="display:flex;gap:6px;align-items:center">
           <select class="form-input tl-sel" id="tradeFilterTicker" onchange="setTradeTicker(this.value)"></select>
           <button class="btn btn-p btn-sm" onclick="openTradeForm()">+ เพิ่มรายการ</button>
+          <button class="btn btn-s btn-sm" onclick="openYearReport()" title="พิมพ์รายงานประจำปี A4">📄 รายงานปี</button>
+          <button class="btn btn-g btn-sm" onclick="exportTradesCsv()" title="ส่งออกรายการเป็น CSV">⬇️ CSV</button>
+          <button class="btn btn-g btn-sm" onclick="exportBackupJson()" title="สำรองข้อมูลทั้งหมดเป็น JSON">⬇️ สำรอง</button>
         </div>
       </div>
       <div id="tradeFormWrap" class="hidden"></div>
@@ -1889,7 +1924,8 @@ function renderNetWorth() {
       <div class="md-note" id="nwChartNote"></div>
     </div>
     <div class="md-card"><div class="md-card-t">🍩 สัดส่วนทรัพย์สิน</div><div class="md-canvas-wrap"><canvas id="nwAllocChart"></canvas></div><div class="dn-legend" id="nwAllocLegend"></div></div>
-  </div>`;
+  </div>
+  ${targetCardHtml('class')}`;
 
   // ── Lists: one collapsible group per kind (stocks · categories · หนี้สิน) ──
   // Groups start collapsed so the page opens clean; what the user expands is
@@ -2849,6 +2885,355 @@ function benchNoteHtml(hist) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// รายงานประจำปี + ส่งออกไฟล์
+// Everything here is derived from the book, so it only tells the truth for
+// years the book covers. Thai dividend tax credit: เครดิตภาษี =
+// เงินปันผล(ก่อนหัก) × อัตราภาษีนิติบุคคล ÷ (100 − อัตรา) — 20% is the ordinary
+// rate, but the real one is on the หนังสือรับรองการหักภาษี ณ ที่จ่าย, so it is a field.
+// ═══════════════════════════════════════════════════════════════
+const CORP_TAX_DEFAULT = 20;
+
+function divTaxCredit(gross, ratePct) {
+  const r = ratePct == null ? CORP_TAX_DEFAULT : +ratePct;
+  if (!(r > 0) || r >= 100) return 0;
+  return gross * r / (100 - r);
+}
+
+// Position of every book-driven ticker as of a date (inclusive).
+function positionsAsOf(dateISO) {
+  return tickersWithTrades().map(tk => {
+    const upto = tradesFor(tk).filter(t => String(t.date || '') <= dateISO);
+    let realized = 0, dividends = 0;
+    const end = walkTrades(upto, e => { realized += e.realized; dividends += e.dividends; });
+    return { ticker: tk, qty: end.qty, cost: end.cost, avgCost: end.qty > 0 ? end.cost / end.qty : 0, realized, dividends };
+  }).filter(r => r.qty > 0).sort((a, b) => b.cost - a.cost);
+}
+
+function valueOn(dateISO, hist) {
+  const arr = (hist || (S.kb && S.kb.value_history) || []).filter(h => h && h.date && h.date <= dateISO);
+  return arr.length ? arr[arr.length - 1] : null;
+}
+
+function reportData(year, taxRate) {
+  const yr = String(year);
+  const thisYear = new Date().toISOString().slice(0, 4);
+  const all = sortedTrades((S.tradeLog && S.tradeLog.trades) || []);
+  const trades = all.filter(t => String(t.date || '').slice(0, 4) === yr);
+  const stats = tradeYearStats()[yr] || { realized: 0, dividends: 0, fees: 0, n: 0 };
+
+  let bought = 0, sold = 0;
+  trades.forEach(t => {
+    const q = Math.abs(+t.qty || 0), pr = +t.price || 0, fee = +t.fee || 0;
+    if (t.type === 'buy') bought += q * pr + fee;
+    else if (t.type === 'sell') sold += q * pr - fee;
+  });
+
+  const divs = trades.filter(t => t.type === 'div').map(t => {
+    const gross = Math.abs(+t.qty || 0) * (+t.price || 0);
+    const tax = +t.tax || 0;
+    return { date: t.date, ticker: tradeTicker(t), qty: Math.abs(+t.qty || 0), dps: +t.price || 0,
+             gross, tax, net: gross - tax, credit: divTaxCredit(gross, taxRate) };
+  });
+  const divTotals = divs.reduce((a, d) => ({
+    gross: a.gross + d.gross, tax: a.tax + d.tax, net: a.net + d.net, credit: a.credit + d.credit
+  }), { gross: 0, tax: 0, net: 0, credit: 0 });
+
+  const startVal = valueOn(yr + '-01-01');
+  const endVal = valueOn(yr === thisYear ? new Date().toISOString().split('T')[0] : yr + '-12-31');
+
+  const holdings = yr === thisYear
+    ? portfolioTotals().held.map(s => {
+        const st = plRowStats(s);
+        return { ticker: s.ticker, qty: s.shares, avgCost: s.avg_cost, cost: st.cost, value: st.value, pl: st.pl };
+      }).sort((a, b) => b.value - a.value)
+    : positionsAsOf(yr + '-12-31').map(r => ({ ticker: r.ticker, qty: r.qty, avgCost: r.avgCost, cost: r.cost, value: null, pl: null }));
+
+  return { year: yr, isCurrent: yr === thisYear, trades, stats, bought, sold, netInvested: bought - sold,
+           divs, divTotals, startVal, endVal, holdings, taxRate: taxRate == null ? CORP_TAX_DEFAULT : +taxRate };
+}
+
+function reportHtml(d) {
+  const money = v => (v == null ? '—' : fmtBaht(v));
+  const row = (label, value, strong) => `<tr><td>${label}</td><td class="num${strong ? ' b' : ''}">${value}</td></tr>`;
+  const growth = d.startVal && d.endVal && d.startVal.value > 0
+    ? ((d.endVal.value - d.startVal.value) / d.startVal.value * 100) : null;
+
+  return `<div class="rp">
+    <h1>รายงานพอร์ตประจำปี ${escHtml(d.year)}</h1>
+    <div class="rp-sub">${escHtml((S.registry && S.registry.portfolio_name) || 'Portfolio')} · พิมพ์เมื่อ ${new Date().toLocaleDateString('th-TH', { dateStyle: 'long' })}${d.isCurrent ? ' · ปีที่ยังไม่จบ (ข้อมูลถึงวันที่พิมพ์)' : ''}</div>
+
+    <h2>สรุปทั้งปี</h2>
+    <table class="rp-t">
+      ${row('มูลค่าพอร์ตต้นปี', d.startVal ? money(d.startVal.value) + ` <span class="dim">(${d.startVal.date})</span>` : '—')}
+      ${row('มูลค่าพอร์ตปลายปี', d.endVal ? money(d.endVal.value) + ` <span class="dim">(${d.endVal.date})</span>` : '—', true)}
+      ${row('เปลี่ยนแปลงมูลค่า', growth == null ? '—' : fmtPct(growth))}
+      ${row('ซื้อระหว่างปี', money(d.bought))}
+      ${row('ขายระหว่างปี', money(d.sold))}
+      ${row('เงินลงทุนสุทธิ (ซื้อ − ขาย)', money(d.netInvested))}
+      ${row('กำไรที่ขายจริง (realized)', (d.stats.realized >= 0 ? '+' : '−') + fmtBaht(Math.abs(d.stats.realized)), true)}
+      ${row('ปันผลรับสุทธิ', money(d.divTotals.net), true)}
+      ${row('ค่าคอมมิชชั่นรวม', money(d.stats.fees))}
+    </table>
+
+    <h2>ปันผลและภาษี</h2>
+    ${d.divs.length ? `<table class="rp-t rp-grid">
+      <thead><tr><th>วันที่</th><th>หุ้น</th><th class="num">จำนวนหุ้น</th><th class="num">฿/หุ้น</th><th class="num">ปันผล</th><th class="num">หัก ณ ที่จ่าย</th><th class="num">สุทธิ</th><th class="num">เครดิตภาษี</th></tr></thead>
+      <tbody>${d.divs.map(x => `<tr>
+        <td>${escHtml(x.date)}</td><td>${escHtml(x.ticker)}</td>
+        <td class="num">${x.qty.toLocaleString()}</td><td class="num">${x.dps.toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
+        <td class="num">${fmtBaht(x.gross)}</td><td class="num">${fmtBaht(x.tax)}</td>
+        <td class="num">${fmtBaht(x.net)}</td><td class="num">${fmtBaht(x.credit)}</td></tr>`).join('')}
+        <tr class="rp-tot"><td colspan="4">รวม</td>
+          <td class="num">${fmtBaht(d.divTotals.gross)}</td><td class="num">${fmtBaht(d.divTotals.tax)}</td>
+          <td class="num">${fmtBaht(d.divTotals.net)}</td><td class="num">${fmtBaht(d.divTotals.credit)}</td></tr>
+      </tbody></table>
+      <div class="rp-note">เครดิตภาษีเงินปันผลคำนวณที่อัตราภาษีนิติบุคคล ${d.taxRate}% (เครดิต = เงินปันผล × ${d.taxRate} ÷ ${100 - d.taxRate}) —
+      อัตราจริงของแต่ละบริษัทอยู่ในหนังสือรับรองการหักภาษี ณ ที่จ่าย และบางกรณี (เช่น กิจการ BOI) เครดิตภาษีใช้ไม่ได้ ให้ยึดเอกสารจริงเป็นหลัก</div>`
+      : '<div class="rp-note">ไม่มีปันผลที่บันทึกไว้ในปีนี้</div>'}
+
+    <h2>หุ้นที่ถืออยู่${d.isCurrent ? ' (ปัจจุบัน)' : ' ณ สิ้นปี ' + escHtml(d.year)}</h2>
+    ${d.holdings.length ? `<table class="rp-t rp-grid">
+      <thead><tr><th>หุ้น</th><th class="num">จำนวน</th><th class="num">ต้นทุนเฉลี่ย</th><th class="num">ต้นทุนรวม</th>${d.isCurrent ? '<th class="num">มูลค่า</th><th class="num">กำไร/ขาดทุน</th>' : ''}</tr></thead>
+      <tbody>${d.holdings.map(h => `<tr>
+        <td>${escHtml(h.ticker)}</td><td class="num">${(+h.qty).toLocaleString()}</td>
+        <td class="num">${(+h.avgCost).toFixed(2)}</td><td class="num">${fmtBaht(h.cost)}</td>
+        ${d.isCurrent ? `<td class="num">${fmtBaht(h.value)}</td><td class="num">${h.pl >= 0 ? '+' : '−'}${fmtBaht(Math.abs(h.pl))}</td>` : ''}</tr>`).join('')}
+      </tbody></table>${d.isCurrent ? '' : '<div class="rp-note">คำนวณจากสมุดซื้อขายเท่านั้น — หุ้นที่ยังไม่มีรายการในสมุดจะไม่ปรากฏในตารางนี้</div>'}`
+      : '<div class="rp-note">ไม่มีข้อมูลการถือครองสำหรับปีนี้</div>'}
+
+    <h2>รายการทั้งหมดในปี (${d.trades.length})</h2>
+    ${d.trades.length ? `<table class="rp-t rp-grid">
+      <thead><tr><th>วันที่</th><th>หุ้น</th><th>ประเภท</th><th class="num">จำนวน</th><th class="num">ราคา</th><th class="num">ค่าคอม/ภาษี</th><th class="num">รวม</th></tr></thead>
+      <tbody>${d.trades.map(t => {
+        const q = Math.abs(+t.qty || 0), pr = +t.price || 0, fee = +t.fee || 0, tax = +t.tax || 0;
+        const total = t.type === 'buy' ? -(q * pr + fee) : t.type === 'sell' ? (q * pr - fee) : (q * pr - tax);
+        return `<tr><td>${escHtml(t.date)}</td><td>${escHtml(tradeTicker(t))}</td><td>${TRADE_LABEL[t.type] || ''}</td>
+          <td class="num">${q.toLocaleString()}</td><td class="num">${pr.toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
+          <td class="num">${fmtBaht(fee + tax)}</td><td class="num">${total >= 0 ? '+' : '−'}${fmtBaht(Math.abs(total))}</td></tr>`;
+      }).join('')}</tbody></table>` : '<div class="rp-note">ไม่มีรายการในปีนี้</div>'}
+  </div>`;
+}
+
+const REPORT_CSS = `
+  @page { size: A4; margin: 14mm 12mm; }
+  body { font-family: -apple-system, 'Sarabun', 'Helvetica Neue', sans-serif; color: #111; font-size: 11px; margin: 0; }
+  .rp { max-width: 186mm; }
+  h1 { font-size: 19px; margin: 0 0 2px; }
+  .rp-sub { color: #666; font-size: 10.5px; margin-bottom: 14px; }
+  h2 { font-size: 13px; margin: 16px 0 6px; padding-bottom: 3px; border-bottom: 1.5px solid #111; }
+  table.rp-t { width: 100%; border-collapse: collapse; }
+  table.rp-t td, table.rp-t th { padding: 3.5px 6px; }
+  .rp-t tbody tr { border-bottom: 1px solid #e6e6e6; }
+  .rp-grid thead th { background: #f2f2f2; border-bottom: 1.5px solid #999; text-align: left; font-size: 10px; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .b { font-weight: 700; }
+  .dim { color: #888; font-size: 9.5px; }
+  .rp-tot td { border-top: 1.5px solid #111; font-weight: 700; }
+  .rp-note { color: #555; font-size: 9.5px; line-height: 1.5; margin-top: 6px; }
+  tr, table { page-break-inside: avoid; }
+`;
+
+function openYearReport() {
+  const year = tradeFilter.year !== 'all' ? tradeFilter.year : new Date().toISOString().slice(0, 4);
+  const d = reportData(year, (S.assetReg && S.assetReg.settings && S.assetReg.settings.corp_tax) || CORP_TAX_DEFAULT);
+  const frame = document.getElementById('printFrame');
+  const doc = frame.contentDocument;
+  doc.open();
+  doc.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>รายงานพอร์ต ${d.year}</title><style>${REPORT_CSS}</style></head><body>${reportHtml(d)}</body></html>`);
+  doc.close();
+  setTimeout(() => { frame.contentWindow.focus(); frame.contentWindow.print(); }, 250);
+}
+
+// ── Export ──────────────────────────────────────────────────────────────
+function downloadFile(name, text, type) {
+  const blob = new Blob([text], { type: type || 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 500);
+}
+
+function csvCell(v) {
+  const t = String(v == null ? '' : v);
+  return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+}
+
+function tradesCsv(year) {
+  const rows = sortedTrades((S.tradeLog && S.tradeLog.trades) || [])
+    .filter(t => year === 'all' || String(t.date || '').slice(0, 4) === String(year));
+  const head = ['วันที่', 'หุ้น', 'ประเภท', 'จำนวน', 'ราคาต่อหุ้น', 'ค่าคอม', 'ภาษีหัก ณ ที่จ่าย', 'ยอดสุทธิ', 'หมายเหตุ'];
+  const body = rows.map(t => {
+    const q = Math.abs(+t.qty || 0), pr = +t.price || 0, fee = +t.fee || 0, tax = +t.tax || 0;
+    const total = t.type === 'buy' ? -(q * pr + fee) : t.type === 'sell' ? (q * pr - fee) : (q * pr - tax);
+    return [t.date, tradeTicker(t), TRADE_LABEL[t.type] || t.type, q, pr, fee, tax, +total.toFixed(2), t.note || ''];
+  });
+  return [head, ...body].map(r => r.map(csvCell).join(',')).join('\n');
+}
+
+function exportTradesCsv() {
+  const year = tradeFilter.year !== 'all' ? tradeFilter.year : 'all';
+  // BOM so Excel opens Thai text in the right encoding
+  downloadFile(`trades-${year}.csv`, '﻿' + tradesCsv(year), 'text/csv;charset=utf-8');
+  toast('⬇️ ดาวน์โหลด CSV แล้ว');
+}
+
+function exportBackupJson() {
+  const payload = {
+    exported_at: new Date().toISOString(),
+    app: 'legendary-templar-portfolio',
+    registry: S.registry, kb: S.kb, assetReg: S.assetReg, tradeLog: S.tradeLog
+  };
+  downloadFile(`portfolio-backup-${new Date().toISOString().split('T')[0]}.json`, JSON.stringify(payload, null, 2), 'application/json');
+  toast('⬇️ ดาวน์โหลดไฟล์สำรองแล้ว');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// สัดส่วนเป้าหมาย — เป้า vs จริง vs ต้องปรับกี่บาท
+// Targets live in asset_registry.json (an app-owned file) under settings.targets,
+// as { sector: {…}, class: {…} } in percent. 'sector' weighs the stock portfolio
+// by กลุ่มธุรกิจ; 'class' weighs the whole net worth by ประเภททรัพย์สิน.
+// ═══════════════════════════════════════════════════════════════
+function targetsFor(kind) {
+  const t = S.assetReg && S.assetReg.settings && S.assetReg.settings.targets;
+  return (t && t[kind]) || {};
+}
+
+function setTargets(kind, map) {
+  if (!S.assetReg) S.assetReg = emptyAssetReg();
+  if (!S.assetReg.settings) S.assetReg.settings = { usdthb_override: 0, last_fx: null };
+  if (!S.assetReg.settings.targets) S.assetReg.settings.targets = {};
+  S.assetReg.settings.targets[kind] = map;
+}
+
+// [{key, value}] — what the portfolio actually holds, by sector
+function actualSectorMix() {
+  const by = {};
+  portfolioTotals().held.forEach(s => {
+    const sec = (s.sector && s.sector !== '—') ? s.sector : 'ไม่ระบุกลุ่ม';
+    by[sec] = (by[sec] || 0) + plRowStats(s).value;
+  });
+  return Object.keys(by).map(k => ({ key: k, value: by[k] }));
+}
+
+// …and by asset class across the whole net worth (debts excluded — they are not
+// an allocation, they are a claim on it)
+function actualClassMix() {
+  const t = netWorthTotals();
+  const rows = [];
+  if (t.stocksValue > 0) rows.push({ key: 'หุ้น', value: t.stocksValue });
+  nwByCat((S.assetReg?.assets || []).filter(a => a.kind !== 'liability'))
+    .forEach(c => { if (c.sum > 0) rows.push({ key: c.cat, value: c.sum }); });
+  return rows;
+}
+
+function actualMix(kind) { return kind === 'class' ? actualClassMix() : actualSectorMix(); }
+
+// One row per bucket, including buckets that only exist as a target (0 held).
+function rebalanceRows(kind) {
+  const mix = actualMix(kind);
+  const targets = targetsFor(kind);
+  const total = mix.reduce((a, r) => a + r.value, 0);
+  const keys = [...new Set([...mix.map(r => r.key), ...Object.keys(targets)])];
+  return keys.map(k => {
+    const value = (mix.find(r => r.key === k) || { value: 0 }).value;
+    const pct = total > 0 ? value / total * 100 : 0;
+    const target = +targets[k] || 0;
+    const targetValue = total * target / 100;
+    return { key: k, value, pct, target, diffPct: pct - target, diffBaht: value - targetValue, hasTarget: k in targets };
+  }).sort((a, b) => b.value - a.value || a.key.localeCompare(b.key, 'th'));
+}
+
+function targetSum(kind) {
+  const t = targetsFor(kind);
+  return Object.keys(t).reduce((a, k) => a + (+t[k] || 0), 0);
+}
+
+const TARGET_TOL_PCT = 2;   // within 2 points of the target counts as on plan
+
+function targetCardHtml(kind) {
+  const rows = rebalanceRows(kind);
+  const anyTarget = rows.some(r => r.hasTarget);
+  const title = kind === 'class' ? '🎯 สัดส่วนเป้าหมาย (ประเภททรัพย์สิน)' : '🎯 สัดส่วนเป้าหมาย (กลุ่มธุรกิจ)';
+  if (!rows.length) return '';
+  const sum = targetSum(kind);
+  const warn = anyTarget && Math.abs(sum - 100) > 0.5
+    ? `<div class="tg-warn">รวมเป้าหมาย ${sum.toFixed(0)}% — ปกติควรรวมได้ 100%</div>` : '';
+  const body = anyTarget ? rows.map(r => {
+    const on = Math.abs(r.diffPct) <= TARGET_TOL_PCT || !r.hasTarget;
+    const over = r.diffBaht > 0;
+    const act = !r.hasTarget ? '<span class="tg-none">ยังไม่ตั้งเป้า</span>'
+      : on ? '<span class="tg-ok">ตามแผน</span>'
+      : `<span class="${over ? 'tg-over' : 'tg-under'}">${over ? 'ลด' : 'เพิ่ม'} ${fmtBaht(Math.abs(r.diffBaht))}</span>`;
+    return `<div class="tg-row">
+      <div class="tg-nm">${escHtml(r.key)}</div>
+      <div class="tg-bar">
+        <i style="width:${Math.min(100, r.pct).toFixed(1)}%"></i>
+        ${r.hasTarget ? `<span class="tg-mark" style="left:${Math.min(100, r.target).toFixed(1)}%"></span>` : ''}
+      </div>
+      <div class="tg-pct">${r.pct.toFixed(0)}%${r.hasTarget ? ` <span style="color:var(--tx3)">/ ${r.target.toFixed(0)}%</span>` : ''}</div>
+      <div class="tg-act">${act}</div>
+    </div>`;
+  }).join('') : `<div class="tl-note">ยังไม่ได้ตั้งเป้าหมาย — ตั้งแล้วจะเห็นว่าตอนนี้เบี้ยวไปจากแผนกี่บาท และต้องซื้อเพิ่ม/ลดตัวไหน</div>`;
+  return `<div class="md-card">
+    <div class="md-card-head">
+      <div class="md-card-t">${title}</div>
+      <button class="btn btn-g btn-sm" data-k="${kind}" onclick="openTargets(this.dataset.k)">✏️ ตั้งเป้าหมาย</button>
+    </div>
+    ${warn}${body}
+  </div>`;
+}
+
+let targetKind = 'sector';
+
+function openTargets(kind) {
+  targetKind = kind || 'sector';
+  const rows = rebalanceRows(targetKind);
+  const body = document.getElementById('targetBody');
+  body.innerHTML = `<div class="tl-note" style="margin:0 0 12px">
+      ใส่เป้าหมายเป็น % ${targetKind === 'class' ? 'ของทรัพย์สินรวม' : 'ของมูลค่าพอร์ตหุ้น'} — เว้นว่างหรือ 0 = ไม่ตั้งเป้าสำหรับกลุ่มนั้น
+    </div>
+    ${rows.map(r => `<div class="tg-edit">
+      <div class="tg-edit-nm">${escHtml(r.key)}<span>ตอนนี้ ${r.pct.toFixed(1)}% · ${fmtBaht(r.value)}</span></div>
+      <input class="form-input tg-input" type="number" min="0" max="100" step="1"
+             data-key="${escHtml(r.key)}" value="${r.hasTarget ? r.target : ''}" placeholder="0" oninput="updateTargetSum()">
+    </div>`).join('')}
+    <div class="tg-sum" id="tgSum"></div>`;
+  document.getElementById('targetTitle').textContent = targetKind === 'class' ? '🎯 เป้าหมาย: ประเภททรัพย์สิน' : '🎯 เป้าหมาย: กลุ่มธุรกิจ';
+  updateTargetSum();
+  document.getElementById('targetModal').classList.remove('hidden');
+}
+
+function readTargetInputs() {
+  const map = {};
+  document.querySelectorAll('#targetBody .tg-input').forEach(el => {
+    const v = +el.value || 0;
+    if (v > 0) map[el.dataset.key] = v;
+  });
+  return map;
+}
+
+function updateTargetSum() {
+  const map = readTargetInputs();
+  const sum = Object.keys(map).reduce((a, k) => a + map[k], 0);
+  const el = document.getElementById('tgSum');
+  if (!el) return;
+  const ok = Math.abs(sum - 100) <= 0.5 || sum === 0;
+  el.innerHTML = `รวม <b style="color:${ok ? 'var(--green)' : 'var(--yellow)'}">${sum.toFixed(0)}%</b>` +
+    (sum === 0 ? ' — ไม่ตั้งเป้า' : ok ? '' : ' — ปกติควรรวมได้ 100% (บันทึกได้อยู่ แต่ตัวเลข “ต้องปรับ” จะเพี้ยน)');
+}
+
+async function saveTargets() {
+  setTargets(targetKind, readTargetInputs());
+  closeM('targetModal');
+  renderDashboard();
+  try { if (S.view === 'networth') renderNetWorth(); } catch (e) {}
+  toast('✅ บันทึกเป้าหมายแล้ว — กำลังบันทึก…');
+  await saveAssetReg();
+}
+
+// ═══════════════════════════════════════════════════════════════
 // BENCHMARK — เทียบพอร์ตกับดัชนี
 // "กำไร 12%" ตอบไม่ได้ว่าดีหรือแย่ถ้าไม่รู้ว่าตลาดไปเท่าไหร่ในช่วงเดียวกัน.
 // The index series is cached in localStorage ONLY — stock_registry.json is
@@ -3694,7 +4079,8 @@ function renderMoneyDashboard() {
     </div>
     <div class="md-card"><div class="md-card-t">🍩 สัดส่วนพอร์ต (Allocation)</div><div class="md-canvas-wrap"><canvas id="allocChart"></canvas></div><div class="dn-legend" id="allocLegend"></div></div>
   </div>
-  ${contribCardHtml()}` : `
+  ${contribCardHtml()}
+  ${targetCardHtml('sector')}` : `
   <div class="md-card" style="text-align:center;color:var(--tx3);font-size:13px">
     ยังไม่มีหุ้นที่กรอกจำนวน/ต้นทุน — ใส่ Shares + Avg Cost (ปุ่ม ✏️ ในแถว) เพื่อดูมูลค่าพอร์ตและกราฟ
   </div>`;

@@ -1471,6 +1471,178 @@
     S.tradeLog = prevLog; S.registry = prevReg; S.offline = prevOff;
   }
 
+  // ══════════════════ target allocation ══════════════════
+  sec('rebalanceRows');
+  {
+    const prevReg = S.registry, prevAsset = S.assetReg, prevOff = S.offline;
+    S.offline = true;
+    S.registry = { stocks: [
+      { ticker: 'A', sector: 'Tech', shares: 100, avg_cost: 10, current_price: 60 },   // 6000
+      { ticker: 'B', sector: 'Bank', shares: 100, avg_cost: 10, current_price: 30 },   // 3000
+      { ticker: 'C', sector: 'Food', shares: 100, avg_cost: 10, current_price: 10 },   // 1000
+      { ticker: 'W', sector: 'Tech', shares: 0,   avg_cost: 0 }                        // watch only
+    ] };
+    S.assetReg = { version: 1, assets: [], snapshots: [], settings: { usdthb_override: 35, targets: {} } };
+
+    eq('mix by sector', actualSectorMix().map(r => [r.key, r.value]).sort(),
+       [['Bank', 3000], ['Food', 1000], ['Tech', 6000]]);
+    ok('watch-only stocks are not part of the mix', actualSectorMix().length === 3);
+
+    setTargets('sector', { Tech: 40, Bank: 40, Gold: 20 });
+    const rows = rebalanceRows('sector');
+    eq('biggest holding first', rows.map(r => r.key), ['Tech', 'Bank', 'Food', 'Gold']);
+    near('actual percent', rows[0].pct, 60);
+    near('over target by baht', rows[0].diffBaht, 2000);      // 60% of 10000 vs 40%
+    near('under target by baht', rows[1].diffBaht, -1000);    // 30% vs 40%
+    ok('a bucket with no target is flagged', rows[2].hasTarget === false);
+    eq('a target with nothing held still shows up', [rows[3].key, rows[3].value], ['Gold', 0]);
+    near('…and says how much to add', rows[3].diffBaht, -2000);
+    near('targets add up', targetSum('sector'), 100);
+
+    const card = targetCardHtml('sector');
+    ok('over-weight says to trim', /ลด ฿2,000/.test(card), card.slice(0, 300));
+    ok('under-weight says to add', /เพิ่ม ฿1,000/.test(card));
+    ok('a bucket without a target says so', /ยังไม่ตั้งเป้า/.test(card));
+
+    // within tolerance counts as on plan
+    setTargets('sector', { Tech: 59, Bank: 30, Food: 11 });
+    ok('close enough is on plan', /ตามแผน/.test(targetCardHtml('sector')));
+    // a target set that does not add to 100 warns but still works
+    setTargets('sector', { Tech: 50 });
+    ok('a lopsided target set warns', /รวมเป้าหมาย 50%/.test(targetCardHtml('sector')));
+    setTargets('sector', {});
+    ok('no targets at all invites setting them', /ยังไม่ได้ตั้งเป้าหมาย/.test(targetCardHtml('sector')));
+
+    // net worth uses asset classes instead
+    S.assetReg.assets = [
+      { id: 'a1', kind: 'asset', cat: 'Gold', name: 'ทอง', price_mode: 'manual', manual_price: 5000, qty: 1, price_cur: 'THB' },
+      { id: 'a2', kind: 'liability', cat: 'Loan', name: 'หนี้', price_mode: 'manual', manual_price: 3000, qty: 1, price_cur: 'THB' }
+    ];
+    const mix = actualClassMix();
+    eq('stocks and asset categories, no debts', mix.map(r => r.key), ['หุ้น', 'Gold']);
+    near('stock side comes from the portfolio', mix[0].value, 10000);
+    setTargets('class', { 'หุ้น': 50, Gold: 50 });
+    const cls = rebalanceRows('class');
+    near('net worth rebalance in baht', cls[0].diffBaht, 2500);   // 10000 of 15000 vs 50%
+    eq('the two kinds keep separate targets', Object.keys(targetsFor('sector')).length, 0);
+
+    // editing through the modal
+    openTargets('sector');
+    const inputs = () => [...document.querySelectorAll('#targetBody .tg-input')];
+    eq('one input per bucket', inputs().length, 3);
+    inputs()[0].value = '50';
+    inputs()[1].value = '30';
+    inputs()[2].value = '';
+    updateTargetSum();
+    ok('the running total is shown', /80%/.test(document.getElementById('tgSum').textContent));
+    ok('…and warns it is not 100', /100%/.test(document.getElementById('tgSum').textContent));
+    eq('blank means no target', Object.keys(readTargetInputs()).sort(), ['Bank', 'Tech']);
+    saveTargets();
+    eq('targets are stored on the asset registry', S.assetReg.settings.targets.sector, { Tech: 50, Bank: 30 });
+    ok('the modal closes on save', document.getElementById('targetModal').classList.contains('hidden'));
+
+    S.registry = prevReg; S.assetReg = prevAsset; S.offline = prevOff;
+  }
+
+  // ══════════════════ annual report + export ══════════════════
+  sec('divTaxCredit');
+  near('20% rate credits a quarter of the dividend', divTaxCredit(1000, 20), 250);
+  near('30% rate', divTaxCredit(1000, 30), 1000 * 30 / 70);
+  near('default rate is 20%', divTaxCredit(1000), 250);
+  eq('no rate → no credit', divTaxCredit(1000, 0), 0);
+  eq('a nonsense rate → no credit', divTaxCredit(1000, 100), 0);
+
+  sec('positionsAsOf / valueOn');
+  {
+    const prevLog = S.tradeLog, prevKb = S.kb;
+    S.tradeLog = { version: 1, trades: [
+      { id: '1', date: '2025-03-01', ticker: 'AAA', type: 'buy',  qty: 100, price: 10, fee: 0 },
+      { id: '2', date: '2026-02-01', ticker: 'AAA', type: 'buy',  qty: 100, price: 20, fee: 0 },
+      { id: '3', date: '2026-06-01', ticker: 'AAA', type: 'sell', qty: 150, price: 25, fee: 0 },
+      { id: '4', date: '2026-06-01', ticker: 'BBB', type: 'buy',  qty: 10,  price: 100, fee: 0 }
+    ] };
+    let at = positionsAsOf('2025-12-31');
+    eq('only what was held back then', at.map(r => r.ticker), ['AAA']);
+    eq('…at the quantity held then', at[0].qty, 100);
+    near('…and the average then', at[0].avgCost, 10);
+    at = positionsAsOf('2026-12-31');
+    eq('later, both are held', at.map(r => r.ticker).sort(), ['AAA', 'BBB']);
+    eq('…after the sale', at.find(r => r.ticker === 'AAA').qty, 50);
+
+    S.kb = { value_history: [
+      { date: '2025-12-20', value: 900, cost: 800 },
+      { date: '2026-01-10', value: 1000, cost: 800 },
+      { date: '2026-08-01', value: 1400, cost: 900 }
+    ] };
+    eq('value on a date takes the last point at or before it', valueOn('2026-01-01').date, '2025-12-20');
+    eq('exact match wins', valueOn('2026-08-01').value, 1400);
+    eq('before any history there is nothing', valueOn('2020-01-01'), null);
+    S.tradeLog = prevLog; S.kb = prevKb;
+  }
+
+  sec('reportData');
+  {
+    const prevLog = S.tradeLog, prevKb = S.kb, prevReg = S.registry;
+    S.registry = { portfolio_name: 'T', stocks: [] };
+    S.kb = { value_history: [
+      { date: '2024-12-28', value: 100000, cost: 95000 },
+      { date: '2025-12-30', value: 150000, cost: 120000 }
+    ] };
+    S.tradeLog = { version: 1, trades: [
+      { id: '1', date: '2025-02-01', ticker: 'AAA', type: 'buy',  qty: 1000, price: 10, fee: 30 },
+      { id: '2', date: '2025-05-01', ticker: 'AAA', type: 'div',  qty: 1000, price: 1,  tax: 100 },
+      { id: '3', date: '2025-09-01', ticker: 'AAA', type: 'sell', qty: 400,  price: 15, fee: 25 },
+      { id: '4', date: '2024-04-01', ticker: 'OLD', type: 'buy',  qty: 10,   price: 5,  fee: 0 }
+    ] };
+    const d = reportData('2025', 20);
+    eq('only this year’s trades', d.trades.length, 3);
+    near('bought includes the fee', d.bought, 10030);
+    near('sold is net of the fee', d.sold, 5975);
+    near('net invested', d.netInvested, 10030 - 5975);
+    near('realised for the year', d.stats.realized, 400 * (15 - 10.03) - 25);
+    eq('one dividend row', d.divs.length, 1);
+    near('dividend gross', d.divTotals.gross, 1000);
+    near('dividend net', d.divTotals.net, 900);
+    near('tax credit at 20%', d.divTotals.credit, 250);
+    eq('opening value is the last point before the year', d.startVal.date, '2024-12-28');
+    eq('closing value is the last point in the year', d.endVal.date, '2025-12-30');
+    ok('a finished year is not marked current', d.isCurrent === false);
+    eq('holdings for a past year come from the book', d.holdings.map(h => h.ticker).sort(), ['AAA', 'OLD']);
+    eq('…at the year-end quantity', d.holdings.find(h => h.ticker === 'AAA').qty, 600);
+
+    const html = reportHtml(d);
+    ok('report names the year', /รายงานพอร์ตประจำปี 2025/.test(html));
+    ok('report shows realised gain', /กำไรที่ขายจริง/.test(html));
+    ok('report shows the tax credit', /เครดิตภาษี/.test(html));
+    ok('report explains the credit rate', /อัตราภาษีนิติบุคคล 20%/.test(html));
+    ok('report lists the trades', /2025-09-01/.test(html));
+
+    const now = new Date().toISOString().slice(0, 4);
+    ok('the running year is marked as unfinished', reportData(now, 20).isCurrent === true);
+
+    S.tradeLog = prevLog; S.kb = prevKb; S.registry = prevReg;
+  }
+
+  sec('CSV export');
+  {
+    const prevLog = S.tradeLog;
+    S.tradeLog = { version: 1, trades: [
+      { id: '1', date: '2026-02-01', ticker: 'AAA', type: 'buy',  qty: 100, price: 10, fee: 5, note: 'ปกติ' },
+      { id: '2', date: '2026-03-01', ticker: 'AAA', type: 'sell', qty: 50,  price: 12, fee: 5, note: 'ขาย, ครึ่งนึง' },
+      { id: '3', date: '2025-03-01', ticker: 'OLD', type: 'div',  qty: 10,  price: 1, tax: 1 }
+    ] };
+    const csv = tradesCsv('2026').split('\n');
+    eq('header row', csv[0].split(',')[0], 'วันที่');
+    eq('a row per trade in that year', csv.length, 3);
+    ok('buys are negative money out', csv[1].indexOf('-1005') !== -1, csv[1]);
+    ok('sells are positive money in', csv[2].indexOf('595') !== -1, csv[2]);
+    ok('a comma inside a note is quoted', /"ขาย, ครึ่งนึง"/.test(csv[2]), csv[2]);
+    eq('all years exports everything', tradesCsv('all').split('\n').length, 4);
+    eq('quotes inside text are doubled', csvCell('a"b'), '"a""b"');
+    eq('plain text is left alone', csvCell('AAA'), 'AAA');
+    S.tradeLog = prevLog;
+  }
+
   L.push('');
   L.push('PASS ' + pass + '   FAIL ' + fail);
   const pre = document.createElement('pre');
