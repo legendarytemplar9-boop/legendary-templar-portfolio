@@ -250,6 +250,28 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 .xd-tot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:none}
 .xd-cash{font-weight:800;color:var(--green);white-space:nowrap}
 .xd-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.tl-tools{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 10px}
+.tl-sel{padding:5px 8px;font-size:12px;width:auto;min-width:112px}
+.tl-sum{display:flex;gap:8px;flex-wrap:wrap}
+.tl-stat{flex:1 1 130px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px}
+.tl-stat-l{font-size:10px;color:var(--tx3);text-transform:uppercase;letter-spacing:.4px}
+.tl-stat-v{font-size:16px;font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums}
+.tl-row{display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin-bottom:7px}
+.tl-ic{font-size:15px;flex:0 0 auto}
+.tl-l{min-width:0;flex:1 1 auto}
+.tl-nm{font-weight:700;font-size:13.5px}
+.tl-sub{font-size:11px;color:var(--tx3);margin-top:2px}
+.tl-r{text-align:right;flex:0 0 auto;font-variant-numeric:tabular-nums}
+.tl-amt{font-weight:700;font-size:13.5px}
+.tl-gain{font-size:11px;margin-top:2px}
+.tl-acts{display:flex;gap:4px;flex:0 0 auto}
+.tl-form{background:var(--bg3);border:1px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px}
+.tl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:520px){.tl-grid{grid-template-columns:1fr}}
+.tl-note{font-size:11.5px;color:var(--tx3);line-height:1.55;margin-top:10px}
+.tl-empty{text-align:center;color:var(--tx3);font-size:13px;padding:22px 10px;line-height:1.7}
+.tl-mig{background:var(--yellowd);border:1px solid rgba(255,184,0,.35);border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--tx2);line-height:1.6;margin-bottom:12px}
+.pp-lock{color:var(--yellow);font-size:10.5px;font-weight:700}
 .xd-warn{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:11.5px;color:var(--tx2);line-height:1.55;margin-top:12px}
 /* ── Money Dashboard ── */
 .md-wrap{margin-bottom:20px}
@@ -405,6 +427,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
     <button class="btn btn-s btn-sm hidden" id="btnSync" onclick="syncData()">⟳ Sync</button>
     <button class="btn btn-p btn-sm hidden" id="btnPrices" onclick="updatePrices()">💰 ราคา</button>
     <button class="btn btn-s btn-sm hidden" id="btnXD" onclick="openXD()">💵 XD</button>
+    <button class="btn btn-s btn-sm hidden" id="btnTrades" onclick="openTrades()">📒 สมุด</button>
     <button class="btn btn-s btn-sm hidden" id="btnReports" onclick="openReports()">📊 Reports</button>
     <button class="btn btn-p btn-sm hidden" id="btnAddStock" onclick="openAddStock()">+ Add Stock</button>
     <button class="btn btn-s btn-sm hidden" id="btnPastePort" onclick="openPastePort()">📋 วางพอร์ต</button>
@@ -793,6 +816,30 @@ HANA   | 2000 | 38 | 35.75"></textarea>
   </div>
 </div>
 
+<div class="mbg center hidden" id="tradeModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">
+      <div class="mt-t">📒 สมุดซื้อ–ขาย–ปันผล</div>
+      <button class="btn btn-g btn-sm" onclick="closeM('tradeModal')">✕</button>
+    </div>
+    <div class="mb">
+      <div id="tradeMigrate"></div>
+      <div id="tradeSummary"></div>
+      <div class="tl-tools">
+        <div class="sort-bar" id="tradeYearBar"></div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select class="form-input tl-sel" id="tradeFilterTicker" onchange="setTradeTicker(this.value)"></select>
+          <button class="btn btn-p btn-sm" onclick="openTradeForm()">+ เพิ่มรายการ</button>
+        </div>
+      </div>
+      <div id="tradeFormWrap" class="hidden"></div>
+      <div id="tradeList"></div>
+      <div class="tl-note">ต้นทุนคิดแบบ <b>ถัวเฉลี่ย</b> เหมือนใบพอร์ตของโบรก — ขายแล้วกำไรที่รับรู้ = (ราคาขาย − ต้นทุนเฉลี่ย) × จำนวน − ค่าคอม · จำนวนหุ้นและต้นทุนของหุ้นที่มีในสมุด จะคำนวณจากสมุดให้อัตโนมัติ</div>
+    </div>
+  </div>
+</div>
+
 <div class="mbg center hidden" id="nwBreakModal">
   <div class="modal">
     <div class="mh"></div>
@@ -869,6 +916,8 @@ let S = {
   regFileId: null,
   kbFileId: null,
   assetFileId: null,
+  tradeLog: null,
+  tradeFileId: null,
   lastSync: null,
   offline: false,
   view: 'stocks',
@@ -883,6 +932,11 @@ let S = {
 };
 
 const ASSET_FILE = 'asset_registry.json';
+// The trade log lives in its OWN Drive file, like asset_registry.json: the
+// Sun/Wed cloud routine rewrites stock_registry.json, so anything it doesn't
+// know about must not live in there.
+const TRADE_FILE = 'trade_log.json';
+function emptyTradeLog() { return { version: 1, last_updated: '', trades: [] }; }
 function emptyAssetReg() {
   return { version: 1, last_updated: '', assets: [], snapshots: [], settings: { usdthb_override: 0, last_fx: null } };
 }
@@ -899,6 +953,8 @@ function saveLS() {
       kbFileId: S.kbFileId,
       lastSync: S.lastSync,
       assetFileId: S.assetFileId,
+      tradeFileId: S.tradeFileId,
+      tradeLog: S.tradeLog,
       plSort: S.plSort,
       nwOpen: S.nwOpen,
       nwSort: S.nwSort,
@@ -923,6 +979,7 @@ function loadLS() {
     if (d.regFileId) S.regFileId = d.regFileId;
     if (d.kbFileId) S.kbFileId = d.kbFileId;
     if (d.assetFileId) S.assetFileId = d.assetFileId;
+    if (d.tradeFileId) S.tradeFileId = d.tradeFileId;
     if (d.lastSync) S.lastSync = d.lastSync;
     if (d.plSort && d.plSort.key) S.plSort = { key: d.plSort.key, dir: d.plSort.dir === 'asc' ? 'asc' : 'desc' };
     if (d.nwOpen && typeof d.nwOpen === 'object') S.nwOpen = d.nwOpen;
@@ -934,6 +991,7 @@ function loadLS() {
     if (d.registry) S.cachedRegistry = d.registry; // recovery buffer
     if (d.kb) S.cachedKb = d.kb;
     if (d.assetReg) S.cachedAssetReg = d.assetReg;
+    if (d.tradeLog) S.cachedTradeLog = d.tradeLog;
     // Migrate a previously-cached typo'd folder ID so old sessions self-heal.
     if (S.folderId === BAD_FOLDER_ID) {
       S.folderId = GOOD_FOLDER_ID;
@@ -1004,7 +1062,7 @@ function signOut() {
   if (S.accessToken) {
     try { google.accounts.oauth2.revoke(S.accessToken, () => {}); } catch(e) {}
   }
-  S.accessToken = null; S.registry = null; S.kb = null; S.assetReg = null;
+  S.accessToken = null; S.registry = null; S.kb = null; S.assetReg = null; S.tradeLog = null;
   showSignIn();
   toast('Signed out');
 }
@@ -1219,6 +1277,20 @@ async function syncData() {
     } else {
       S.assetReg = S.cachedAssetReg || emptyAssetReg();
     }
+    // Find + read the trade log — created on first save if missing
+    if (!S.tradeFileId) {
+      setLoadMsg('ค้นหา ' + TRADE_FILE + '…');
+      const tf = await driveSearch(TRADE_FILE, S.folderId);
+      if (tf) S.tradeFileId = tf.id;
+    }
+    if (S.tradeFileId) {
+      setLoadMsg('อ่าน ' + TRADE_FILE + '…');
+      S.tradeLog = await driveGetMedia(S.tradeFileId);
+      if (!Array.isArray(S.tradeLog.trades)) S.tradeLog.trades = [];
+    } else {
+      S.tradeLog = S.cachedTradeLog || emptyTradeLog();
+    }
+    syncPositionsFromTrades();
     S.lastSync = new Date().toLocaleTimeString('th-TH');
     saveLS();
     renderDashboard();
@@ -1230,6 +1302,7 @@ async function syncData() {
     if (!S.registry) S.registry = S.cachedRegistry || FALLBACK.registry;
     if (!S.kb) S.kb = S.cachedKb || FALLBACK.kb;
     if (!S.assetReg) S.assetReg = S.cachedAssetReg || emptyAssetReg();
+    if (!S.tradeLog) S.tradeLog = S.cachedTradeLog || emptyTradeLog();
     renderDashboard();
     toast('⚠️ Drive error — ใช้ข้อมูลสำรองในเครื่อง');
   }
@@ -1304,6 +1377,26 @@ async function saveRegistry() {
 // no double entry. Crypto prices via Binance, FX via open.er-api
 // with Yahoo THB=X fallback and a manual override.
 // ═══════════════════════════════════════════════════════════════
+async function saveTradeLog() {
+  saveLS(); // recovery buffer first — nothing is lost if Drive fails
+  if (S.offline) { toast('💾 บันทึกสมุด offline (เก็บในเครื่อง)'); return; }
+  try {
+    await ensureTokenAsync();
+    if (!S.accessToken) throw new Error('ยังไม่ได้เข้าสู่ระบบ / token หมดอายุ');
+    S.tradeLog.last_updated = new Date().toISOString().split('T')[0];
+    if (!S.tradeFileId) {
+      const tf = await driveSearch(TRADE_FILE, S.folderId);
+      if (tf) S.tradeFileId = tf.id;
+    }
+    if (S.tradeFileId) await drivePatch(S.tradeFileId, S.tradeLog);
+    else S.tradeFileId = await driveCreate(TRADE_FILE, S.folderId, S.tradeLog);
+    saveLS();
+    clearSaveErrorBanner();
+  } catch(err) {
+    saveErrorBanner('บันทึกสมุดซื้อขายไป Drive ไม่สำเร็จ: ' + err.message + ' — ข้อมูลถูกเก็บในเครื่องชั่วคราว ยังไม่หาย', saveTradeLog);
+  }
+}
+
 async function saveAssetReg() {
   saveLS(); // recovery buffer first — nothing is lost if Drive fails
   if (S.offline) { toast('💾 บันทึก offline (เก็บในเครื่อง)'); return; }
@@ -1470,6 +1563,7 @@ function applyView() {
   document.getElementById('btnPastePort').classList.toggle('hidden', !onStocks);
   document.getElementById('btnPrices').classList.toggle('hidden', !onStocks);
   document.getElementById('btnXD').classList.toggle('hidden', !onStocks);
+  document.getElementById('btnTrades').classList.toggle('hidden', !onStocks);
 }
 
 function switchView(v) {
@@ -2005,6 +2099,308 @@ function renderNwAllocChart(t, assets) {
   });
 }
 
+// The stock's own page of the book: what it has banked and paid out so far.
+function tradeDetailHtml(stock) {
+  const tk = String(stock.ticker).toUpperCase();
+  const pos = positionFromTrades(tk);
+  const btn = `<button class="btn btn-s btn-sm" data-t="${escHtml(tk)}" onclick="openTrades(this.dataset.t)">📒 ${pos.n ? 'ดู/แก้รายการ' : 'บันทึกซื้อ-ขาย-ปันผล'}</button>`;
+  if (!pos.n) {
+    return `<div class="sec-title">สมุดซื้อ–ขาย–ปันผล</div>
+      <div style="font-size:12.5px;color:var(--tx3);line-height:1.6;margin-bottom:9px">ยังไม่มีรายการของ ${escHtml(tk)} — จำนวนและต้นทุนตอนนี้มาจากการกรอกมือ</div>${btn}`;
+  }
+  const rCol = pos.realized >= 0 ? 'var(--green)' : 'var(--red)';
+  return `<div class="sec-title">สมุดซื้อ–ขาย–ปันผล (${pos.n} รายการ)</div>
+    <div class="tl-sum" style="margin-bottom:9px">
+      <div class="tl-stat"><div class="tl-stat-l">ถืออยู่</div><div class="tl-stat-v">${fmtQty(pos.qty)}</div></div>
+      <div class="tl-stat"><div class="tl-stat-l">ต้นทุนเฉลี่ย</div><div class="tl-stat-v">฿${pos.avgCost.toFixed(2)}</div></div>
+      <div class="tl-stat"><div class="tl-stat-l">กำไรที่ขายจริง</div><div class="tl-stat-v" style="color:${rCol}">${pos.realized >= 0 ? '+' : '−'}${fmtBaht(Math.abs(pos.realized))}</div></div>
+      <div class="tl-stat"><div class="tl-stat-l">ปันผลรับ</div><div class="tl-stat-v" style="color:var(--c1)">${fmtBaht(pos.dividends)}</div></div>
+    </div>${btn}`;
+}
+
+// ── Trade log UI ────────────────────────────────────────────────────────
+let tradeFilter = { ticker: 'all', year: 'all' };
+let editTradeId = null;
+
+function openTrades(ticker) {
+  if (!S.tradeLog) S.tradeLog = S.cachedTradeLog || emptyTradeLog();
+  tradeFilter = { ticker: ticker ? String(ticker).toUpperCase() : 'all', year: tradeFilter.year || 'all' };
+  closeM('detailModal');
+  renderTradeAll();
+  document.getElementById('tradeFormWrap').classList.add('hidden');
+  document.getElementById('tradeModal').classList.remove('hidden');
+}
+
+function setTradeTicker(v) { tradeFilter.ticker = v; renderTradeList(); renderTradeSummary(); }
+function setTradeYear(v) { tradeFilter.year = v; renderTradeAll(); }
+
+function renderTradeAll() {
+  renderTradeMigrate();
+  renderTradeSummary();
+  renderTradeYearBar();
+  renderTradeTickerSelect();
+  renderTradeList();
+}
+
+// Offer to seed the log from positions that predate it, once.
+function renderTradeMigrate() {
+  const el = document.getElementById('tradeMigrate');
+  if (!el) return;
+  const pending = stocksNeedingOpening();
+  el.innerHTML = pending.length ? `<div class="tl-mig">
+    <b>ยังมี ${pending.length} ตัวที่ยอดมาจากการกรอกมือ</b> (${pending.slice(0, 6).map(s => escHtml(s.ticker)).join(', ')}${pending.length > 6 ? '…' : ''})<br>
+    สร้าง “ยอดยกมา” ให้อัตโนมัติ 1 รายการต่อตัว (ซื้อ = จำนวน × ต้นทุนเฉลี่ยที่มีอยู่) แล้วสมุดจะคุมยอดให้ต่อจากนี้
+    <div style="margin-top:9px"><button class="btn btn-p btn-sm" onclick="migrateOpeningBalances()">📥 สร้างยอดยกมา ${pending.length} ตัว</button></div>
+  </div>` : '';
+}
+
+async function migrateOpeningBalances() {
+  const pending = stocksNeedingOpening();
+  if (!pending.length) return;
+  if (!confirm(`สร้างรายการ "ยอดยกมา" ${pending.length} รายการจากยอดปัจจุบัน?\n\nหลังจากนี้จำนวนหุ้นและต้นทุนของหุ้นเหล่านี้จะคำนวณจากสมุด`)) return;
+  const today = new Date().toISOString().split('T')[0];
+  pending.forEach(s => S.tradeLog.trades.push(openingTradeFor(s, today)));
+  await commitTrades(`✅ สร้างยอดยกมา ${pending.length} รายการ`);
+}
+
+function renderTradeSummary() {
+  const el = document.getElementById('tradeSummary');
+  if (!el) return;
+  const stats = tradeYearStats();
+  const key = tradeFilter.year === 'all' ? 'all' : tradeFilter.year;
+  const st = stats[key] || { realized: 0, dividends: 0, fees: 0, n: 0 };
+  const label = tradeFilter.year === 'all' ? 'ทั้งหมด' : 'ปี ' + tradeFilter.year;
+  const col = st.realized >= 0 ? 'var(--green)' : 'var(--red)';
+  el.innerHTML = `<div class="tl-sum">
+    <div class="tl-stat"><div class="tl-stat-l">กำไรที่ขายจริง · ${escHtml(label)}</div><div class="tl-stat-v" style="color:${col}">${st.realized >= 0 ? '+' : '−'}${fmtBaht(Math.abs(st.realized))}</div></div>
+    <div class="tl-stat"><div class="tl-stat-l">ปันผลรับ · ${escHtml(label)}</div><div class="tl-stat-v" style="color:var(--c1)">${fmtBaht(st.dividends)}</div></div>
+    <div class="tl-stat"><div class="tl-stat-l">ค่าคอม · ${escHtml(label)}</div><div class="tl-stat-v">${fmtBaht(st.fees)}</div></div>
+    <div class="tl-stat"><div class="tl-stat-l">รายการ</div><div class="tl-stat-v">${st.n}</div></div>
+  </div>`;
+}
+
+function renderTradeYearBar() {
+  const bar = document.getElementById('tradeYearBar');
+  if (!bar) return;
+  const opts = [{ k: 'all', l: 'ทุกปี' }, ...tradeYears().map(y => ({ k: y, l: y }))];
+  bar.innerHTML = opts.map(o =>
+    `<button class="sort-chip${tradeFilter.year === o.k ? ' on' : ''}" data-y="${escHtml(o.k)}" onclick="setTradeYear(this.dataset.y)">${escHtml(o.l)}</button>`
+  ).join('');
+}
+
+function renderTradeTickerSelect() {
+  const sel = document.getElementById('tradeFilterTicker');
+  if (!sel) return;
+  const tks = tickersWithTrades().sort();
+  sel.innerHTML = `<option value="all">ทุกตัว</option>` +
+    tks.map(t => `<option value="${escHtml(t)}">${escHtml(t)}</option>`).join('');
+  sel.value = tks.indexOf(tradeFilter.ticker) === -1 ? 'all' : tradeFilter.ticker;
+  if (sel.value === 'all') tradeFilter.ticker = 'all';
+}
+
+// id → realised P/L, so a sell row can show what it actually banked
+function realizedByTradeId() {
+  const map = {};
+  tickersWithTrades().forEach(tk => {
+    walkTrades(tradesFor(tk), e => { if (e.t.type === 'sell') map[e.t.id] = e.realized; });
+  });
+  return map;
+}
+
+function filteredTrades() {
+  return sortedTrades((S.tradeLog?.trades || []).filter(t => {
+    if (tradeFilter.ticker !== 'all' && tradeTicker(t) !== tradeFilter.ticker) return false;
+    if (tradeFilter.year !== 'all' && String(t.date || '').slice(0, 4) !== tradeFilter.year) return false;
+    return true;
+  })).reverse();   // newest first for reading
+}
+
+function renderTradeList() {
+  const el = document.getElementById('tradeList');
+  if (!el) return;
+  const rows = filteredTrades();
+  if (!rows.length) {
+    el.innerHTML = `<div class="tl-empty">${(S.tradeLog?.trades || []).length
+      ? 'ไม่มีรายการในตัวกรองนี้'
+      : 'ยังไม่มีรายการ — กด <b>+ เพิ่มรายการ</b> เพื่อบันทึกการซื้อ ขาย หรือปันผล<br><span style="font-size:12px">บันทึกแล้วจะได้ กำไรที่ขายจริง · ปันผลรับ · ค่าคอมรวม · ต้นทุนที่ถูกต้องแม้ซื้อหลายไม้</span>'}</div>`;
+    return;
+  }
+  const realized = realizedByTradeId();
+  el.innerHTML = rows.map(t => {
+    const q = Math.abs(+t.qty || 0), price = +t.price || 0, fee = +t.fee || 0, tax = +t.tax || 0;
+    const icon = (TRADE_TYPES.find(x => x.key === t.type) || TRADE_TYPES[0]).icon;
+    let amt, amtCol, sub;
+    if (t.type === 'sell') {
+      amt = '+' + fmtBaht(q * price - fee);
+      amtCol = 'var(--tx)';
+      sub = `ขาย ${fmtQty(q)} × ฿${price.toLocaleString()}${fee ? ` · ค่าคอม ฿${fee.toLocaleString()}` : ''}`;
+    } else if (t.type === 'div') {
+      amt = '+' + fmtBaht(q * price - tax);
+      amtCol = 'var(--c1)';
+      sub = `ปันผล ${fmtQty(q)} หุ้น × ฿${price.toLocaleString()}${tax ? ` · หัก ณ ที่จ่าย ฿${tax.toLocaleString()}` : ''}`;
+    } else {
+      amt = '−' + fmtBaht(q * price + fee);
+      amtCol = 'var(--tx)';
+      sub = `ซื้อ ${fmtQty(q)} × ฿${price.toLocaleString()}${fee ? ` · ค่าคอม ฿${fee.toLocaleString()}` : ''}`;
+    }
+    const r = realized[t.id];
+    const gain = t.type === 'sell' && r != null
+      ? `<div class="tl-gain" style="color:${r >= 0 ? 'var(--green)' : 'var(--red)'}">กำไรที่รับรู้ ${r >= 0 ? '+' : '−'}${fmtBaht(Math.abs(r))}</div>` : '';
+    return `<div class="tl-row">
+      <div class="tl-ic">${icon}</div>
+      <div class="tl-l">
+        <div class="tl-nm">${escHtml(tradeTicker(t))} · ${TRADE_LABEL[t.type] || 'ซื้อ'}</div>
+        <div class="tl-sub">${escHtml(String(t.date || ''))} · ${sub}${t.note ? ' · ' + escHtml(t.note) : ''}</div>
+      </div>
+      <div class="tl-r"><div class="tl-amt" style="color:${amtCol}">${amt}</div>${gain}</div>
+      <div class="tl-acts">
+        <button class="nw-act" data-id="${escHtml(t.id)}" onclick="openTradeForm(this.dataset.id)" title="แก้ไข">✏️</button>
+        <button class="nw-act del" data-id="${escHtml(t.id)}" onclick="deleteTrade(this.dataset.id)" title="ลบ">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openTradeForm(id) {
+  editTradeId = id || null;
+  const t = id ? (S.tradeLog?.trades || []).find(x => x.id === id) : null;
+  const today = new Date().toISOString().split('T')[0];
+  const tickers = [...new Set((S.registry?.stocks || []).map(s => s.ticker))].sort();
+  const wrap = document.getElementById('tradeFormWrap');
+  wrap.innerHTML = `<div class="tl-form">
+    <div class="tl-grid">
+      <div class="form-group"><label class="form-label">วันที่</label>
+        <input class="form-input" id="tfDate" type="date" value="${escHtml(t?.date || today)}"></div>
+      <div class="form-group"><label class="form-label">ประเภท</label>
+        <select class="form-input" id="tfType" onchange="onTradeTypeChange()">
+          ${TRADE_TYPES.map(x => `<option value="${x.key}"${(t?.type || 'buy') === x.key ? ' selected' : ''}>${x.icon} ${x.label}</option>`).join('')}
+        </select></div>
+      <div class="form-group"><label class="form-label">หุ้น</label>
+        <input class="form-input" id="tfTicker" list="tfTickerList" placeholder="เช่น CPF" value="${escHtml(t ? tradeTicker(t) : (tradeFilter.ticker !== 'all' ? tradeFilter.ticker : ''))}">
+        <datalist id="tfTickerList">${tickers.map(x => `<option value="${escHtml(x)}"></option>`).join('')}</datalist></div>
+      <div class="form-group"><label class="form-label" id="tfQtyLabel">จำนวนหุ้น</label>
+        <input class="form-input" id="tfQty" type="number" step="any" min="0" value="${t ? (+t.qty || 0) : ''}" oninput="updateTradePreview()"></div>
+      <div class="form-group"><label class="form-label" id="tfPriceLabel">ราคา/หุ้น (฿)</label>
+        <input class="form-input" id="tfPrice" type="number" step="any" min="0" value="${t ? (+t.price || 0) : ''}" oninput="updateTradePreview()"></div>
+      <div class="form-group" id="tfFeeGroup"><label class="form-label">ค่าคอม + VAT (฿)</label>
+        <input class="form-input" id="tfFee" type="number" step="any" min="0" value="${t ? (+t.fee || 0) : 0}" oninput="updateTradePreview()"></div>
+      <div class="form-group hidden" id="tfTaxGroup"><label class="form-label">หัก ณ ที่จ่าย (฿)</label>
+        <input class="form-input" id="tfTax" type="number" step="any" min="0" value="${t ? (+t.tax || 0) : 0}" oninput="updateTradePreview()"></div>
+      <div class="form-group"><label class="form-label">บันทึกย่อ</label>
+        <input class="form-input" id="tfNote" value="${escHtml(t?.note || '')}" placeholder="ไม่ใส่ก็ได้"></div>
+    </div>
+    <div class="tl-note" id="tfPreview"></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn btn-p btn-sm" onclick="saveTradeForm()">💾 ${id ? 'บันทึกการแก้ไข' : 'เพิ่มรายการ'}</button>
+      <button class="btn btn-g btn-sm" onclick="closeTradeForm()">ยกเลิก</button>
+    </div>
+  </div>`;
+  wrap.classList.remove('hidden');
+  onTradeTypeChange();
+}
+
+function closeTradeForm() {
+  editTradeId = null;
+  document.getElementById('tradeFormWrap').classList.add('hidden');
+}
+
+function onTradeTypeChange() {
+  const type = document.getElementById('tfType').value;
+  const isDiv = type === 'div';
+  document.getElementById('tfTaxGroup').classList.toggle('hidden', !isDiv);
+  document.getElementById('tfFeeGroup').classList.toggle('hidden', isDiv);
+  document.getElementById('tfQtyLabel').textContent = isDiv ? 'จำนวนหุ้นที่ได้ปันผล' : 'จำนวนหุ้น';
+  document.getElementById('tfPriceLabel').textContent = isDiv ? 'ปันผล/หุ้น (฿)' : 'ราคา/หุ้น (฿)';
+  // Thai dividends are withheld at 10% — prefill it, but leave it editable.
+  const tax = document.getElementById('tfTax');
+  if (isDiv && !(+tax.value > 0)) {
+    const q = +document.getElementById('tfQty').value || 0, p = +document.getElementById('tfPrice').value || 0;
+    if (q > 0 && p > 0) tax.value = +(q * p * DIV_TAX_PCT / 100).toFixed(2);
+  }
+  updateTradePreview();
+}
+
+function updateTradePreview() {
+  const el = document.getElementById('tfPreview');
+  if (!el) return;
+  const type = document.getElementById('tfType').value;
+  const q = +document.getElementById('tfQty').value || 0;
+  const p = +document.getElementById('tfPrice').value || 0;
+  const fee = +document.getElementById('tfFee').value || 0;
+  const tax = +document.getElementById('tfTax').value || 0;
+  const tk = (document.getElementById('tfTicker').value || '').toUpperCase().trim();
+  if (!q || !p) { el.textContent = 'ใส่จำนวนและราคาเพื่อดูยอดรวม'; return; }
+  if (type === 'div') {
+    el.innerHTML = `รับสุทธิ <b>${fmtBaht(q * p - tax)}</b> (ก่อนหักภาษี ${fmtBaht(q * p)}${tax ? ` · หัก ${fmtBaht(tax)}` : ''})`;
+    return;
+  }
+  if (type === 'sell') {
+    const pos = tk ? positionFromTrades(tk) : null;
+    const gain = pos && pos.qty > 0 ? (Math.min(q, pos.qty) * (p - pos.avgCost) - fee) : null;
+    el.innerHTML = `รับสุทธิ <b>${fmtBaht(q * p - fee)}</b>` +
+      (pos && pos.qty > 0 ? ` · ถืออยู่ ${fmtQty(pos.qty)} หุ้น ต้นทุนเฉลี่ย ฿${pos.avgCost.toFixed(2)} → กำไรที่รับรู้ <b style="color:${gain >= 0 ? 'var(--green)' : 'var(--red)'}">${gain >= 0 ? '+' : '−'}${fmtBaht(Math.abs(gain))}</b>` : '');
+    return;
+  }
+  el.innerHTML = `จ่ายทั้งหมด <b>${fmtBaht(q * p + fee)}</b> (${fmtQty(q)} × ฿${p.toLocaleString()}${fee ? ` + ค่าคอม ${fmtBaht(fee)}` : ''})`;
+}
+
+async function saveTradeForm() {
+  const date = document.getElementById('tfDate').value;
+  const type = document.getElementById('tfType').value;
+  const ticker = (document.getElementById('tfTicker').value || '').toUpperCase().trim();
+  const qty = +document.getElementById('tfQty').value || 0;
+  const price = +document.getElementById('tfPrice').value || 0;
+  const fee = +document.getElementById('tfFee').value || 0;
+  const tax = +document.getElementById('tfTax').value || 0;
+  const note = (document.getElementById('tfNote').value || '').trim();
+
+  if (!date) { toast('⚠️ ใส่วันที่ก่อน'); return; }
+  if (!ticker) { toast('⚠️ ใส่ชื่อหุ้นก่อน'); return; }
+  if (!(qty > 0)) { toast('⚠️ จำนวนต้องมากกว่า 0'); return; }
+  if (!(price > 0)) { toast('⚠️ ราคาต้องมากกว่า 0'); return; }
+  if (type === 'sell') {
+    const pos = positionFromTrades(ticker);
+    const held = editTradeId ? pos.qty + tradeQtyOf(editTradeId, ticker) : pos.qty;
+    if (qty > held + 1e-9 && !confirm(`${ticker} ในสมุดมี ${fmtQty(held)} หุ้น แต่กำลังขาย ${fmtQty(qty)}\n\nบันทึกต่อไหม? (ระบบจะคิดกำไรจากจำนวนที่มีจริงเท่านั้น)`)) return;
+  }
+
+  if (!S.tradeLog) S.tradeLog = emptyTradeLog();
+  const rec = { id: editTradeId || tradeGenId(), date, ticker, type, qty, price, note };
+  if (type === 'div') rec.tax = tax; else rec.fee = fee;
+
+  const i = (S.tradeLog.trades || []).findIndex(t => t.id === rec.id);
+  if (i >= 0) S.tradeLog.trades[i] = rec; else S.tradeLog.trades.push(rec);
+
+  closeTradeForm();
+  await commitTrades(i >= 0 ? '✅ แก้ไขรายการแล้ว' : `✅ บันทึก${TRADE_LABEL[type]} ${ticker} แล้ว`);
+}
+
+// How many shares a to-be-replaced sell removed, so editing it can be checked
+// against the position as it stands without that row.
+function tradeQtyOf(id, ticker) {
+  const t = (S.tradeLog?.trades || []).find(x => x.id === id);
+  return t && t.type === 'sell' && tradeTicker(t) === String(ticker).toUpperCase() ? Math.abs(+t.qty || 0) : 0;
+}
+
+async function deleteTrade(id) {
+  const t = (S.tradeLog?.trades || []).find(x => x.id === id);
+  if (!t) return;
+  if (!confirm(`ลบรายการ ${TRADE_LABEL[t.type] || ''} ${tradeTicker(t)} วันที่ ${t.date}?`)) return;
+  S.tradeLog.trades = S.tradeLog.trades.filter(x => x.id !== id);
+  await commitTrades('🗑️ ลบรายการแล้ว');
+}
+
+// Recompute positions, repaint, then persist BOTH files: the log holds the
+// events, the registry holds the positions every other screen reads.
+async function commitTrades(msg) {
+  syncPositionsFromTrades();
+  renderTradeAll();
+  renderDashboard();
+  toast(msg + ' — กำลังบันทึก…');
+  await saveTradeLog();
+  await persistRegistryKB();
+}
+
 // ── Asset CRUD ──
 let editAssetId = null;
 
@@ -2287,6 +2683,182 @@ function getAlerts() {
   }
 
   return alerts;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TRADE LOG — ซื้อ / ขาย / ปันผล
+// The registry used to store only a snapshot (จำนวน + ต้นทุนเฉลี่ย ณ วันนี้), so
+// nothing could say what was actually sold or received. The log keeps the
+// events; positions are DERIVED from it and written back into the registry so
+// every existing screen (charts, allocation, XD, exports) keeps working.
+// Cost basis is a moving average — what Thai brokers show on the statement —
+// not FIFO: a sell realises (ราคาขาย − ต้นทุนเฉลี่ย) × จำนวน and leaves the
+// average of what remains untouched.
+// ═══════════════════════════════════════════════════════════════
+const TRADE_TYPES = [
+  { key: 'buy',  label: 'ซื้อ',   icon: '🟢' },
+  { key: 'sell', label: 'ขาย',   icon: '🔴' },
+  { key: 'div',  label: 'ปันผล', icon: '💵' }
+];
+const TRADE_LABEL = { buy: 'ซื้อ', sell: 'ขาย', div: 'ปันผล' };
+const DIV_TAX_PCT = 10;   // หัก ณ ที่จ่ายมาตรฐานของหุ้นไทย
+
+function tradeGenId() { return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function tradeTicker(t) { return String((t && t.ticker) || '').toUpperCase(); }
+
+// All trades, oldest first. Same-day trades keep the order they were entered,
+// so a buy typed before a sell on that date is the one the sell draws from.
+function sortedTrades(list) {
+  return (list || []).map((t, i) => ({ t, i }))
+    .sort((a, b) => {
+      const da = String(a.t.date || ''), db = String(b.t.date || '');
+      return da === db ? a.i - b.i : (da < db ? -1 : 1);
+    })
+    .map(x => x.t);
+}
+
+function tradesFor(ticker) {
+  const tk = String(ticker || '').toUpperCase();
+  return sortedTrades((S.tradeLog?.trades || []).filter(t => tradeTicker(t) === tk));
+}
+
+function tickersWithTrades() {
+  return [...new Set((S.tradeLog?.trades || []).map(tradeTicker).filter(Boolean))];
+}
+
+// One chronological walk shared by every number below, so the lifetime totals
+// and the per-year totals can never drift apart.
+function walkTrades(trades, cb) {
+  let qty = 0, cost = 0;
+  sortedTrades(trades).forEach(t => {
+    const q = Math.abs(+t.qty || 0), p = +t.price || 0, fee = +t.fee || 0, tax = +t.tax || 0;
+    let realized = 0, dividends = 0, sold = 0;
+    if (t.type === 'sell') {
+      const avg = qty > 0 ? cost / qty : 0;
+      sold = Math.min(q, qty);                 // never sell more than is held
+      realized = sold * (p - avg) - fee;
+      qty -= sold;
+      cost -= sold * avg;
+      if (qty <= 1e-9) { qty = 0; cost = 0; }  // flat position → no cost left over
+    } else if (t.type === 'div') {
+      dividends = q * p - tax;
+    } else {                                    // buy (the default)
+      qty += q;
+      cost += q * p + fee;
+    }
+    if (cb) cb({ t, realized, dividends, fee, sold, qty, cost });
+  });
+  return { qty, cost };
+}
+
+function positionFromTrades(ticker) {
+  const list = tradesFor(ticker);
+  let realized = 0, dividends = 0, fees = 0, last = '';
+  const end = walkTrades(list, e => {
+    realized += e.realized;
+    dividends += e.dividends;
+    fees += e.fee;
+    if (String(e.t.date || '') > last) last = String(e.t.date || '');
+  });
+  return {
+    qty: end.qty, cost: end.cost,
+    avgCost: end.qty > 0 ? end.cost / end.qty : 0,
+    realized, dividends, fees, last, n: list.length
+  };
+}
+
+// year → { realized, dividends, fees, n }, plus 'all'
+function tradeYearStats() {
+  const out = { all: { realized: 0, dividends: 0, fees: 0, n: 0 } };
+  const bump = (y, k, v) => {
+    if (!out[y]) out[y] = { realized: 0, dividends: 0, fees: 0, n: 0 };
+    out[y][k] += v; out.all[k] += v;
+  };
+  tickersWithTrades().forEach(tk => {
+    walkTrades(tradesFor(tk), e => {
+      const y = String(e.t.date || '').slice(0, 4) || '—';
+      bump(y, 'n', 1);
+      bump(y, 'fees', e.fee);
+      bump(y, 'realized', e.realized);
+      bump(y, 'dividends', e.dividends);
+    });
+  });
+  return out;
+}
+
+function tradeYears() {
+  return [...new Set((S.tradeLog?.trades || []).map(t => String(t.date || '').slice(0, 4)).filter(Boolean))].sort().reverse();
+}
+
+// Create the registry entry a trade refers to, if the ticker is new.
+function ensureStock(ticker, date, note) {
+  if (!S.registry) S.registry = FALLBACK.registry;
+  if (!Array.isArray(S.registry.stocks)) S.registry.stocks = [];
+  let stock = S.registry.stocks.find(s => String(s.ticker).toUpperCase() === String(ticker).toUpperCase());
+  if (stock) return stock;
+  stock = {
+    ticker: String(ticker).toUpperCase(), company: '', sector: '—',
+    avg_cost: 0, shares: 0,
+    thesis_score: 70, thesis_status: scoreEmoji(70),
+    notes: note || '', last_review_date: date, catalysts: [], thesis_breakers: []
+  };
+  S.registry.stocks.push(stock);
+  if (S.kb) {
+    S.kb.score_history = S.kb.score_history || {};
+    S.kb.catalyst_log = S.kb.catalyst_log || {};
+    S.kb.guidance_tracker = S.kb.guidance_tracker || {};
+    S.kb.score_history[stock.ticker] = [{ date, score: 70, delta: 0, reason: 'initial entry' }];
+    S.kb.catalyst_log[stock.ticker] = [];
+    S.kb.guidance_tracker[stock.ticker] = [];
+  }
+  return stock;
+}
+
+// Push derived positions back into the registry. Everything downstream still
+// reads s.shares / s.avg_cost, so the log stays invisible to the rest of the app.
+function syncPositionsFromTrades() {
+  if (!S.tradeLog || !S.registry || !Array.isArray(S.registry.stocks)) return [];
+  const owned = tickersWithTrades();
+  const today = new Date().toISOString().split('T')[0];
+  owned.forEach(tk => {
+    const pos = positionFromTrades(tk);
+    const stock = ensureStock(tk, pos.last || today, 'สร้างจากสมุดซื้อขาย');
+    stock.shares = +pos.qty.toFixed(6);
+    stock.avg_cost = +pos.avgCost.toFixed(4);
+    stock.realized_pl = +pos.realized.toFixed(2);
+    stock.dividends_received = +pos.dividends.toFixed(2);
+    stock.fees_paid = +pos.fees.toFixed(2);
+    stock.pos_source = 'trades';
+    if (pos.last) stock.position_date = pos.last;
+  });
+  // A ticker whose last trade was deleted goes back to being edited by hand.
+  S.registry.stocks.forEach(s => {
+    if (s.pos_source === 'trades' && owned.indexOf(String(s.ticker).toUpperCase()) === -1) {
+      delete s.pos_source; delete s.realized_pl; delete s.dividends_received; delete s.fees_paid;
+    }
+  });
+  return owned;
+}
+
+function fromTrades(s) { return !!s && s.pos_source === 'trades'; }
+
+// Stocks holding a position that the log doesn't know about yet.
+function stocksNeedingOpening() {
+  return (S.registry?.stocks || []).filter(s => !fromTrades(s) && s.shares > 0 && s.avg_cost > 0);
+}
+
+// "ยอดยกมา": one buy that reproduces the position already on file.
+function openingTradeFor(s, today) {
+  return {
+    id: tradeGenId(),
+    date: s.position_date || s.last_review_date || today,
+    ticker: String(s.ticker).toUpperCase(),
+    type: 'buy',
+    qty: +s.shares || 0,
+    price: +s.avg_cost || 0,
+    fee: 0,
+    note: 'ยอดยกมา (ก่อนเริ่มใช้สมุด)'
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2821,6 +3393,8 @@ function renderMoneyDashboard() {
   // Hero + charts need at least one position; the list itself always renders
   // (watch-only stocks live there too, and they used to have their own cards).
   const day = dayStats();
+  const thisYear = new Date().toISOString().slice(0, 4);
+  const book = tradeYearStats()[thisYear] || { realized: 0, dividends: 0, fees: 0, n: 0 };
   const dayCol = day.chg >= 0 ? 'var(--green)' : 'var(--red)';
   const daySg = day.chg >= 0 ? '+' : '−';
   const staleAll = daysSinceISO(lastUpd);
@@ -2834,6 +3408,7 @@ function renderMoneyDashboard() {
       <div class="md-pl" style="color:${plColor}">${sign}${fmtBaht(Math.abs(t.pl))} (${sign}${Math.abs(t.plPct).toFixed(2)}%)</div>
       ${day.has ? `<div class="md-day" style="color:${dayCol}"><span class="md-day-l">วันนี้</span>${daySg}${fmtBaht(Math.abs(day.chg))} (${daySg}${Math.abs(day.pct).toFixed(2)}%)</div>` : ''}
       <div class="md-sub">ต้นทุนรวม ${fmtBaht(t.cost)} · ราคาล่าสุด ${lastStr}${staleStr}</div>
+      ${book.n ? `<div class="md-sub" style="margin-top:3px">📒 ปีนี้: กำไรที่ขายจริง <b style="color:${book.realized >= 0 ? 'var(--green)' : 'var(--red)'}">${book.realized >= 0 ? '+' : '−'}${fmtBaht(Math.abs(book.realized))}</b> · ปันผลรับ <b style="color:var(--c1)">${fmtBaht(book.dividends)}</b> · ค่าคอม ${fmtBaht(book.fees)}</div>` : ''}
     </div>
     <button class="btn btn-p btn-sm" onclick="updatePrices()">💰 อัพเดตราคา</button>
   </div>
@@ -3366,6 +3941,9 @@ function openDetail(ticker) {
       </div>`;
     }).join('');
   }
+
+  // Trade book for this stock
+  html += tradeDetailHtml(stock);
 
   // Notes
   if (stock.notes) {
@@ -4118,6 +4696,8 @@ function openPasteTemplateInClaude() {
   toast('📋 คัดลอกคำสั่ง + เปิด Claude แล้ว — แนบรูปพอร์ตแล้วกดส่ง');
 }
 
+function setPasteOverwrite(on) { S.pasteOverwrite = !!on; previewPastePort(); }
+
 function previewPastePort() {
   const msg = document.getElementById('pastePortMsg');
   const box = document.getElementById('pastePortPreview');
@@ -4134,7 +4714,7 @@ function previewPastePort() {
   }
 
   const fallbackDate = res.defaultDate || ppTodayISO();
-  let nNew = 0, nUpd = 0, nSame = 0;
+  let nNew = 0, nUpd = 0, nSame = 0, nLocked = 0;
   const body = res.rows.map(r => {
     const cur = S.registry?.stocks?.find(s => s.ticker === r.ticker);
     const date = r.date || fallbackDate;
@@ -4144,11 +4724,13 @@ function previewPastePort() {
       tag = same ? 'same' : 'upd'; tagT = same ? 'เท่าเดิม' : 'แก้ไข';
     }
     if (tag === 'new') nNew++; else if (tag === 'upd') nUpd++; else nSame++;
+    const locked = fromTrades(cur) && !S.pasteOverwrite;
+    if (locked) nLocked++;
     const was = (oldV, newV, fmt) => (cur && oldV !== newV && oldV ? `<span class="pp-old">${fmt(oldV)}</span>` : '') + fmt(newV);
     const q = n => Number(n).toLocaleString();
     const p = n => Number(n).toLocaleString(undefined, { maximumFractionDigits: 4 });
     return `<tr>
-      <td><b>${escHtml(r.ticker)}</b> <span class="pp-tag ${tag}">${tagT}</span></td>
+      <td><b>${escHtml(r.ticker)}</b> <span class="pp-tag ${tag}">${tagT}</span>${locked ? ' <span class="pp-lock" title="จำนวน/ต้นทุนมาจากสมุดซื้อขาย — จะไม่ถูกทับ">🔒 ตามสมุด</span>' : ''}</td>
       <td>${was(cur?.shares, r.shares, q)}</td>
       <td>${was(cur?.avg_cost, r.avg_cost, p)}</td>
       <td>${r.price == null ? '<span style="color:var(--tx3)">—</span>' : was(cur?.current_price, r.price, p)}</td>
@@ -4156,13 +4738,19 @@ function previewPastePort() {
     </tr>`;
   }).join('');
 
+  const anyFromTrades = res.rows.some(r => fromTrades(S.registry?.stocks?.find(s => s.ticker === r.ticker)));
   box.innerHTML = `<div class="pp-scroll"><table class="pp-tbl">
     <thead><tr><th>หุ้น</th><th>จำนวน</th><th>ต้นทุน/หุ้น</th><th>ราคาตลาด</th><th>วันที่</th></tr></thead>
     <tbody>${body}</tbody></table></div>` +
+    (anyFromTrades ? `<label class="tl-note" style="display:flex;gap:8px;align-items:flex-start;cursor:pointer">
+      <input type="checkbox" id="ppOverwrite" ${S.pasteOverwrite ? 'checked' : ''} onchange="setPasteOverwrite(this.checked)" style="margin-top:3px">
+      <span>ทับจำนวน/ต้นทุนของตัวที่มี 🔒 ตามสมุด ด้วย (ตัวนั้นจะเลิกคำนวณจากสมุด — ปกติไม่ต้องติ๊ก เพราะยอดในสมุดละเอียดกว่าใบพอร์ต)</span>
+    </label>` : '') +
     (res.errors.length ? `<div class="pp-err">⚠️ ${res.errors.map(escHtml).join('<br>⚠️ ')}</div>` : '');
 
   msg.style.color = 'var(--c1)';
-  msg.textContent = `พร้อมใส่ ${res.rows.length} ตัว — ใหม่ ${nNew} · แก้ไข ${nUpd} · เท่าเดิม ${nSame}`;
+  msg.textContent = `พร้อมใส่ ${res.rows.length} ตัว — ใหม่ ${nNew} · แก้ไข ${nUpd} · เท่าเดิม ${nSame}` +
+    (nLocked ? ` · 🔒 ข้าม ${nLocked} (ตามสมุด)` : '');
   btn.disabled = false;
 }
 
@@ -4190,31 +4778,28 @@ async function applyPastePort() {
   const today = ppTodayISO();
   const fallbackDate = res.defaultDate || today;
   let added = 0, updated = 0;
+  const skipped = [], overridden = [];
 
   res.rows.forEach(r => {
     const date = r.date || fallbackDate;
-    let stock = S.registry.stocks.find(s => s.ticker === r.ticker);
-    if (!stock) {
-      stock = {
-        ticker: r.ticker, company: '', sector: '—',
-        avg_cost: 0, shares: 0,
-        thesis_score: 70, thesis_status: scoreEmoji(70),
-        notes: 'เพิ่มจากการวางพอร์ต ' + date,
-        last_review_date: date, catalysts: [], thesis_breakers: []
-      };
-      S.registry.stocks.push(stock);
-      S.kb.score_history = S.kb.score_history || {};
-      S.kb.catalyst_log = S.kb.catalyst_log || {};
-      S.kb.guidance_tracker = S.kb.guidance_tracker || {};
-      S.kb.score_history[r.ticker] = [{ date, score: 70, delta: 0, reason: 'initial entry (วางพอร์ต)' }];
-      S.kb.catalyst_log[r.ticker] = [];
-      S.kb.guidance_tracker[r.ticker] = [];
-      added++;
-    } else updated++;
+    const known = S.registry.stocks.find(s => s.ticker === r.ticker);
+    const stock = known || ensureStock(r.ticker, date, 'เพิ่มจากการวางพอร์ต ' + date);
+    if (known) updated++; else added++;
 
-    stock.shares = r.shares;
-    stock.avg_cost = r.avg_cost;
-    stock.position_date = date;           // when this holding was last confirmed
+    // A position that comes from the trade log is owned by the log — pasting a
+    // statement must not silently overwrite it (that would leave two different
+    // truths). The price is fair game either way; it isn't in the log.
+    if (fromTrades(stock) && !S.pasteOverwrite) {
+      skipped.push(r.ticker);
+    } else {
+      if (fromTrades(stock)) {
+        stock.pos_source = 'manual-override';   // the log stays, but stops driving this one
+        overridden.push(r.ticker);
+      }
+      stock.shares = r.shares;
+      stock.avg_cost = r.avg_cost;
+      stock.position_date = date;         // when this holding was last confirmed
+    }
     if (r.price != null && r.price > 0) {
       stock.current_price = r.price;
       // Keep price_updated a real timestamp; a past-dated statement gets that day's noon.
@@ -4227,7 +4812,8 @@ async function applyPastePort() {
 
   closeM('pastePortModal');
   renderDashboard();
-  toast(`✅ วางพอร์ตแล้ว: เพิ่ม ${added} · อัพเดต ${updated} — กำลังบันทึก…`);
+  const extra = skipped.length ? ` · ข้าม ${skipped.join(', ')} (ใช้ยอดจากสมุด)` : '';
+  toast(`✅ วางพอร์ตแล้ว: เพิ่ม ${added} · อัพเดต ${updated}${extra} — กำลังบันทึก…`);
   await persistRegistryKB();
 }
 
@@ -4270,6 +4856,8 @@ function useOffline() {
   S.registry = S.cachedRegistry || FALLBACK.registry;
   S.kb = S.cachedKb || FALLBACK.kb;
   S.assetReg = S.cachedAssetReg || emptyAssetReg();
+  S.tradeLog = S.cachedTradeLog || emptyTradeLog();
+  syncPositionsFromTrades();
   S.lastSync = 'Offline mode';
   renderDashboard();
 }
@@ -4311,6 +4899,7 @@ function showDashboard() {
   document.getElementById('btnSync').classList.remove('hidden');
   document.getElementById('btnPrices').classList.remove('hidden');
   document.getElementById('btnXD').classList.remove('hidden');
+  document.getElementById('btnTrades').classList.remove('hidden');
   document.getElementById('btnReports').classList.remove('hidden');
   document.getElementById('btnAddStock').classList.remove('hidden');
   document.getElementById('btnPastePort').classList.remove('hidden');

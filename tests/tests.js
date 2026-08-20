@@ -1031,6 +1031,298 @@
     S.registry = prevReg; S.kb = prevKb;
   }
 
+  // ══════════════════ trade log ══════════════════
+  const near = (name, got, want, tol) => ok(name, Math.abs(got - want) <= (tol == null ? 0.005 : tol), 'got ' + got + ' want ' + want);
+
+  sec('positionFromTrades — cost basis');
+  {
+    const prevLog = S.tradeLog, prevReg = S.registry, prevKb = S.kb;
+    const log = ts => { S.tradeLog = { version: 1, trades: ts }; };
+
+    log([{ id: '1', date: '2026-01-05', ticker: 'AAA', type: 'buy', qty: 100, price: 10, fee: 0 }]);
+    let pos = positionFromTrades('AAA');
+    eq('one buy: shares', pos.qty, 100);
+    near('one buy: cost', pos.cost, 1000);
+    near('one buy: average', pos.avgCost, 10);
+
+    // fees are part of what the position cost
+    log([{ id: '1', date: '2026-01-05', ticker: 'AAA', type: 'buy', qty: 100, price: 10, fee: 50 }]);
+    near('buy fee joins the cost', positionFromTrades('AAA').avgCost, 10.5);
+    near('buy fee counted as a fee too', positionFromTrades('AAA').fees, 50);
+
+    // two buys average out
+    log([
+      { id: '1', date: '2026-01-05', ticker: 'AAA', type: 'buy', qty: 100, price: 10, fee: 0 },
+      { id: '2', date: '2026-02-05', ticker: 'AAA', type: 'buy', qty: 100, price: 20, fee: 0 }
+    ]);
+    pos = positionFromTrades('AAA');
+    eq('two buys: shares', pos.qty, 200);
+    near('two buys: average', pos.avgCost, 15);
+
+    // a partial sell realises against the average and leaves it alone
+    log([
+      { id: '1', date: '2026-01-05', ticker: 'AAA', type: 'buy',  qty: 100, price: 10, fee: 0 },
+      { id: '2', date: '2026-02-05', ticker: 'AAA', type: 'buy',  qty: 100, price: 20, fee: 0 },
+      { id: '3', date: '2026-03-05', ticker: 'AAA', type: 'sell', qty: 50,  price: 25, fee: 30 }
+    ]);
+    pos = positionFromTrades('AAA');
+    eq('after a partial sell: shares', pos.qty, 150);
+    near('average is untouched by a sell', pos.avgCost, 15);
+    near('realised = (25 − 15) × 50 − 30', pos.realized, 470);
+    near('remaining cost', pos.cost, 2250);
+
+    // selling everything empties the position completely
+    log([
+      { id: '1', date: '2026-01-05', ticker: 'AAA', type: 'buy',  qty: 100, price: 10, fee: 0 },
+      { id: '2', date: '2026-03-05', ticker: 'AAA', type: 'sell', qty: 100, price: 8,  fee: 0 }
+    ]);
+    pos = positionFromTrades('AAA');
+    eq('sold out: no shares', pos.qty, 0);
+    near('sold out: no cost left behind', pos.cost, 0);
+    near('a loss is realised as a loss', pos.realized, -200);
+    near('sold out: average resets', pos.avgCost, 0);
+
+    // you cannot sell more than you hold
+    log([
+      { id: '1', date: '2026-01-05', ticker: 'AAA', type: 'buy',  qty: 100, price: 10, fee: 0 },
+      { id: '2', date: '2026-03-05', ticker: 'AAA', type: 'sell', qty: 500, price: 12, fee: 0 }
+    ]);
+    pos = positionFromTrades('AAA');
+    eq('oversell clamps to what is held', pos.qty, 0);
+    near('oversell only realises the real shares', pos.realized, 200);
+
+    // dividends are net of withholding and never touch the position
+    log([
+      { id: '1', date: '2026-01-05', ticker: 'AAA', type: 'buy', qty: 1000, price: 10, fee: 0 },
+      { id: '2', date: '2026-05-05', ticker: 'AAA', type: 'div', qty: 1000, price: 0.5, tax: 50 }
+    ]);
+    pos = positionFromTrades('AAA');
+    near('dividend net of tax', pos.dividends, 450);
+    eq('dividend leaves the shares alone', pos.qty, 1000);
+    near('dividend leaves the average alone', pos.avgCost, 10);
+    near('withholding tax is not a fee', pos.fees, 0);
+
+    // entry order does not matter; trade date does
+    log([
+      { id: '2', date: '2026-03-05', ticker: 'AAA', type: 'sell', qty: 50, price: 25, fee: 0 },
+      { id: '1', date: '2026-01-05', ticker: 'AAA', type: 'buy',  qty: 100, price: 10, fee: 0 }
+    ]);
+    near('a sell typed first still sells what was bought earlier', positionFromTrades('AAA').realized, 750);
+    eq('…and leaves the right number of shares', positionFromTrades('AAA').qty, 50);
+
+    // same day: the order they were entered decides
+    log([
+      { id: '1', date: '2026-03-05', ticker: 'AAA', type: 'buy',  qty: 100, price: 10, fee: 0 },
+      { id: '2', date: '2026-03-05', ticker: 'AAA', type: 'sell', qty: 100, price: 11, fee: 0 }
+    ]);
+    near('same-day buy then sell', positionFromTrades('AAA').realized, 100);
+
+    // other tickers are not mixed in
+    log([
+      { id: '1', date: '2026-01-05', ticker: 'AAA', type: 'buy', qty: 100, price: 10, fee: 0 },
+      { id: '2', date: '2026-01-05', ticker: 'BBB', type: 'buy', qty: 50,  price: 40, fee: 0 }
+    ]);
+    eq('AAA only counts AAA', positionFromTrades('AAA').qty, 100);
+    eq('BBB only counts BBB', positionFromTrades('BBB').qty, 50);
+    eq('lowercase ticker still matches', positionFromTrades('aaa').qty, 100);
+    eq('unknown ticker is empty', positionFromTrades('ZZZ').n, 0);
+    eq('no log at all is safe', (S.tradeLog = null, positionFromTrades('AAA').qty), 0);
+
+    S.tradeLog = prevLog; S.registry = prevReg; S.kb = prevKb;
+  }
+
+  sec('tradeYearStats');
+  {
+    const prevLog = S.tradeLog;
+    S.tradeLog = { version: 1, trades: [
+      { id: '1', date: '2025-01-05', ticker: 'AAA', type: 'buy',  qty: 100, price: 10, fee: 20 },
+      { id: '2', date: '2025-06-05', ticker: 'AAA', type: 'div',  qty: 100, price: 1, tax: 10 },
+      { id: '3', date: '2026-03-05', ticker: 'AAA', type: 'sell', qty: 50, price: 20, fee: 30 },
+      { id: '4', date: '2026-07-05', ticker: 'AAA', type: 'div',  qty: 50, price: 1, tax: 5 }
+    ] };
+    const st = tradeYearStats();
+    near('realised lands in the year it was sold', st['2026'].realized, 50 * (20 - 10.2) - 30);
+    eq('the buy year has no realised gain', st['2025'].realized, 0);
+    near('dividends by year', st['2025'].dividends, 90);
+    near('dividends the next year', st['2026'].dividends, 45);
+    near('fees by year', st['2025'].fees, 20);
+    eq('trade count by year', [st['2025'].n, st['2026'].n], [2, 2]);
+    near('all-time realised', st.all.realized, 50 * (20 - 10.2) - 30);
+    near('all-time dividends', st.all.dividends, 135);
+    eq('years listed newest first', tradeYears(), ['2026', '2025']);
+    S.tradeLog = prevLog;
+  }
+
+  sec('syncPositionsFromTrades');
+  {
+    const prevLog = S.tradeLog, prevReg = S.registry, prevKb = S.kb;
+    S.kb = { score_history: {}, catalyst_log: {}, guidance_tracker: {}, evidence_clips: [] };
+    S.registry = { portfolio_name: 'T', stocks: [
+      { ticker: 'AAA', company: 'A', sector: 'Tech', shares: 999, avg_cost: 999, thesis_score: 70, catalysts: [], thesis_breakers: [] },
+      { ticker: 'MAN', company: 'M', sector: 'Bank', shares: 40, avg_cost: 5, thesis_score: 70, catalysts: [], thesis_breakers: [] }
+    ] };
+    S.tradeLog = { version: 1, trades: [
+      { id: '1', date: '2026-01-05', ticker: 'AAA', type: 'buy',  qty: 100, price: 10, fee: 0 },
+      { id: '2', date: '2026-02-05', ticker: 'AAA', type: 'sell', qty: 40,  price: 15, fee: 0 },
+      { id: '3', date: '2026-02-06', ticker: 'AAA', type: 'div',  qty: 60,  price: 1, tax: 6 },
+      { id: '4', date: '2026-02-07', ticker: 'NEW', type: 'buy',  qty: 10,  price: 100, fee: 0 }
+    ] };
+    syncPositionsFromTrades();
+    const aaa = S.registry.stocks.find(s => s.ticker === 'AAA');
+    eq('shares come from the book', aaa.shares, 60);
+    near('average cost comes from the book', aaa.avg_cost, 10);
+    near('realised is stored on the stock', aaa.realized_pl, 200);
+    near('dividends are stored on the stock', aaa.dividends_received, 54);
+    eq('the stock is marked as book-driven', aaa.pos_source, 'trades');
+    eq('position date follows the last trade', aaa.position_date, '2026-02-06');
+    ok('a ticker only in the book gets created', !!S.registry.stocks.find(s => s.ticker === 'NEW'));
+    eq('…with the position from the book', S.registry.stocks.find(s => s.ticker === 'NEW').shares, 10);
+    const man = S.registry.stocks.find(s => s.ticker === 'MAN');
+    eq('a hand-entered stock is left alone', [man.shares, man.avg_cost], [40, 5]);
+    ok('…and is not marked book-driven', !fromTrades(man));
+
+    // remove the trades → the stock goes back to being edited by hand
+    S.tradeLog.trades = S.tradeLog.trades.filter(t => t.ticker !== 'AAA');
+    syncPositionsFromTrades();
+    ok('deleting every trade releases the stock', !fromTrades(S.registry.stocks.find(s => s.ticker === 'AAA')));
+    ok('…and clears the derived numbers', S.registry.stocks.find(s => s.ticker === 'AAA').realized_pl === undefined);
+
+    // opening balances for positions that predate the book
+    S.tradeLog = { version: 1, trades: [] };
+    syncPositionsFromTrades();
+    const need = stocksNeedingOpening().map(s => s.ticker).sort();
+    // NEW is in the list too: releasing it kept its last position, which is now
+    // a hand-held one like any other.
+    eq('hand-entered positions are offered an opening balance', need, ['AAA', 'MAN', 'NEW']);
+    const op = openingTradeFor(S.registry.stocks.find(s => s.ticker === 'MAN'), '2026-08-20');
+    eq('opening trade is a buy of the whole position', [op.type, op.qty, op.price], ['buy', 40, 5]);
+    S.tradeLog.trades.push(op);
+    syncPositionsFromTrades();
+    const man2 = S.registry.stocks.find(s => s.ticker === 'MAN');
+    eq('opening balance reproduces the position exactly', [man2.shares, man2.avg_cost], [40, 5]);
+    eq('…and it is now book-driven', man2.pos_source, 'trades');
+    eq('…so it is no longer offered', stocksNeedingOpening().map(s => s.ticker), ['AAA', 'NEW']);
+
+    S.tradeLog = prevLog; S.registry = prevReg; S.kb = prevKb;
+  }
+
+  sec('วางพอร์ต never silently overwrites the book');
+  {
+    const prevLog = S.tradeLog, prevReg = S.registry, prevKb = S.kb, prevOff = S.offline, prevParsed = S.pasteParsed;
+    S.offline = true;
+    S.kb = { score_history: {}, catalyst_log: {}, guidance_tracker: {}, evidence_clips: [], value_history: [] };
+    S.registry = { portfolio_name: 'T', stocks: [] };
+    S.tradeLog = { version: 1, trades: [
+      { id: '1', date: '2026-01-05', ticker: 'BOOK', type: 'buy', qty: 100, price: 10, fee: 0 }
+    ] };
+    syncPositionsFromTrades();
+    S.registry.stocks.push({ ticker: 'HAND', company: 'H', sector: '—', shares: 10, avg_cost: 5, thesis_score: 70, catalysts: [], thesis_breakers: [] });
+
+    S.pasteParsed = parsePortfolioPaste('#วันที่ 2026-08-01\nBOOK | 999 | 99 | 12\nHAND | 20 | 6 | 7');
+    S.pasteOverwrite = false;
+    applyPastePort();
+    const book = S.registry.stocks.find(s => s.ticker === 'BOOK');
+    const hand = S.registry.stocks.find(s => s.ticker === 'HAND');
+    eq('a book-driven position survives the paste', [book.shares, book.avg_cost], [100, 10]);
+    eq('…but its market price is still updated', book.current_price, 12);
+    eq('a hand-entered position is updated as before', [hand.shares, hand.avg_cost], [20, 6]);
+
+    // ticking the override hands the stock back to the pasted numbers
+    S.pasteParsed = parsePortfolioPaste('#วันที่ 2026-08-02\nBOOK | 999 | 99 | 13');
+    S.pasteOverwrite = true;
+    applyPastePort();
+    const book2 = S.registry.stocks.find(s => s.ticker === 'BOOK');
+    eq('override wins when asked for', [book2.shares, book2.avg_cost], [999, 99]);
+    eq('…and the stock stops following the book', book2.pos_source, 'manual-override');
+    eq('…while the trades themselves are untouched', S.tradeLog.trades.length, 1);
+    S.pasteOverwrite = false;
+
+    S.tradeLog = prevLog; S.registry = prevReg; S.kb = prevKb; S.offline = prevOff; S.pasteParsed = prevParsed;
+  }
+
+  sec('trade log screen');
+  {
+    const prevLog = S.tradeLog, prevReg = S.registry, prevKb = S.kb, prevOff = S.offline;
+    S.offline = true;
+    S.kb = { score_history: {}, catalyst_log: {}, guidance_tracker: {}, evidence_clips: [], value_history: [] };
+    S.registry = { portfolio_name: 'T', stocks: [
+      { ticker: 'AAA', company: 'A', sector: 'Tech', shares: 0, avg_cost: 0, thesis_score: 70, catalysts: [], thesis_breakers: [] }
+    ] };
+    S.tradeLog = { version: 1, trades: [] };
+    openTrades();
+    ok('empty book explains itself', /ยังไม่มีรายการ/.test(document.getElementById('tradeList').textContent));
+
+    // add a buy through the real form
+    openTradeForm();
+    document.getElementById('tfDate').value = '2026-02-01';
+    document.getElementById('tfType').value = 'buy';
+    document.getElementById('tfTicker').value = 'aaa';
+    document.getElementById('tfQty').value = '100';
+    document.getElementById('tfPrice').value = '10';
+    document.getElementById('tfFee').value = '25';
+    updateTradePreview();
+    ok('form previews what it will cost', /1,025/.test(document.getElementById('tfPreview').textContent),
+       document.getElementById('tfPreview').textContent);
+    saveTradeForm();
+    eq('the trade is in the book', S.tradeLog.trades.length, 1);
+    eq('ticker is stored uppercase', S.tradeLog.trades[0].ticker, 'AAA');
+    eq('the position follows immediately', S.registry.stocks.find(s => s.ticker === 'AAA').shares, 100);
+    ok('the list shows it', /AAA · ซื้อ/.test(document.getElementById('tradeList').textContent));
+    ok('the summary counts it', /รายการ/.test(document.getElementById('tradeSummary').textContent));
+
+    // a sell shows what it realised
+    openTradeForm();
+    document.getElementById('tfDate').value = '2026-03-01';
+    document.getElementById('tfType').value = 'sell';
+    document.getElementById('tfTicker').value = 'AAA';
+    document.getElementById('tfQty').value = '50';
+    document.getElementById('tfPrice').value = '20';
+    document.getElementById('tfFee').value = '0';
+    saveTradeForm();
+    eq('two entries now', S.tradeLog.trades.length, 2);
+    eq('shares halved', S.registry.stocks.find(s => s.ticker === 'AAA').shares, 50);
+    ok('the sell row shows realised gain', /กำไรที่รับรู้/.test(document.getElementById('tradeList').textContent));
+    ok('newest entry is listed first',
+       document.getElementById('tradeList').textContent.indexOf('2026-03-01') <
+       document.getElementById('tradeList').textContent.indexOf('2026-02-01'));
+
+    // a dividend prefills the 10% withholding
+    openTradeForm();
+    document.getElementById('tfQty').value = '50';
+    document.getElementById('tfPrice').value = '2';
+    document.getElementById('tfType').value = 'div';
+    onTradeTypeChange();
+    near('withholding prefilled at 10%', +document.getElementById('tfTax').value, 10);
+    ok('fee field hides for dividends', document.getElementById('tfFeeGroup').classList.contains('hidden'));
+    document.getElementById('tfDate').value = '2026-05-01';
+    document.getElementById('tfTicker').value = 'AAA';
+    saveTradeForm();
+    near('dividend recorded net of tax', positionFromTrades('AAA').dividends, 90);
+
+    // filters
+    setTradeYear('2026');
+    eq('all three are in 2026', filteredTrades().length, 3);
+    setTradeTicker('AAA');
+    eq('filtering by ticker keeps them', filteredTrades().length, 3);
+    setTradeYear('all');
+    eq('back to everything', filteredTrades().length, 3);
+
+    // the detail modal shows the stock's own page of the book
+    const dh = tradeDetailHtml(S.registry.stocks.find(s => s.ticker === 'AAA'));
+    ok('detail shows the entry count', /3 รายการ/.test(dh), dh.slice(0, 120));
+    ok('detail shows realised gain', /กำไรที่ขายจริง/.test(dh));
+    ok('detail of an untouched stock offers to start one',
+       /ยังไม่มีรายการ/.test(tradeDetailHtml({ ticker: 'ZZZ' })));
+
+    // deleting the last trade of a ticker releases it
+    S.tradeLog.trades = [];
+    syncPositionsFromTrades();
+    ok('no trades → not book-driven', !fromTrades(S.registry.stocks.find(s => s.ticker === 'AAA')));
+
+    closeM('tradeModal');
+    S.tradeLog = prevLog; S.registry = prevReg; S.kb = prevKb; S.offline = prevOff;
+  }
+
   L.push('');
   L.push('PASS ' + pass + '   FAIL ' + fail);
   const pre = document.createElement('pre');
