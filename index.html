@@ -272,7 +272,13 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 .nw-chip.tap:hover{border-color:var(--c1);color:var(--c1)}
 .nw-chip.tap::after{content:'›';margin-left:1px;color:var(--tx3);font-weight:700}
 /* ── Collapsible net-worth groups ── */
-.nw-tools{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:18px 0 10px}
+.nw-tools{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:18px 0 10px}
+.nw-tools-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.grp-bar{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px}
+.grp-bar-l{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.grp-bar-lb{font-size:11px;color:var(--tx3);font-weight:600}
+.md-rows .nw-grp-b{padding:0 8px}
+.md-rows .nw-grp{margin-bottom:10px}
 .nw-tools-n{font-size:11.5px;color:var(--tx3)}
 .nw-grp{margin-bottom:8px}
 .nw-grp-h{display:flex;align-items:center;gap:9px;width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;cursor:pointer;font-family:var(--fn);color:var(--tx);text-align:left;transition:.15s}
@@ -450,7 +456,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 <!-- NET WORTH VIEW -->
 <div class="main hidden" id="nwView">
   <div class="md-wrap" id="nwDash"></div>
-  <div id="nwLists"></div>
+  <div id="nwLists" data-groups="nw"></div>
 </div>
 
 <!-- ASSET MODAL (add/edit asset or liability) -->
@@ -845,6 +851,9 @@ let S = {
   view: 'stocks',
   plSort: { key: 'value', dir: 'desc' },
   nwOpen: {},          // net-worth groups the user left expanded, by group key
+  nwSort: { key: 'value', dir: 'desc' },
+  stClosed: {},        // stock groups the user collapsed (they start expanded)
+  stGroup: 'sector',   // how the stock list is grouped: sector|status|held|none
   editData: {}
 };
 
@@ -867,6 +876,9 @@ function saveLS() {
       assetFileId: S.assetFileId,
       plSort: S.plSort,
       nwOpen: S.nwOpen,
+      nwSort: S.nwSort,
+      stClosed: S.stClosed,
+      stGroup: S.stGroup,
       // Recovery buffer ONLY — Google Drive is the source of truth. This lets a
       // failed Drive save be retried/recovered instead of lost on reload.
       registry: S.registry,
@@ -887,6 +899,9 @@ function loadLS() {
     if (d.lastSync) S.lastSync = d.lastSync;
     if (d.plSort && d.plSort.key) S.plSort = { key: d.plSort.key, dir: d.plSort.dir === 'asc' ? 'asc' : 'desc' };
     if (d.nwOpen && typeof d.nwOpen === 'object') S.nwOpen = d.nwOpen;
+    if (d.nwSort && d.nwSort.key) S.nwSort = { key: d.nwSort.key, dir: d.nwSort.dir === 'asc' ? 'asc' : 'desc' };
+    if (d.stClosed && typeof d.stClosed === 'object') S.stClosed = d.stClosed;
+    if (d.stGroup && ST_GROUPS.some(g => g.key === d.stGroup)) S.stGroup = d.stGroup;
     if (d.registry) S.cachedRegistry = d.registry; // recovery buffer
     if (d.kb) S.cachedKb = d.kb;
     if (d.assetReg) S.cachedAssetReg = d.assetReg;
@@ -1483,7 +1498,9 @@ function nwBuildGroups(t, assets, liabs) {
       </div>`
     });
   }
-  nwByCat(assets).forEach(g => groups.push({
+  // Sorting reorders the asset categories; หุ้น stays on top and หนี้สิน at the
+  // bottom — they are not one of the categories being compared.
+  nwByCat(assets, S.nwSort).forEach(g => groups.push({
     key: 'cat:' + g.cat, icon: nwCatIcon(g.cat), name: g.cat, n: g.list.length, sum: g.sum,
     body: g.list.map(a => nwRowHtml(a)).join('')
   }));
@@ -1491,14 +1508,18 @@ function nwBuildGroups(t, assets, liabs) {
     groups.push({
       key: 'liab', cls: 'liab', neg: true, icon: '💳', name: 'หนี้สิน', n: liabs.length,
       sum: liabs.reduce((acc, a) => acc + assetValueTHB(a), 0),
-      body: liabs.slice().sort((a, b) => assetValueTHB(b) - assetValueTHB(a)).map(a => nwRowHtml(a)).join('')
+      body: nwByCat(liabs, S.nwSort).reduce((acc, g) => acc.concat(g.list), []).map(a => nwRowHtml(a)).join('')
     });
   }
   return groups;
 }
 
-// assets → [{cat, list (biggest first), sum}], biggest group first
-function nwByCat(assets) {
+// assets → [{cat, list, sum}], ordered by `sort` (default: biggest value first).
+// The same key orders the items inside each category, so one chip moves both.
+function nwByCat(assets, sort) {
+  const key = (sort && sort.key) || 'value';
+  const mul = (sort && sort.dir === 'asc') ? 1 : -1;
+  const nm = a => String(a.name || '');
   const by = {};
   (assets || []).forEach(a => {
     const c = a.cat || 'อื่นๆ';
@@ -1506,70 +1527,123 @@ function nwByCat(assets) {
   });
   return Object.keys(by).map(c => ({
     cat: c,
-    list: by[c].slice().sort((a, b) => assetValueTHB(b) - assetValueTHB(a)),
+    list: by[c].slice().sort((a, b) => {
+      if (key === 'name') return mul * nm(a).localeCompare(nm(b), 'th');
+      const d = assetValueTHB(a) - assetValueTHB(b);
+      return d ? mul * d : nm(a).localeCompare(nm(b), 'th');
+    }),
     sum: by[c].reduce((acc, a) => acc + assetValueTHB(a), 0)
-  })).sort((a, b) => b.sum - a.sum);
+  })).sort((a, b) => {
+    if (key === 'name') return mul * a.cat.localeCompare(b.cat, 'th');
+    const d = key === 'count' ? a.list.length - b.list.length : a.sum - b.sum;
+    return d ? mul * d : a.cat.localeCompare(b.cat, 'th');
+  });
 }
 
 function nwPct(v, base) { return base > 0 ? (v / base * 100) : 0; }
 
-function nwGroupHtml(g, base) {
-  const open = !!S.nwOpen[g.key];
+// ── Group engine, shared by the Net Worth list and the หุ้น list ─────────
+// Both are "one collapsible group per kind", so the header markup, the
+// ⊕/⊖ all-button and the open/closed memory live here once. They differ only
+// in their default: net-worth groups start collapsed (S.nwOpen names the ones
+// left open), stock groups start expanded (S.stClosed names the collapsed
+// ones) because a stock row carries much more than a line of text.
+const GRP_KINDS = {
+  nw: { btn: 'nwExpandBtn', isOpen: k => !!S.nwOpen[k], set: (k, o) => { if (o) S.nwOpen[k] = true; else delete S.nwOpen[k]; } },
+  st: { btn: 'stExpandBtn', isOpen: k => !S.stClosed[k], set: (k, o) => { if (o) delete S.stClosed[k]; else S.stClosed[k] = true; } }
+};
+
+function grpIsOpen(kind, key) { return GRP_KINDS[kind].isOpen(key); }
+function grpEls(kind) { return [...document.querySelectorAll('[data-groups="' + kind + '"] .nw-grp')]; }
+function grpKindOf(el) { const w = el.closest('[data-groups]'); return w && GRP_KINDS[w.dataset.groups] ? w.dataset.groups : 'nw'; }
+
+function grpSetOpen(kind, el, open) {
+  el.classList.toggle('open', open);
+  const h = el.querySelector('.nw-grp-h');
+  if (h) h.setAttribute('aria-expanded', String(open));
+  GRP_KINDS[kind].set(el.dataset.key, open);
+}
+
+function grpToggle(btn) {
+  const el = btn.closest('.nw-grp');
+  if (!el) return;
+  const kind = grpKindOf(el);
+  const open = !el.classList.contains('open');
+  grpSetOpen(kind, el, open);
+  if (kind === 'st' && open) stRenderSparklines(el);
+  grpSyncBtn(kind);
+  saveLS();
+}
+
+function grpToggleAll(kind) {
+  const els = grpEls(kind);
+  const openAll = els.some(el => !el.classList.contains('open'));
+  els.forEach(el => grpSetOpen(kind, el, openAll));
+  if (kind === 'st' && openAll) stRenderSparklines(null);
+  grpSyncBtn(kind);
+  saveLS();
+}
+
+function grpSyncBtn(kind) {
+  const b = document.getElementById(GRP_KINDS[kind].btn);
+  if (!b) return;
+  b.textContent = grpEls(kind).some(el => !el.classList.contains('open')) ? '⊕ ขยายทั้งหมด' : '⊖ ยุบทั้งหมด';
+}
+
+// Open one group and bring it into view (used by the donut legend).
+function grpOpenGroup(kind, key) {
+  const el = grpEls(kind).find(x => x.dataset.key === key);
+  if (!el) return;
+  if (!el.classList.contains('open')) {
+    grpSetOpen(kind, el, true);
+    if (kind === 'st') stRenderSparklines(el);
+    grpSyncBtn(kind);
+    saveLS();
+  }
+  if (el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function nwOpenGroup(key) { grpOpenGroup('nw', key); }
+
+function groupHtml(kind, g, base) {
+  const open = grpIsOpen(kind, g.key);
   const pct = nwPct(g.sum, base);
   const w = Math.max(1.5, Math.min(100, pct));
   return `<div class="nw-grp ${g.cls || ''}${open ? ' open' : ''}" data-key="${escHtml(g.key)}">
-    <button class="nw-grp-h" onclick="nwToggleGroup(this)" aria-expanded="${open}">
+    <button class="nw-grp-h" onclick="grpToggle(this)" aria-expanded="${open}">
       <span class="nw-caret">▶</span>
       <span class="nw-grp-ic">${g.icon}</span>
       <span class="nw-grp-nm">${escHtml(g.name)}</span>
       <span class="nw-grp-n">${g.n} รายการ</span>
       <span class="nw-grp-bar"><i style="width:${w.toFixed(1)}%"></i></span>
-      <span class="nw-grp-p" title="${g.neg ? 'เทียบทรัพย์สินรวม' : 'สัดส่วนของทรัพย์สินรวม'}">${pct.toFixed(0)}%</span>
+      <span class="nw-grp-p" title="${g.neg ? 'เทียบทรัพย์สินรวม' : 'สัดส่วนของทั้งหมด'}">${pct.toFixed(0)}%</span>
       <span class="nw-grp-v">${g.neg ? '−' : ''}${fmtBaht(g.sum)}</span>
     </button>
     <div class="nw-grp-b">${g.body}</div>
   </div>`;
 }
 
-function nwGroupEls() { return [...document.querySelectorAll('#nwLists .nw-grp')]; }
+// ── Net Worth sorting (mirrors the หุ้น list's sort chips) ───────────────
+const NW_SORTS = [
+  { key: 'value', label: 'มูลค่า'   },
+  { key: 'count', label: 'จำนวน'    },
+  { key: 'name',  label: 'ก-ฮ/A-Z' }
+];
 
-function nwSetOpen(el, open) {
-  el.classList.toggle('open', open);
-  const h = el.querySelector('.nw-grp-h');
-  if (h) h.setAttribute('aria-expanded', String(open));
-  if (open) S.nwOpen[el.dataset.key] = true;
-  else delete S.nwOpen[el.dataset.key];
-}
-
-function nwToggleGroup(btn) {
-  const el = btn.closest('.nw-grp');
-  if (!el) return;
-  nwSetOpen(el, !el.classList.contains('open'));
-  nwSyncExpandBtn();
+function setNwSort(key) {
+  if (S.nwSort.key === key) S.nwSort.dir = S.nwSort.dir === 'asc' ? 'desc' : 'asc';
+  else S.nwSort = { key, dir: key === 'name' ? 'asc' : 'desc' };
   saveLS();
+  renderNetWorth();
 }
 
-function nwToggleAll() {
-  const els = nwGroupEls();
-  const openAll = els.some(el => !el.classList.contains('open'));
-  els.forEach(el => nwSetOpen(el, openAll));
-  nwSyncExpandBtn();
-  saveLS();
-}
-
-function nwSyncExpandBtn() {
-  const b = document.getElementById('nwExpandBtn');
-  if (!b) return;
-  const els = nwGroupEls();
-  b.textContent = els.some(el => !el.classList.contains('open')) ? '⊕ ขยายทั้งหมด' : '⊖ ยุบทั้งหมด';
-}
-
-// Open one group and bring it into view (used by the donut legend).
-function nwOpenGroup(key) {
-  const el = nwGroupEls().find(x => x.dataset.key === key);
-  if (!el) return;
-  if (!el.classList.contains('open')) { nwSetOpen(el, true); nwSyncExpandBtn(); saveLS(); }
-  if (el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+function renderNwSortBar() {
+  const bar = document.getElementById('nwSortBar');
+  if (!bar) return;
+  bar.innerHTML = NW_SORTS.map(o => {
+    const on = S.nwSort.key === o.key;
+    const arrow = on ? (S.nwSort.dir === 'asc' ? ' ↑' : ' ↓') : '';
+    return `<button class="sort-chip${on ? ' on' : ''}" data-key="${o.key}" onclick="setNwSort(this.dataset.key)">${o.label}${arrow}</button>`;
+  }).join('');
 }
 
 // ── ทรัพย์สินอื่น / หนี้สิน breakdown (tap a hero chip) ──────────────────
@@ -1685,9 +1759,13 @@ function renderNetWorth() {
   if (groups.length) {
     html += `<div class="nw-tools">
       <div class="nw-tools-n">${groups.length} กลุ่ม · ${items.length + (t.stocksHeld ? 1 : 0)} รายการ</div>
-      <button class="btn btn-g btn-sm" id="nwExpandBtn" onclick="nwToggleAll()">⊕ ขยายทั้งหมด</button>
+      <div class="nw-tools-r">
+        <span class="grp-bar-lb">เรียง</span>
+        <div class="sort-bar" id="nwSortBar"></div>
+        <button class="btn btn-g btn-sm" id="nwExpandBtn" onclick="grpToggleAll('nw')">⊕ ขยายทั้งหมด</button>
+      </div>
     </div>`;
-    html += groups.map(g => nwGroupHtml(g, gross)).join('');
+    html += groups.map(g => groupHtml('nw', g, gross)).join('');
   }
 
   if (!items.length) {
@@ -1697,7 +1775,8 @@ function renderNetWorth() {
     </div>`;
   }
   lists.innerHTML = html;
-  nwSyncExpandBtn();
+  renderNwSortBar();
+  grpSyncBtn('nw');
 
   renderNwValueChart();
   renderNwAllocChart(t, assets);
@@ -2566,10 +2645,18 @@ function renderMoneyDashboard() {
       <div class="md-card-t">📊 หุ้นทั้งหมด (${stocks.length})</div>
       <div class="sort-bar" id="plSortBar"></div>
     </div>
-    <div class="md-rows" id="plRows"></div>
+    <div class="grp-bar">
+      <div class="grp-bar-l">
+        <span class="grp-bar-lb">จัดกลุ่ม</span>
+        <div class="sort-bar" id="stGroupBar"></div>
+      </div>
+      <button class="btn btn-g btn-sm" id="stExpandBtn" onclick="grpToggleAll('st')">⊖ ยุบทั้งหมด</button>
+    </div>
+    <div class="md-rows" id="plRows" data-groups="st"></div>
   </div>`;
 
   renderPlSortBar();
+  renderStGroupBar();
   renderStockRows();
   if (t.held.length) { renderValueChart(); renderAllocChart(t.held); }
 }
@@ -2625,61 +2712,175 @@ function renderPlSortBar() {
   }).join('');
 }
 
+// ── Grouping the stock list ──────────────────────────────────────────────
+// Same collapsible groups as the Net Worth list, but the "kind" is chosen by
+// the user: sector, thesis status, or held-vs-watch. Groups start EXPANDED so
+// the list looks like it always did until ⊖ ยุบทั้งหมด is pressed.
+const ST_GROUPS = [
+  { key: 'sector', label: '🏭 กลุ่มธุรกิจ' },
+  { key: 'status', label: '🚦 สถานะ'      },
+  { key: 'held',   label: '💼 ถือ/เฝ้าดู'  },
+  { key: 'none',   label: '☰ ไม่จัดกลุ่ม' }
+];
+
+const ST_SECTOR_ICONS = [
+  ['🏦', ['bank', 'ธนาคาร', 'finance', 'การเงิน', 'เงินทุน', 'securit', 'หลักทรัพย์']],
+  ['🏥', ['health', 'สุขภาพ', 'medical', 'โรงพยาบาล', 'pharma', 'ยา']],
+  ['💻', ['tech', 'เทคโน', 'electronic', 'อิเล็ก', 'software', 'ict', 'semiconductor', 'ชิ้นส่วน']],
+  ['⛽', ['petro', 'ปิโตร', 'oil', 'น้ำมัน', 'gas', 'ก๊าซ', 'chemical', 'เคมี']],
+  ['⚡', ['energy', 'พลังงาน', 'power', 'ไฟฟ้า', 'utilit', 'สาธารณูปโภค']],
+  ['🛒', ['retail', 'ค้าปลีก', 'commerce', 'พาณิชย์', 'ห้าง']],
+  ['🍽️', ['food', 'อาหาร', 'beverage', 'เครื่องดื่ม', 'agro', 'เกษตร']],
+  ['🏢', ['property', 'อสังหา', 'real estate', 'reit', 'นิคม']],
+  ['🏗️', ['construct', 'ก่อสร้าง', 'material', 'วัสดุ', 'ปูน', 'เหล็ก']],
+  ['📡', ['telecom', 'สื่อสาร', 'communication']],
+  ['📺', ['media', 'มีเดีย', 'บันเทิง', 'entertain']],
+  ['🚚', ['transport', 'ขนส่ง', 'logistic', 'โลจิสติกส์', 'shipping', 'airline', 'สายการบิน']],
+  ['🛡️', ['insurance', 'ประกัน']],
+  ['✈️', ['tourism', 'ท่องเที่ยว', 'hotel', 'โรงแรม', 'leisure']],
+  ['🚗', ['auto', 'ยานยนต์', 'รถ']],
+  ['🏭', ['industrial', 'อุตสาหกรรม', 'manufact', 'packaging', 'บรรจุภัณฑ์']]
+];
+
+function stSectorIcon(sec) {
+  const t = String(sec || '').toLowerCase();
+  for (const [icon, keys] of ST_SECTOR_ICONS) {
+    for (const k of keys) if (t.indexOf(k) !== -1) return icon;
+  }
+  return '🏭';
+}
+
+function stGroupOf(s) {
+  if (S.stGroup === 'status') {
+    const sc = s.thesis_score || 0;
+    const name = sc >= 75 ? 'แข็งแกร่ง / ดี (75+)' : sc >= 60 ? 'ติดตาม (60–74)' : sc >= 45 ? 'เฝ้าระวัง (45–59)' : 'พิจารณาขาย (ต่ำกว่า 45)';
+    return { key: 'sc:' + name, name, icon: scoreEmoji(sc) };
+  }
+  if (S.stGroup === 'held') {
+    return (s.avg_cost > 0 && s.shares > 0)
+      ? { key: 'hd:held', name: 'ถือครองอยู่', icon: '💼' }
+      : { key: 'hd:watch', name: 'เฝ้าดู (Watch only)', icon: '👀' };
+  }
+  const sec = (s.sector && s.sector !== '—') ? s.sector : 'ไม่ระบุกลุ่ม';
+  return { key: 'sec:' + sec, name: sec, icon: stSectorIcon(sec) };
+}
+
+// Rows arrive already in the user's sort order, so each group keeps it; the
+// groups themselves are ordered by the same key (summed, or averaged for
+// คะแนน, or by name for ก-ฮ/A-Z).
+function stockGroups() {
+  const map = new Map();
+  sortedStockRows().forEach(s => {
+    const g = stGroupOf(s);
+    if (!map.has(g.key)) map.set(g.key, { key: g.key, name: g.name, icon: g.icon, list: [], value: 0, pl: 0, cost: 0, scoreSum: 0 });
+    const e = map.get(g.key);
+    const st = plRowStats(s);
+    e.list.push(s);
+    e.value += st.value; e.pl += st.pl; e.cost += st.cost; e.scoreSum += st.score;
+  });
+  const groups = [...map.values()];
+  groups.forEach(g => { g.n = g.list.length; g.score = g.scoreSum / g.n; });
+  const { key, dir } = S.plSort;
+  const mul = dir === 'asc' ? 1 : -1;
+  return groups.sort((a, b) => {
+    if (key === 'ticker') return mul * a.name.localeCompare(b.name, 'th');
+    const d = a[key] - b[key];
+    return d ? mul * d : a.name.localeCompare(b.name, 'th');
+  });
+}
+
+function setStGroup(key) {
+  S.stGroup = key;
+  saveLS();
+  renderStGroupBar();
+  renderStockRows();
+}
+
+function renderStGroupBar() {
+  const bar = document.getElementById('stGroupBar');
+  if (!bar) return;
+  bar.innerHTML = ST_GROUPS.map(o =>
+    `<button class="sort-chip${S.stGroup === o.key ? ' on' : ''}" data-key="${o.key}" onclick="setStGroup(this.dataset.key)">${o.label}</button>`
+  ).join('');
+}
+
+// Sparklines are drawn with responsive:false, so a collapsed group is fine —
+// this just re-draws after an expand in case the canvas was replaced.
+function stRenderSparklines(root) {
+  (root || document).querySelectorAll('.st-row').forEach(r => {
+    if (r.dataset.ticker) renderSparkline(r.dataset.ticker, 'spark_' + r.dataset.ticker);
+  });
+}
+
 function renderStockRows() {
   const el = document.getElementById('plRows');
   if (!el) return;
   const rows = sortedStockRows();
-  el.innerHTML = rows.map(s => {
-    const tk = s.ticker;
-    const st = plRowStats(s);
-    const held = s.avg_cost > 0 && s.shares > 0;
-    const trend = getTrend(tk);
-    const delta = getLatestDelta(tk);
-    const deltaStr = delta > 0 ? `<span style="color:var(--green)">+${delta}</span>`
-                   : delta < 0 ? `<span style="color:var(--red)">${delta}</span>`
-                               : `<span style="color:var(--tx3)">±0</span>`;
-    const cred = getCredibility(tk);
-    const cats = (s.catalysts || []).filter(c => c.status !== 'cancelled');
-    const col = st.pl >= 0 ? 'var(--green)' : 'var(--red)';
-    const sg = st.pl >= 0 ? '+' : '−';
-    const sub = [s.company, s.sector && s.sector !== '—' ? s.sector : ''].filter(Boolean).join(' · ');
-
-    const money = held
-      ? `<div class="st-val">${fmtBaht(st.value)}</div>
-         <div class="st-pl" style="color:${col}">${sg}${fmtBaht(Math.abs(st.pl))} (${sg}${Math.abs(st.pct).toFixed(2)}%)</div>
-         <div class="st-qty">${s.shares.toLocaleString()} × ${st.hasP ? '฿' + s.current_price : 'ยังไม่มีราคา'} · ทุน ${fmtBaht(st.cost)}</div>`
-      : `<div class="st-watch">Watch only</div>`;
-
-    return `<div class="st-row" data-ticker="${escHtml(tk)}" onclick="openDetail(this.dataset.ticker)">
-      <div class="st-id">
-        <div class="st-head">
-          <span class="st-emoji">${scoreEmoji(s.thesis_score)}</span>
-          <span class="st-ticker">${escHtml(tk)}</span>
-          <span class="st-score ${scoreColor(s.thesis_score)}">${s.thesis_score}</span>
-        </div>
-        ${sub ? `<div class="st-sub">${escHtml(sub)}</div>` : ''}
-      </div>
-      <div class="st-spark"><canvas id="spark_${escHtml(tk)}" width="110" height="32"></canvas></div>
-      <div class="st-money">${money}</div>
-      <div class="st-acts">
-        <button class="st-act score" data-ticker="${escHtml(tk)}" onclick="event.stopPropagation();openEdit(this.dataset.ticker)" title="แก้คะแนน">★</button>
-        <button class="st-act edit" data-ticker="${escHtml(tk)}" onclick="event.stopPropagation();openEditDetails(this.dataset.ticker)" title="แก้ชื่อ/จำนวน/ต้นทุน">✏️</button>
-        <button class="st-act del" data-ticker="${escHtml(tk)}" onclick="event.stopPropagation();confirmDeleteStock(this.dataset.ticker)" title="ลบ">✕</button>
-      </div>
-      <div class="st-meta">
-        <div class="chips">
-          <span class="chip ${trend.cls}">${trend.arrow} ${trend.cls === 'flat' ? 'Stable' : trend.cls === 'up' ? `Up ${trend.weeks}w` : `Down ${trend.weeks}w`}</span>
-          <span class="chip">Δ ${deltaStr}</span>
-          ${cred ? `<span class="chip ${cred.pct >= 70 ? 'green' : cred.pct >= 50 ? 'yellow' : 'down'}">Trust ${cred.pct}%</span>` : ''}
-        </div>
-        ${s.notes ? `<div class="c-notes">${escHtml(s.notes)}</div>` : ''}
-        ${cats.length ? `<div class="cat-strip">${cats.map(c => `<span class="ct ${c.status === 'in_progress' ? 'ip' : c.status === 'completed' ? 'done' : ''}">${c.status === 'in_progress' ? '⚡' : ''}${escHtml(c.event.length > 20 ? c.event.slice(0, 18) + '…' : c.event)}</span>`).join('')}</div>` : ''}
-      </div>
-    </div>`;
-  }).join('');
+  if (S.stGroup === 'none') {
+    el.innerHTML = rows.map(s => stockRowHtml(s)).join('');
+  } else {
+    const groups = stockGroups();
+    const base = groups.reduce((acc, g) => acc + g.value, 0);
+    el.innerHTML = groups.map(g => groupHtml('st', {
+      key: g.key, icon: g.icon, name: g.name, n: g.n, sum: g.value,
+      body: g.list.map(s => stockRowHtml(s)).join('')
+    }, base)).join('');
+  }
+  const btn = document.getElementById('stExpandBtn');
+  if (btn) btn.classList.toggle('hidden', S.stGroup === 'none');
+  grpSyncBtn('st');
 
   // Sparklines need the canvases in the DOM first.
   setTimeout(() => rows.forEach(s => renderSparkline(s.ticker, 'spark_' + s.ticker)), 30);
+}
+
+function stockRowHtml(s) {
+  const tk = s.ticker;
+  const st = plRowStats(s);
+  const held = s.avg_cost > 0 && s.shares > 0;
+  const trend = getTrend(tk);
+  const delta = getLatestDelta(tk);
+  const deltaStr = delta > 0 ? `<span style="color:var(--green)">+${delta}</span>`
+                 : delta < 0 ? `<span style="color:var(--red)">${delta}</span>`
+                             : `<span style="color:var(--tx3)">±0</span>`;
+  const cred = getCredibility(tk);
+  const cats = (s.catalysts || []).filter(c => c.status !== 'cancelled');
+  const col = st.pl >= 0 ? 'var(--green)' : 'var(--red)';
+  const sg = st.pl >= 0 ? '+' : '−';
+  const sub = [s.company, s.sector && s.sector !== '—' ? s.sector : ''].filter(Boolean).join(' · ');
+
+  const money = held
+    ? `<div class="st-val">${fmtBaht(st.value)}</div>
+       <div class="st-pl" style="color:${col}">${sg}${fmtBaht(Math.abs(st.pl))} (${sg}${Math.abs(st.pct).toFixed(2)}%)</div>
+       <div class="st-qty">${s.shares.toLocaleString()} × ${st.hasP ? '฿' + s.current_price : 'ยังไม่มีราคา'} · ทุน ${fmtBaht(st.cost)}</div>`
+    : `<div class="st-watch">Watch only</div>`;
+
+  return `<div class="st-row" data-ticker="${escHtml(tk)}" onclick="openDetail(this.dataset.ticker)">
+    <div class="st-id">
+      <div class="st-head">
+        <span class="st-emoji">${scoreEmoji(s.thesis_score)}</span>
+        <span class="st-ticker">${escHtml(tk)}</span>
+        <span class="st-score ${scoreColor(s.thesis_score)}">${s.thesis_score}</span>
+      </div>
+      ${sub ? `<div class="st-sub">${escHtml(sub)}</div>` : ''}
+    </div>
+    <div class="st-spark"><canvas id="spark_${escHtml(tk)}" width="110" height="32"></canvas></div>
+    <div class="st-money">${money}</div>
+    <div class="st-acts">
+      <button class="st-act score" data-ticker="${escHtml(tk)}" onclick="event.stopPropagation();openEdit(this.dataset.ticker)" title="แก้คะแนน">★</button>
+      <button class="st-act edit" data-ticker="${escHtml(tk)}" onclick="event.stopPropagation();openEditDetails(this.dataset.ticker)" title="แก้ชื่อ/จำนวน/ต้นทุน">✏️</button>
+      <button class="st-act del" data-ticker="${escHtml(tk)}" onclick="event.stopPropagation();confirmDeleteStock(this.dataset.ticker)" title="ลบ">✕</button>
+    </div>
+    <div class="st-meta">
+      <div class="chips">
+        <span class="chip ${trend.cls}">${trend.arrow} ${trend.cls === 'flat' ? 'Stable' : trend.cls === 'up' ? `Up ${trend.weeks}w` : `Down ${trend.weeks}w`}</span>
+        <span class="chip">Δ ${deltaStr}</span>
+        ${cred ? `<span class="chip ${cred.pct >= 70 ? 'green' : cred.pct >= 50 ? 'yellow' : 'down'}">Trust ${cred.pct}%</span>` : ''}
+      </div>
+      ${s.notes ? `<div class="c-notes">${escHtml(s.notes)}</div>` : ''}
+      ${cats.length ? `<div class="cat-strip">${cats.map(c => `<span class="ct ${c.status === 'in_progress' ? 'ip' : c.status === 'completed' ? 'done' : ''}">${c.status === 'in_progress' ? '⚡' : ''}${escHtml(c.event.length > 20 ? c.event.slice(0, 18) + '…' : c.event)}</span>`).join('')}</div>` : ''}
+    </div>
+  </div>`;
 }
 
 function renderValueChart() {

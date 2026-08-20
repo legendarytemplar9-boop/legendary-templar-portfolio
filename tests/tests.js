@@ -303,6 +303,7 @@
     catalyst_log: {}, guidance_tracker: {}, evidence_clips: [], value_history: []
   };
   S.plSort = { key: 'ticker', dir: 'asc' };
+  S.stGroup = 'none';   // this section is about the row itself; grouping has its own
   try {
     renderMoneyDashboard();
     const rowsEl = document.getElementById('plRows');
@@ -655,6 +656,184 @@
     ok('empty state', document.getElementById('nwBreakBody').innerHTML.indexOf('ยังไม่มี') !== -1);
 
     S.registry = prevReg; S.assetReg = prevAsset; S.nwOpen = prevOpen; S.view = prevView;
+    document.getElementById('nwLists').innerHTML = '';
+    document.getElementById('nwDash').innerHTML = '';
+  }
+
+  // ══════════════════ stock list: grouping / expand / collapse ══════════════════
+  sec('stSectorIcon');
+  eq('bank', stSectorIcon('Banking'), '🏦');
+  eq('thai bank', stSectorIcon('ธนาคาร'), '🏦');
+  eq('healthcare', stSectorIcon('Healthcare'), '🏥');
+  eq('technology', stSectorIcon('Technology'), '💻');
+  eq('energy', stSectorIcon('Energy & Utilities'), '⚡');
+  eq('petro before energy keywords', stSectorIcon('Petrochemicals'), '⛽');
+  eq('food', stSectorIcon('Food & Beverage'), '🍽️');
+  eq('property', stSectorIcon('Property Development'), '🏢');
+  eq('unknown sector', stSectorIcon('Zzz'), '🏭');
+  eq('blank sector', stSectorIcon(''), '🏭');
+
+  sec('stGroupOf');
+  {
+    const prev = S.stGroup;
+    const held = { ticker: 'AAA', sector: 'Banking', thesis_score: 80, shares: 10, avg_cost: 5 };
+    const watch = { ticker: 'WWW', sector: '—', thesis_score: 50, shares: 0, avg_cost: 0 };
+    S.stGroup = 'sector';
+    eq('by sector', [stGroupOf(held).key, stGroupOf(held).name], ['sec:Banking', 'Banking']);
+    eq('sector placeholder — becomes its own group', stGroupOf(watch).name, 'ไม่ระบุกลุ่ม');
+    S.stGroup = 'status';
+    eq('by status — strong', stGroupOf(held).key, 'sc:แข็งแกร่ง / ดี (75+)');
+    eq('by status — watchlist band', stGroupOf(watch).key, 'sc:เฝ้าระวัง (45–59)');
+    eq('status icon follows the score', stGroupOf(watch).icon, '🟠');
+    S.stGroup = 'held';
+    eq('by holding — held', stGroupOf(held).key, 'hd:held');
+    eq('by holding — watch only', stGroupOf(watch).key, 'hd:watch');
+    S.stGroup = prev;
+  }
+
+  sec('stockGroups + renderStockRows');
+  {
+    const prevReg = S.registry, prevKb = S.kb, prevSort = S.plSort, prevMode = S.stGroup, prevClosed = S.stClosed;
+    S.registry = { portfolio_name: 'T', last_updated: TODAY, stocks: [
+      { ticker: 'AAA', company: 'Alpha', sector: 'Technology', shares: 100, avg_cost: 10, current_price: 12, thesis_score: 78, catalysts: [], thesis_breakers: [] },
+      { ticker: 'CCC', company: 'Gamma', sector: 'Technology', shares: 10, avg_cost: 10, current_price: 12, thesis_score: 50, catalysts: [], thesis_breakers: [] },
+      { ticker: 'BBB', company: 'Beta', sector: 'Banking', shares: 50, avg_cost: 20, current_price: 18, thesis_score: 64, catalysts: [], thesis_breakers: [] },
+      { ticker: 'WWW', company: 'Watch', sector: 'Food', shares: 0, avg_cost: 0, thesis_score: 70, catalysts: [], thesis_breakers: [] }
+    ] };
+    S.kb = { score_history: {}, catalyst_log: {}, guidance_tracker: {}, evidence_clips: [], value_history: [] };
+    S.stClosed = {};
+
+    S.stGroup = 'sector';
+    S.plSort = { key: 'value', dir: 'desc' };
+    let g = stockGroups();
+    eq('sector groups, biggest value first', g.map(x => x.name), ['Technology', 'Banking', 'Food']);
+    eq('group totals', g.map(x => x.value), [1320, 900, 0]);
+    eq('group counts', g.map(x => x.n), [2, 1, 1]);
+    eq('rows inside keep the sort', g[0].list.map(x => x.ticker), ['AAA', 'CCC']);
+    eq('group icons', g.map(x => x.icon), ['💻', '🏦', '🍽️']);
+
+    S.plSort = { key: 'ticker', dir: 'asc' };
+    eq('name sort orders groups alphabetically', stockGroups().map(x => x.name), ['Banking', 'Food', 'Technology']);
+    S.plSort = { key: 'score', dir: 'desc' };
+    // Technology averages (78+50)/2 = 64 — level with Banking's 64, so the tie
+    // breaks on the group name; Food (70) leads.
+    eq('score sort orders groups by average score', stockGroups().map(x => x.name), ['Food', 'Banking', 'Technology']);
+
+    S.stGroup = 'status';
+    S.plSort = { key: 'value', dir: 'desc' };
+    eq('status groups', stockGroups().map(x => x.name), ['แข็งแกร่ง / ดี (75+)', 'ติดตาม (60–74)', 'เฝ้าระวัง (45–59)']);
+    S.stGroup = 'held';
+    eq('held groups', stockGroups().map(x => x.name), ['ถือครองอยู่', 'เฝ้าดู (Watch only)']);
+    eq('held group counts', stockGroups().map(x => x.n), [3, 1]);
+
+    // ── rendered list ──
+    S.stGroup = 'sector';
+    renderMoneyDashboard();
+    // #plRows is replaced on every renderMoneyDashboard, so never hold the node
+    const rowsEl = () => document.getElementById('plRows');
+    const grps = () => [...rowsEl().querySelectorAll('.nw-grp')];
+    const btn = () => document.getElementById('stExpandBtn');
+    eq('one group per sector', grps().length, 3);
+    eq('groups carry their key', grps().map(x => x.dataset.key), ['sec:Technology', 'sec:Banking', 'sec:Food']);
+    // Unlike the net-worth list, stock groups start EXPANDED — nothing the user
+    // could see before this feature is hidden by it.
+    eq('everything starts expanded', grps().filter(x => !x.classList.contains('open')).length, 0);
+    eq('every stock still has a row', rowsEl().querySelectorAll('.st-row').length, 4);
+    eq('button offers collapse-all', btn().textContent, '⊖ ยุบทั้งหมด');
+    ok('header shows count and value', grps()[0].innerHTML.indexOf('2 รายการ') !== -1 && grps()[0].innerHTML.indexOf('฿1,320') !== -1);
+
+    grps()[0].querySelector('.nw-grp-h').click();
+    eq('tap collapses just that group', grps().filter(x => !x.classList.contains('open')).map(x => x.dataset.key), ['sec:Technology']);
+    eq('collapsed groups are remembered', Object.keys(S.stClosed), ['sec:Technology']);
+    eq('button now offers expand-all', btn().textContent, '⊕ ขยายทั้งหมด');
+    btn().click();
+    eq('expand all reopens everything', grps().filter(x => !x.classList.contains('open')).length, 0);
+    eq('nothing left collapsed', S.stClosed, {});
+    btn().click();
+    eq('collapse all closes everything', grps().filter(x => x.classList.contains('open')).length, 0);
+    eq('all three are remembered as collapsed', Object.keys(S.stClosed).length, 3);
+    renderMoneyDashboard();
+    eq('re-render keeps them collapsed', grps().filter(x => x.classList.contains('open')).length, 0);
+    ok('collapsed rows are still in the DOM', rowsEl().querySelectorAll('.st-row').length === 4);
+
+    setStGroup('none');
+    eq('ungrouped renders a flat list', grps().length, 0);
+    eq('flat list still has every row', rowsEl().querySelectorAll('.st-row').length, 4);
+    ok('no expand button when ungrouped', btn().classList.contains('hidden'));
+    ok('grouping choice is a chip', document.getElementById('stGroupBar').querySelectorAll('.sort-chip').length === 4);
+    ok('active grouping chip is marked', document.getElementById('stGroupBar').querySelector('.sort-chip.on').dataset.key === 'none');
+    setStGroup('sector');
+    ok('switching back regroups', grps().length === 3 && !btn().classList.contains('hidden'));
+    // the two lists keep separate memories
+    ok('stock groups and net-worth groups do not share state', grpEls('st').length === 3 && grpEls('nw').length === 0);
+
+    S.registry = prevReg; S.kb = prevKb; S.plSort = prevSort; S.stGroup = prevMode; S.stClosed = prevClosed;
+  }
+
+  // ══════════════════ net worth: sorting ══════════════════
+  sec('nwByCat sorting');
+  {
+    const A = [
+      { id: 'x1', cat: 'Crypto', name: 'Bitcoin', qty: 2, manual_price: 100, price_mode: 'manual' },
+      { id: 'x2', cat: 'Cash',   name: 'ออมทรัพย์', qty: 1, manual_price: 900, price_mode: 'manual' },
+      { id: 'x3', cat: 'Crypto', name: 'Ethereum', qty: 1, manual_price: 500, price_mode: 'manual' },
+      { id: 'x4', cat: 'Gold',   name: 'ทองแท่ง', qty: 1, manual_price: 50, price_mode: 'manual' }
+    ];
+    eq('value desc (default)', nwByCat(A, { key: 'value', dir: 'desc' }).map(c => c.cat), ['Cash', 'Crypto', 'Gold']);
+    eq('value asc', nwByCat(A, { key: 'value', dir: 'asc' }).map(c => c.cat), ['Gold', 'Crypto', 'Cash']);
+    eq('by count desc', nwByCat(A, { key: 'count', dir: 'desc' }).map(c => c.cat), ['Crypto', 'Cash', 'Gold']);
+    eq('by name asc', nwByCat(A, { key: 'name', dir: 'asc' }).map(c => c.cat), ['Cash', 'Crypto', 'Gold']);
+    eq('by name desc', nwByCat(A, { key: 'name', dir: 'desc' }).map(c => c.cat), ['Gold', 'Crypto', 'Cash']);
+    // the same key orders the items inside a category
+    eq('items follow value desc', nwByCat(A, { key: 'value', dir: 'desc' })[1].list.map(a => a.id), ['x3', 'x1']);
+    eq('items follow value asc', nwByCat(A, { key: 'value', dir: 'asc' })[1].list.map(a => a.id), ['x1', 'x3']);
+    eq('items follow name asc', nwByCat(A, { key: 'name', dir: 'asc' })[1].list.map(a => a.id), ['x1', 'x3']);
+    eq('count sort falls back to value inside', nwByCat(A, { key: 'count', dir: 'desc' })[0].list.map(a => a.id), ['x3', 'x1']);
+    eq('no sort given behaves as value desc', nwByCat(A).map(c => c.cat), ['Cash', 'Crypto', 'Gold']);
+  }
+
+  sec('Net Worth sort chips');
+  {
+    const prevReg = S.registry, prevAsset = S.assetReg, prevOpen = S.nwOpen, prevSort = S.nwSort;
+    S.registry = { stocks: [] };
+    S.assetReg = { version: 1, snapshots: [], settings: { usdthb_override: 35 }, assets: [
+      { id: 'a1', kind: 'asset', cat: 'Crypto', name: 'Bitcoin', price_mode: 'manual', manual_price: 100, qty: 1, price_cur: 'THB' },
+      { id: 'a2', kind: 'asset', cat: 'Crypto', name: 'Ethereum', price_mode: 'manual', manual_price: 50, qty: 1, price_cur: 'THB' },
+      { id: 'a3', kind: 'asset', cat: 'Cash', name: 'ออมทรัพย์', price_mode: 'manual', manual_price: 900, qty: 1, price_cur: 'THB' },
+      { id: 'a4', kind: 'liability', cat: 'Loan', name: 'สินเชื่อบ้าน', price_mode: 'manual', manual_price: 400, qty: 1, price_cur: 'THB' }
+    ] };
+    S.nwOpen = {}; S.nwSort = { key: 'value', dir: 'desc' };
+    renderNetWorth();
+    const keys = () => [...document.querySelectorAll('#nwLists .nw-grp')].map(g => g.dataset.key);
+    eq('value desc by default', keys(), ['cat:Cash', 'cat:Crypto', 'liab']);
+    eq('sort chips render', document.getElementById('nwSortBar').querySelectorAll('.sort-chip').length, 3);
+    ok('active chip shows a direction arrow', /มูลค่า ↓/.test(document.getElementById('nwSortBar').textContent));
+
+    setNwSort('value');
+    eq('tapping the active chip flips direction', S.nwSort.dir, 'asc');
+    eq('flipped order', keys(), ['cat:Crypto', 'cat:Cash', 'liab']);
+    setNwSort('count');
+    eq('count sort defaults to biggest first', S.nwSort, { key: 'count', dir: 'desc' });
+    eq('most items first', keys(), ['cat:Crypto', 'cat:Cash', 'liab']);
+    setNwSort('name');
+    eq('name sort defaults A→Z', S.nwSort, { key: 'name', dir: 'asc' });
+    eq('alphabetical', keys(), ['cat:Cash', 'cat:Crypto', 'liab']);
+    // debts always sit at the bottom — they are not one of the categories
+    ok('หนี้สิน stays last whatever the sort', keys()[keys().length - 1] === 'liab');
+    setNwSort('name');
+    eq('name flips to Z→A', keys(), ['cat:Crypto', 'cat:Cash', 'liab']);
+
+    S.nwSort = { key: 'value', dir: 'desc' };
+    renderNetWorth();
+    S.nwOpen = { 'cat:Crypto': true };
+    renderNetWorth();
+    const crypto = [...document.querySelectorAll('#nwLists .nw-grp')].find(g => g.dataset.key === 'cat:Crypto');
+    eq('items inside follow the same sort', [...crypto.querySelectorAll('.nw-row-nm')].map(e => e.textContent), ['Bitcoin', 'Ethereum']);
+    setNwSort('value');
+    const crypto2 = [...document.querySelectorAll('#nwLists .nw-grp')].find(g => g.dataset.key === 'cat:Crypto');
+    eq('flipping the sort flips the items too', [...crypto2.querySelectorAll('.nw-row-nm')].map(e => e.textContent), ['Ethereum', 'Bitcoin']);
+
+    S.registry = prevReg; S.assetReg = prevAsset; S.nwOpen = prevOpen; S.nwSort = prevSort;
     document.getElementById('nwLists').innerHTML = '';
     document.getElementById('nwDash').innerHTML = '';
   }
