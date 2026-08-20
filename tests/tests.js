@@ -1323,6 +1323,154 @@
     S.tradeLog = prevLog; S.registry = prevReg; S.kb = prevKb; S.offline = prevOff;
   }
 
+  // ══════════════════ benchmark vs the index ══════════════════
+  sec('benchParseChart');
+  {
+    const payload = { chart: { result: [{
+      timestamp: [1754006400, 1754092800, 1754179200],
+      indicators: { quote: [{ close: [1200, null, 1230] }] }
+    }] } };
+    const pts = benchParseChart(payload);
+    eq('drops days with no close', pts.length, 2);
+    eq('closes come through', pts.map(p => p.close), [1200, 1230]);
+    ok('dates look like dates', /^\d{4}-\d{2}-\d{2}$/.test(pts[0].date), pts[0].date);
+    eq('an error payload is empty, not a crash', benchParseChart({ chart: { error: 'x' } }), []);
+    eq('null payload is empty', benchParseChart(null), []);
+    eq('missing quotes is empty', benchParseChart({ chart: { result: [{ timestamp: [1] }] } }), []);
+  }
+
+  sec('benchOverlay / benchVerdict');
+  {
+    const prevBench = S.bench, prevRange = S.plRange;
+    S.plRange = 'all';
+    S.bench = { symbol: '^SET.BK', points: [
+      { date: '2026-01-01', close: 1000 },
+      { date: '2026-02-01', close: 1100 },
+      { date: '2026-03-01', close: 1050 }
+    ] };
+    eq('close on an exact date', benchCloseOn('2026-02-01'), 1100);
+    eq('close falls back to the last trading day before', benchCloseOn('2026-02-15'), 1100);
+    eq('before the series starts there is nothing', benchCloseOn('2025-12-31'), null);
+
+    const hist = [
+      { date: '2026-01-01', value: 100000, cost: 90000 },
+      { date: '2026-02-01', value: 120000, cost: 90000 },
+      { date: '2026-03-01', value: 130000, cost: 90000 }
+    ];
+    const ov = benchOverlay(hist);
+    // the same money put into the index on day one
+    eq('overlay starts at the portfolio value', ov[0], 100000);
+    near('overlay follows the index', ov[1], 110000);
+    near('…and back down with it', ov[2], 105000);
+
+    const v = benchVerdict(hist);
+    near('portfolio return', v.port, 30);
+    near('index return', v.bench, 5);
+    near('difference is the alpha', v.diff, 25);
+    ok('note says it beat the index', /ชนะดัชนี/.test(benchNoteHtml(hist)), benchNoteHtml(hist));
+
+    // a portfolio that lags
+    const lag = [{ date: '2026-01-01', value: 100000, cost: 90000 }, { date: '2026-02-01', value: 101000, cost: 90000 }];
+    ok('note says it lagged', /แพ้ดัชนี/.test(benchNoteHtml(lag)));
+
+    S.bench = null;
+    eq('no index data → no overlay', benchOverlay(hist), null);
+    eq('…and no verdict', benchVerdict(hist), null);
+    ok('…so the note offers to fetch it', /ดึงดัชนี SET/.test(benchNoteHtml(hist)));
+    S.bench = { symbol: 'x', points: [{ date: '2027-01-01', close: 1000 }] };
+    eq('index history that starts after the range is unusable', benchOverlay(hist), null);
+    S.bench = prevBench; S.plRange = prevRange;
+  }
+
+  // ══════════════════ dividends ══════════════════
+  sec('last12Months');
+  eq('twelve months ending this one', last12Months('2026-08-20').length, 12);
+  eq('oldest is eleven months back', last12Months('2026-08-20')[0], '2025-09');
+  eq('newest is this month', last12Months('2026-08-20')[11], '2026-08');
+  eq('crossing the new year', last12Months('2026-01-15')[0], '2025-02');
+
+  sec('divByMonth / divByTicker12m / forecast');
+  {
+    const prevLog = S.tradeLog, prevReg = S.registry, prevXd = S.xd;
+    S.tradeLog = { version: 1, trades: [
+      { id: 'd1', date: '2026-04-22', ticker: 'SCB',  type: 'div', qty: 500,  price: 5.5,  tax: 275 },
+      { id: 'd2', date: '2026-08-06', ticker: 'BDMS', type: 'div', qty: 1000, price: 0.75, tax: 75 },
+      { id: 'd3', date: '2024-05-05', ticker: 'SCB',  type: 'div', qty: 500,  price: 4,    tax: 200 },
+      { id: 'b1', date: '2026-01-05', ticker: 'SCB',  type: 'buy', qty: 500,  price: 105,  fee: 0 }
+    ] };
+    const months = divByMonth('2026-08-20');
+    eq('twelve buckets', months.length, 12);
+    near('april dividend lands in april', months.find(m => m.month === '2026-04').amount, 2475);
+    near('august dividend lands in august', months.find(m => m.month === '2026-08').amount, 675);
+    eq('a month with nothing is zero, not missing', months.find(m => m.month === '2026-06').amount, 0);
+    near('twelve-month total', divTotal12m('2026-08-20'), 3150);
+    ok('an old dividend is outside the window', divTotal12m('2026-08-20') < 3150 + 1600);
+    ok('buys are not dividends', divTrades().length === 3);
+
+    const byTk = divByTicker12m('2026-08-20');
+    near('per-stock received', byTk.SCB.received, 2475);
+    near('per-share for the year', byTk.SCB.dps, 5.5);
+    ok('the old year is excluded from per-stock too', Math.abs(byTk.SCB.dps - 5.5) < 1e-9);
+
+    S.registry = { stocks: [
+      { ticker: 'SCB',  shares: 500,  avg_cost: 105 },
+      { ticker: 'BDMS', shares: 1000, avg_cost: 22.5 },
+      { ticker: 'NEW',  shares: 200,  avg_cost: 10 },
+      { ticker: 'DRX',  shares: 100,  avg_cost: 50 },
+      { ticker: 'GONE', shares: 0,    avg_cost: 0 }
+    ] };
+    S.xd = { fetched_at: 'x', items: { NEW: { dps: 1.25, conf: 'confirmed' }, DRX: { dps: 3, isDR: true } } };
+    const fc = divForecast12m('2026-08-20');
+    eq('biggest expected first', fc.map(r => r.ticker), ['SCB', 'BDMS', 'NEW']);
+    near('forecast repeats what it paid per share', fc[0].cash, 2750);
+    eq('…from the book when there is history', fc[0].source, 'book');
+    eq('a stock with no history falls back to XD', fc[2].source, 'xd');
+    near('…on the shares held now', fc[2].cash, 250);
+    ok('DRs are left out (issuer sets its own amount)', !fc.find(r => r.ticker === 'DRX'));
+    ok('stocks no longer held are left out', !fc.find(r => r.ticker === 'GONE'));
+
+    near('yield on cost', yieldOnCost({ ticker: 'SCB', shares: 500, avg_cost: 105 }, '2026-08-20'), 2475 / 52500 * 100);
+    eq('no dividends → no yield on cost', yieldOnCost({ ticker: 'NEW', shares: 200, avg_cost: 10 }, '2026-08-20'), null);
+    eq('no cost → no yield on cost', yieldOnCost({ ticker: 'SCB', shares: 0, avg_cost: 0 }, '2026-08-20'), null);
+
+    // the screen
+    renderDivBook();
+    const h = document.getElementById('divBook').innerHTML;
+    ok('shows the twelve-month total', h.indexOf('฿3,150') !== -1);
+    ok('shows a bar per month', document.querySelectorAll('#divBook .dv-bar').length === 12);
+    ok('lists the forecast', h.indexOf('SCB') !== -1 && h.indexOf('฿2,750') !== -1);
+    ok('marks rows that came from XD instead of the book', h.indexOf('จาก XD') !== -1);
+    ok('shows yield on cost', h.indexOf('4.71%') !== -1, 'yield row missing');
+
+    S.tradeLog = { version: 1, trades: [] };
+    renderDivBook();
+    ok('with no dividends yet it says how to start',
+       /ยังไม่มีปันผลในสมุด/.test(document.getElementById('divBook').textContent));
+
+    S.tradeLog = prevLog; S.registry = prevReg; S.xd = prevXd;
+  }
+
+  sec('logging a dividend from the XD table');
+  {
+    const prevLog = S.tradeLog, prevReg = S.registry, prevOff = S.offline;
+    S.offline = true;
+    S.registry = { stocks: [{ ticker: 'CPF', company: 'C', sector: '—', shares: 6500, avg_cost: 20, thesis_score: 70, catalysts: [], thesis_breakers: [] }] };
+    S.tradeLog = { version: 1, trades: [] };
+    const btn = document.createElement('button');
+    btn.dataset.tk = 'CPF'; btn.dataset.dps = '0.45'; btn.dataset.shares = '6500'; btn.dataset.date = '2026-08-31';
+    logDividendFor(btn);
+    eq('form opens as a dividend', document.getElementById('tfType').value, 'div');
+    eq('ticker prefilled', document.getElementById('tfTicker').value, 'CPF');
+    eq('shares prefilled', +document.getElementById('tfQty').value, 6500);
+    eq('amount per share prefilled', +document.getElementById('tfPrice').value, 0.45);
+    eq('XD date prefilled', document.getElementById('tfDate').value, '2026-08-31');
+    near('10% withholding prefilled', +document.getElementById('tfTax').value, 292.5);
+    saveTradeForm();
+    near('saving it books the net amount', positionFromTrades('CPF').dividends, 6500 * 0.45 - 292.5);
+    closeM('tradeModal');
+    S.tradeLog = prevLog; S.registry = prevReg; S.offline = prevOff;
+  }
+
   L.push('');
   L.push('PASS ' + pass + '   FAIL ' + fail);
   const pre = document.createElement('pre');

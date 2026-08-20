@@ -268,6 +268,13 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 .tl-form{background:var(--bg3);border:1px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px}
 .tl-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(max-width:520px){.tl-grid{grid-template-columns:1fr}}
+.dv-bars{display:flex;align-items:flex-end;gap:4px;margin:14px 0 4px}
+.dv-bar{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0}
+/* percentage heights need a definite parent height, so the track is fixed */
+.dv-bar-t{height:76px;width:100%;display:flex;align-items:flex-end;background:var(--bg);border-radius:3px}
+.dv-bar-t i{display:block;width:100%;background:linear-gradient(180deg,var(--c1),rgba(0,229,204,.35));border-radius:3px 3px 0 0}
+.dv-bar-l{font-size:9.5px;color:var(--tx3);font-variant-numeric:tabular-nums}
+.dv-src{font-size:9.5px;color:var(--yellow);border:1px solid rgba(255,184,0,.4);border-radius:4px;padding:0 4px}
 .tl-note{font-size:11.5px;color:var(--tx3);line-height:1.55;margin-top:10px}
 .tl-empty{text-align:center;color:var(--tx3);font-size:13px;padding:22px 10px;line-height:1.7}
 .tl-mig{background:var(--yellowd);border:1px solid rgba(255,184,0,.35);border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--tx2);line-height:1.6;margin-bottom:12px}
@@ -864,6 +871,7 @@ HANA   | 2000 | 38 | 35.75"></textarea>
         <span class="rpt-meta" id="xdMeta" style="margin:0"></span>
       </div>
       <div id="xdContent"><div class="rpt-empty">Loading…</div></div>
+      <div id="divBook"></div>
     </div>
   </div>
 </div>
@@ -917,6 +925,7 @@ let S = {
   kbFileId: null,
   assetFileId: null,
   tradeLog: null,
+  bench: null,        // cached index series (localStorage only)
   tradeFileId: null,
   lastSync: null,
   offline: false,
@@ -2261,9 +2270,9 @@ function renderTradeList() {
   }).join('');
 }
 
-function openTradeForm(id) {
+function openTradeForm(id, prefill) {
   editTradeId = id || null;
-  const t = id ? (S.tradeLog?.trades || []).find(x => x.id === id) : null;
+  const t = id ? (S.tradeLog?.trades || []).find(x => x.id === id) : (prefill || null);
   const today = new Date().toISOString().split('T')[0];
   const tickers = [...new Set((S.registry?.stocks || []).map(s => s.ticker))].sort();
   const wrap = document.getElementById('tradeFormWrap');
@@ -2685,6 +2694,263 @@ function getAlerts() {
   return alerts;
 }
 
+// ── ปันผล: รับแล้ว 12 เดือน + คาดการณ์ 12 เดือนข้างหน้า ─────────────────
+// Received comes from the book (facts). The forecast repeats what each stock
+// paid per share over the last 12 months on the shares held now, and falls back
+// to the announced XD amount for a stock with no history yet — labelled as an
+// estimate either way.
+function fmtPct(v) { return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2) + '%'; }
+
+function divTrades() { return ((S.tradeLog && S.tradeLog.trades) || []).filter(t => t.type === 'div'); }
+function divAmount(t) { return Math.abs(+t.qty || 0) * (+t.price || 0) - (+t.tax || 0); }
+
+function monthKey(d) { return String(d || '').slice(0, 7); }
+
+// The 12 month keys ending with the month of `today`, oldest first.
+function last12Months(today) {
+  const base = new Date((today || new Date().toISOString().split('T')[0]) + 'T00:00:00Z');
+  const out = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() - i, 1));
+    out.push(d.toISOString().slice(0, 7));
+  }
+  return out;
+}
+
+function divByMonth(today) {
+  const months = last12Months(today);
+  const map = {};
+  months.forEach(m => { map[m] = 0; });
+  divTrades().forEach(t => {
+    const m = monthKey(t.date);
+    if (m in map) map[m] += divAmount(t);
+  });
+  return months.map(m => ({ month: m, amount: map[m] }));
+}
+
+function divTotal12m(today) {
+  return divByMonth(today).reduce((a, m) => a + m.amount, 0);
+}
+
+// ticker → { received, dps } over the trailing 12 months
+function divByTicker12m(today) {
+  const first = last12Months(today)[0];
+  const out = {};
+  divTrades().forEach(t => {
+    if (monthKey(t.date) < first) return;
+    const tk = tradeTicker(t);
+    if (!out[tk]) out[tk] = { received: 0, dps: 0 };
+    out[tk].received += divAmount(t);
+    out[tk].dps += +t.price || 0;
+  });
+  return out;
+}
+
+// ปันผล 12 เดือน ÷ ต้นทุนของเราเอง — ปกติสูงกว่า dividend yield ที่เห็นในเว็บ
+function yieldOnCost(stock, today) {
+  const cost = (+stock.avg_cost || 0) * (+stock.shares || 0);
+  if (!(cost > 0)) return null;
+  const rec = divByTicker12m(today)[String(stock.ticker).toUpperCase()];
+  if (!rec || !(rec.received > 0)) return null;
+  return rec.received / cost * 100;
+}
+
+// [{ticker, shares, dps, cash, source}] — 'book' = repeats what it paid,
+// 'xd' = the announced/next amount, for stocks with no dividend on file yet.
+function divForecast12m(today) {
+  const byTk = divByTicker12m(today);
+  const held = ((S.registry && S.registry.stocks) || []).filter(s => s.shares > 0);
+  const rows = [];
+  held.forEach(s => {
+    const tk = String(s.ticker).toUpperCase();
+    const rec = byTk[tk];
+    if (rec && rec.dps > 0) {
+      rows.push({ ticker: tk, shares: s.shares, dps: rec.dps, cash: rec.dps * s.shares, source: 'book' });
+      return;
+    }
+    const xd = S.xd && S.xd.items && S.xd.items[tk];
+    if (xd && xd.dps > 0 && !xd.isDR) {
+      rows.push({ ticker: tk, shares: s.shares, dps: +xd.dps, cash: +xd.dps * s.shares, source: 'xd' });
+    }
+  });
+  return rows.sort((a, b) => b.cash - a.cash);
+}
+
+function renderDivBook() {
+  const el = document.getElementById('divBook');
+  if (!el) return;
+  const today = new Date().toISOString().split('T')[0];
+  const months = divByMonth(today);
+  const total12 = months.reduce((a, m) => a + m.amount, 0);
+  const thisYear = tradeYearStats()[today.slice(0, 4)] || { dividends: 0 };
+  const fc = divForecast12m(today);
+  const fcTotal = fc.reduce((a, r) => a + r.cash, 0);
+  const max = months.reduce((m, x) => Math.max(m, x.amount), 0);
+
+  const bars = months.map(m => {
+    const h = max > 0 ? Math.max(2, m.amount / max * 100) : 2;
+    return `<div class="dv-bar" title="${escHtml(m.month)} · ${fmtBaht(m.amount)}">
+      <div class="dv-bar-t"><i style="height:${h.toFixed(1)}%;${m.amount > 0 ? '' : 'opacity:.25'}"></i></div>
+      <div class="dv-bar-l">${escHtml(m.month.slice(5))}</div>
+    </div>`;
+  }).join('');
+
+  const rows = fc.length ? fc.map(r => {
+    const stock = (S.registry.stocks || []).find(s => String(s.ticker).toUpperCase() === r.ticker) || {};
+    const yc = yieldOnCost(stock, today);
+    return `<tr>
+      <td><strong>${escHtml(r.ticker)}</strong>${r.source === 'xd' ? ' <span class="dv-src">จาก XD</span>' : ''}</td>
+      <td style="text-align:right">${r.dps.toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
+      <td style="text-align:right">${r.shares.toLocaleString()}</td>
+      <td style="text-align:right" class="xd-cash">${fmtBaht(r.cash)}</td>
+      <td style="text-align:right">${yc == null ? '<span style="color:var(--tx3)">—</span>' : yc.toFixed(2) + '%'}</td>
+    </tr>`;
+  }).join('') : '';
+
+  el.innerHTML = `<div class="sec-title" style="margin-top:18px">💰 ปันผลของคุณ</div>
+    <div class="tl-sum">
+      <div class="tl-stat"><div class="tl-stat-l">รับแล้ว 12 เดือนล่าสุด</div><div class="tl-stat-v" style="color:var(--c1)">${fmtBaht(total12)}</div></div>
+      <div class="tl-stat"><div class="tl-stat-l">รับแล้วปีนี้</div><div class="tl-stat-v" style="color:var(--c1)">${fmtBaht(thisYear.dividends || 0)}</div></div>
+      <div class="tl-stat"><div class="tl-stat-l">คาดว่าจะได้ 12 เดือนหน้า</div><div class="tl-stat-v" style="color:var(--yellow)">${fmtBaht(fcTotal)}</div></div>
+    </div>
+    <div class="dv-bars">${bars}</div>
+    ${total12 > 0 ? '' : '<div class="tl-note">ยังไม่มีปันผลในสมุด — กด 📒 ในตาราง XD ด้านบนเมื่อได้รับเงินจริง แล้วกราฟรายเดือนจะเริ่มขึ้น</div>'}
+    ${rows ? `<div class="rpt"><table><thead><tr><th>หุ้น</th><th style="text-align:right">฿/หุ้น ต่อปี</th><th style="text-align:right">จำนวน</th><th style="text-align:right">คาดว่าจะได้</th><th style="text-align:right">% ต่อต้นทุน</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="tl-note">“฿/หุ้น ต่อปี” = ที่จ่ายจริงใน 12 เดือนล่าสุดจากสมุด (หรือรอบที่ประกาศจากตาราง XD ถ้ายังไม่มีในสมุด) — เป็นการประมาณการ ไม่ใช่การประกาศจ่าย · “% ต่อต้นทุน” คือปันผลเทียบต้นทุนของคุณเอง</div>` : ''}`;
+}
+
+// Log a dividend straight from the XD table, prefilled from that row.
+function logDividendFor(el) {
+  const tk = el.dataset.tk;
+  const dps = +el.dataset.dps || 0;
+  const shares = +el.dataset.shares || 0;
+  const date = el.dataset.date || new Date().toISOString().split('T')[0];
+  closeM('xdModal');
+  openTrades(tk);
+  openTradeForm(null, { type: 'div', ticker: tk, qty: shares, price: dps, date, tax: +(shares * dps * DIV_TAX_PCT / 100).toFixed(2) });
+}
+
+async function fetchBenchNow() {
+  showLoading('ดึง' + BENCH_LABEL + '…');
+  await updateBench();
+  hideLoading();
+  renderValueChart();
+}
+
+function benchNoteHtml(hist) {
+  const v = benchVerdict(hist);
+  if (!v) {
+    const has = ((S.bench && S.bench.points) || []).length;
+    return `<div style="margin-top:5px"><button class="btn btn-g btn-sm" onclick="fetchBenchNow()">📊 ${has ? 'อัพเดต' : 'ดึง'}${BENCH_LABEL}มาเทียบ</button></div>`;
+  }
+  const win = v.diff >= 0;
+  return `<div style="margin-top:5px">พอร์ต <b>${fmtPct(v.port)}</b> · ${BENCH_LABEL} <b style="color:var(--yellow)">${fmtPct(v.bench)}</b> →
+    <b style="color:${win ? 'var(--green)' : 'var(--red)'}">${win ? 'ชนะ' : 'แพ้'}ดัชนี ${Math.abs(v.diff).toFixed(2)}%</b></div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BENCHMARK — เทียบพอร์ตกับดัชนี
+// "กำไร 12%" ตอบไม่ได้ว่าดีหรือแย่ถ้าไม่รู้ว่าตลาดไปเท่าไหร่ในช่วงเดียวกัน.
+// The index series is cached in localStorage ONLY — stock_registry.json is
+// shared with the cloud routine, so nothing new goes in there.
+// ═══════════════════════════════════════════════════════════════
+const BENCH_KEY = 'lt_bench_v1';
+// Yahoo is not consistent about the Thai index symbol, so try in order and
+// remember whichever answered.
+const BENCH_CANDIDATES = ['^SET.BK', '^SETI', '^SET'];
+const BENCH_LABEL = 'ดัชนี SET';
+
+function benchLoadCache() {
+  if (S.bench) return S.bench;
+  try {
+    const raw = localStorage.getItem(BENCH_KEY);
+    if (raw) S.bench = JSON.parse(raw);
+  } catch (e) { /* ignore a corrupt cache */ }
+  return S.bench;
+}
+
+function benchSaveCache() {
+  try { localStorage.setItem(BENCH_KEY, JSON.stringify(S.bench)); } catch (e) {}
+}
+
+// Yahoo chart → [{date, close}], oldest first, gaps (holidays) dropped.
+function benchParseChart(json) {
+  const res = json && json.chart && json.chart.result && json.chart.result[0];
+  const stamps = res && res.timestamp;
+  const closes = res && res.indicators && res.indicators.quote && res.indicators.quote[0] && res.indicators.quote[0].close;
+  if (!Array.isArray(stamps) || !Array.isArray(closes)) return [];
+  const out = [];
+  stamps.forEach((t, i) => {
+    const c = closes[i];
+    if (typeof c === 'number' && c > 0) out.push({ date: new Date(t * 1000).toISOString().split('T')[0], close: c });
+  });
+  return out;
+}
+
+async function fetchBenchSeries(range) {
+  const syms = S.bench && S.bench.symbol ? [S.bench.symbol, ...BENCH_CANDIDATES] : BENCH_CANDIDATES;
+  for (const sym of syms) {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=${range || '2y'}`;
+    const j = await xdFetchJSON(url, 1);
+    const pts = benchParseChart(j);
+    if (pts.length > 5) return { symbol: sym, points: pts };
+  }
+  return null;
+}
+
+async function updateBench(quiet) {
+  const got = await fetchBenchSeries('2y');
+  if (!got) {
+    if (!quiet) toast('⚠️ ดึงดัชนีไม่ได้ (proxy บล็อก) — ลองใหม่อีกครั้ง');
+    return false;
+  }
+  S.bench = { symbol: got.symbol, fetched_at: new Date().toISOString(), points: got.points };
+  benchSaveCache();
+  if (!quiet) toast(`✅ ดึง${BENCH_LABEL} (${got.symbol}) แล้ว ${got.points.length} วัน`);
+  return true;
+}
+
+// The index close on or before a date (markets close on different days than
+// the portfolio gets snapshotted).
+function benchCloseOn(date, points) {
+  const pts = points || (S.bench && S.bench.points) || [];
+  let best = null;
+  for (const p of pts) {
+    if (p.date <= date) best = p; else break;
+  }
+  return best ? best.close : null;
+}
+
+// Same money, bought into the index on the first day of the visible range —
+// so the two lines can share one baht axis and be read directly against each other.
+function benchOverlay(hist) {
+  if (!hist || hist.length < 2) return null;
+  const pts = (S.bench && S.bench.points) || [];
+  if (!pts.length) return null;
+  const base = benchCloseOn(hist[0].date, pts);
+  if (!(base > 0)) return null;
+  const startValue = +hist[0].value || 0;
+  if (!(startValue > 0)) return null;
+  let found = 0;
+  const series = hist.map(h => {
+    const c = benchCloseOn(h.date, pts);
+    if (c > 0) { found++; return startValue * c / base; }
+    return null;
+  });
+  return found >= 2 ? series : null;
+}
+
+// "พอร์ต +12.3% · SET +4.1% → ชนะ +8.2%"
+function benchVerdict(hist) {
+  const series = benchOverlay(hist);
+  if (!series) return null;
+  const pv = rangeDelta(hist, 'value');
+  const last = series[series.length - 1], first = series[0];
+  if (!pv || !(first > 0)) return null;
+  const bench = (last - first) / first * 100;
+  return { port: pv.pct, bench, diff: pv.pct - bench };
+}
+
 // ═══════════════════════════════════════════════════════════════
 // TRADE LOG — ซื้อ / ขาย / ปันผล
 // The registry used to store only a snapshot (จำนวน + ต้นทุนเฉลี่ย ณ วันนี้), so
@@ -2957,6 +3223,8 @@ async function updatePrices() {
     if (q) { applyQuote(s, q); ok++; }
     else fail.push(s.ticker);
   }
+  setLoadMsg('ดึง' + BENCH_LABEL + '…');
+  await updateBench(true);       // quiet: the price toast already reports the run
   recordValueSnapshot();
   hideLoading();
   renderDashboard();
@@ -3154,6 +3422,7 @@ async function updateXD() {
   try { localStorage.setItem(XD_KEY, JSON.stringify(S.xd)); } catch (e) { /* quota */ }
   hideLoading();
   renderXD();
+  renderDivBook();
   const n = buildXdRows(held, items).up.length;
   toast(n ? ('✅ พบ XD ที่กำลังจะถึง ' + n + ' ตัว') : 'ไม่พบวัน XD ที่กำลังจะถึง');
 }
@@ -3162,6 +3431,7 @@ function openXD() {
   document.getElementById('xdModal').classList.remove('hidden');
   xdLoadCache();
   renderXD();
+  renderDivBook();
   if (!S.xd) updateXD();          // first tap does the fetch for you
 }
 
@@ -3199,7 +3469,7 @@ function renderXD() {
     h += '<table><thead><tr><th>หุ้น</th><th style="text-align:right">฿/หุ้น</th>' +
          '<th>วัน XD</th><th style="text-align:right">อีก</th>' +
          '<th style="text-align:right">จำนวน</th><th style="text-align:right">ได้รับ</th>' +
-         '<th>สถานะ</th></tr></thead><tbody>';
+         '<th>สถานะ</th><th></th></tr></thead><tbody>';
     r.up.forEach(function (x) {
       const soon = x.days <= 7 ? ' class="xd-soon"' : '';
       let note = '';
@@ -3217,10 +3487,14 @@ function renderXD() {
         '<td style="text-align:right">' + x.shares.toLocaleString() + '</td>' +
         '<td style="text-align:right" class="' + (x.cash != null ? 'xd-cash' : '') + '">' +
           (x.cash != null ? fmtBaht(x.cash) : '<span style="color:var(--tx3)">—</span>') + '</td>' +
-        '<td>' + xdConfBadge(x.conf) + '</td></tr>';
+        '<td>' + xdConfBadge(x.conf) + '</td>' +
+        '<td><button class="nw-act" title="บันทึกว่าได้รับปันผลแล้ว"' +
+          ' data-tk="' + escHtml(x.ticker) + '" data-dps="' + (x.dps != null ? x.dps : 0) + '"' +
+          ' data-shares="' + x.shares + '" data-date="' + escHtml(x.xd || '') + '"' +
+          ' onclick="logDividendFor(this)">📒</button></td></tr>';
     });
     h += '<tr class="xd-tot"><td colspan="5">รวมที่คาดว่าจะได้รับ</td>' +
-         '<td style="text-align:right" class="xd-cash">' + fmtBaht(r.total) + '</td><td></td></tr>';
+         '<td style="text-align:right" class="xd-cash">' + fmtBaht(r.total) + '</td><td></td><td></td></tr>';
     h += '</tbody></table>';
   }
   if (r.none.length) {
@@ -3735,7 +4009,9 @@ function renderValueChart() {
     if (canvas._chart) { canvas._chart.destroy(); canvas._chart = null; }
     return;
   }
-  if (note) note.innerHTML = rangeNoteHtml(hist, 'value');
+  benchLoadCache();
+  const benchSeries = benchOverlay(hist);
+  if (note) note.innerHTML = rangeNoteHtml(hist, 'value') + benchNoteHtml(hist);
   const labels = hist.map(h => h.date.slice(5));
   const values = hist.map(h => h.value);
   const costs = hist.map(h => h.cost);
@@ -3747,7 +4023,8 @@ function renderValueChart() {
       type: 'line',
       data: { labels, datasets: [
         { label: 'มูลค่า', data: values, borderColor: line, borderWidth: 2, fill: true, backgroundColor: line + '22', pointRadius: 0, tension: 0.25 },
-        { label: 'ต้นทุน', data: costs, borderColor: '#8899aa', borderWidth: 1, borderDash: [4,4], fill: false, pointRadius: 0 }
+        { label: 'ต้นทุน', data: costs, borderColor: '#8899aa', borderWidth: 1, borderDash: [4,4], fill: false, pointRadius: 0 },
+        ...(benchSeries ? [{ label: BENCH_LABEL, data: benchSeries, borderColor: '#ffb800', borderWidth: 1.5, borderDash: [2,3], fill: false, pointRadius: 0, tension: 0.25 }] : [])
       ]},
       options: {
         responsive: true, maintainAspectRatio: false, animation: false,
