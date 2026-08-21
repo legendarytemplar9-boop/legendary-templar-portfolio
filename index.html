@@ -4385,6 +4385,13 @@ async function fetchXdFor(ticker, tvRow) {
   return out;
 }
 
+// Is there any usable XD in the cache at all? (Used before sorting by a date
+// the user may never have fetched.)
+function xdHasData() {
+  const items = (xdLoadCache() || {}).items || {};
+  return Object.keys(items).some(function (k) { return items[k] && items[k].xd; });
+}
+
 function xdLoadCache() {
   if (S.xd) return S.xd;
   try {
@@ -4421,6 +4428,7 @@ async function updateXD() {
   hideLoading();
   renderXD();
   renderDivBook();
+  renderStockRows();   // the row badges — and the XD sort order — come from this cache
   const n = buildXdRows(held, items).up.length;
   toast(n ? ('✅ พบ XD ที่กำลังจะถึง ' + n + ' ตัว') : 'ไม่พบวัน XD ที่กำลังจะถึง');
 }
@@ -4733,8 +4741,28 @@ const PL_SORTS = [
   { key: 'pl',     label: 'กำไร'    },
   { key: 'cost',   label: 'ต้นทุน'  },
   { key: 'score',  label: 'คะแนน'   },
+  { key: 'xd',     label: 'วัน XD'  },
   { key: 'ticker', label: 'ก-ฮ/A-Z' }
 ];
+
+// Days until the next XD, for sorting. Anything without an upcoming date is
+// parked at the END in BOTH directions: "no date" is not "a very far date",
+// and flipping the arrow must not promote unknowns to the top of the list.
+function xdSortDays(ticker, today) {
+  const items = (xdLoadCache() || {}).items || {};
+  const it = items[ticker];
+  if (!it || !it.xd) return null;
+  const d = xdDaysUntil(it.xd, today || xdToday());
+  return (d == null || d < 0) ? null : d;
+}
+
+// Shared by rows and groups: null always loses, ties fall back to the caller.
+function xdSortCmp(da, db, mul) {
+  if (da == null && db == null) return 0;
+  if (da == null) return 1;
+  if (db == null) return -1;
+  return mul * (da - db);
+}
 
 function plRowStats(s) {
   const cost = (s.avg_cost || 0) * (s.shares || 0);
@@ -4747,8 +4775,13 @@ function plRowStats(s) {
 function sortedStockRows() {
   const { key, dir } = S.plSort;
   const mul = dir === 'asc' ? 1 : -1;
+  const today = key === 'xd' ? xdToday() : null;
   return (S.registry?.stocks || []).slice().sort((a, b) => {
     if (key === 'ticker') return mul * a.ticker.localeCompare(b.ticker, 'th');
+    if (key === 'xd') {
+      const c = xdSortCmp(xdSortDays(a.ticker, today), xdSortDays(b.ticker, today), mul);
+      return c || a.ticker.localeCompare(b.ticker, 'th');
+    }
     const d = plRowStats(a)[key] - plRowStats(b)[key];
     // Ties keep a stable, predictable order instead of shuffling on re-render.
     return d ? mul * d : a.ticker.localeCompare(b.ticker, 'th');
@@ -4757,11 +4790,14 @@ function sortedStockRows() {
 
 function setPlSort(key) {
   if (S.plSort.key === key) S.plSort.dir = S.plSort.dir === 'asc' ? 'desc' : 'asc';
-  // Names read best A→Z; money and scores read best biggest-first.
-  else S.plSort = { key, dir: key === 'ticker' ? 'asc' : 'desc' };
+  // Names read best A→Z and XD reads best soonest-first; money and scores
+  // read best biggest-first.
+  else S.plSort = { key, dir: (key === 'ticker' || key === 'xd') ? 'asc' : 'desc' };
   saveLS();
   renderPlSortBar();
   renderStockRows();
+  // Sorting by a date nobody has fetched yet would silently do nothing.
+  if (key === 'xd' && !xdHasData()) updateXD();
 }
 
 function renderPlSortBar() {
@@ -4841,11 +4877,21 @@ function stockGroups() {
     e.value += st.value; e.pl += st.pl; e.cost += st.cost; e.scoreSum += st.score;
   });
   const groups = [...map.values()];
-  groups.forEach(g => { g.n = g.list.length; g.score = g.scoreSum / g.n; });
+  const today = xdToday();
+  groups.forEach(g => {
+    g.n = g.list.length;
+    g.score = g.scoreSum / g.n;
+    // A group is as urgent as its nearest XD; groups with none sort last.
+    g.xd = g.list.reduce((best, s) => {
+      const d = xdSortDays(s.ticker, today);
+      return d == null ? best : (best == null ? d : Math.min(best, d));
+    }, null);
+  });
   const { key, dir } = S.plSort;
   const mul = dir === 'asc' ? 1 : -1;
   return groups.sort((a, b) => {
     if (key === 'ticker') return mul * a.name.localeCompare(b.name, 'th');
+    if (key === 'xd') return xdSortCmp(a.xd, b.xd, mul) || a.name.localeCompare(b.name, 'th');
     const d = a[key] - b[key];
     return d ? mul * d : a.name.localeCompare(b.name, 'th');
   });

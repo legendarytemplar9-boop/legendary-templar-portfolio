@@ -389,7 +389,8 @@
        document.querySelector('.md-card-t')?.textContent);
 
     const bar = document.getElementById('plSortBar');
-    ok('5 sort chips', bar.querySelectorAll('.sort-chip').length === 5, bar.querySelectorAll('.sort-chip').length);
+    ok('6 sort chips', bar.querySelectorAll('.sort-chip').length === 6, bar.querySelectorAll('.sort-chip').length);
+    ok('one of them sorts by XD', !!bar.querySelector('[data-key="xd"]'));
     ok('active chip marked', bar.querySelectorAll('.sort-chip.on').length === 1);
     ok('active chip shows direction', /↑/.test(bar.querySelector('.sort-chip.on').textContent));
 
@@ -401,6 +402,36 @@
     document.getElementById('plSortBar').querySelector('[data-key="score"]').click();
     // scores: AAA 78, WWW 70, BBB 64
     eq('score sort works from the UI', rows().map(r => r.dataset.ticker), ['AAA', 'WWW', 'BBB']);
+
+    // ── sorting by XD, from the UI ──
+    {
+      const prevXd = S.xd;
+      // BBB is days away, AAA months away, WWW has nothing announced or guessed
+      S.xd = { fetched_at: TODAY + 'T00:00:00Z', items: {
+        BBB: { xd: '2099-01-02', dps: 1, conf: 'confirmed' },
+        AAA: { xd: '2099-06-30', dps: 2, conf: 'estimated' },
+        WWW: { conf: 'none', note: 'ไม่พบข้อมูลวัน XD' }
+      } };
+      document.getElementById('plSortBar').querySelector('[data-key="xd"]').click();
+      eq('XD sort puts the nearest date first, unknowns last',
+         rows().map(r => r.dataset.ticker), ['BBB', 'AAA', 'WWW']);
+      eq('XD defaults to soonest-first, not biggest-first', S.plSort.dir, 'asc');
+      ok('the chip shows the direction',
+         /↑/.test(document.getElementById('plSortBar').querySelector('.sort-chip.on').textContent));
+
+      document.getElementById('plSortBar').querySelector('[data-key="xd"]').click();
+      eq('flipping reverses the dated rows', rows().slice(0, 2).map(r => r.dataset.ticker), ['AAA', 'BBB']);
+      eq('…but a stock with no XD is still last, never promoted to the top',
+         rows()[2].dataset.ticker, 'WWW');
+
+      // a date that has already gone by must not hold a row near the top
+      S.xd.items.BBB.xd = '2020-01-02';
+      S.plSort = { key: 'xd', dir: 'asc' }; renderStockRows();
+      eq('a past XD drops to the unknown pile',
+         rows().map(r => r.dataset.ticker), ['AAA', 'BBB', 'WWW']);
+
+      S.xd = prevXd;
+    }
 
     // ── row actions ──
     S.plSort = { key: 'ticker', dir: 'asc' }; renderStockRows();
@@ -724,6 +755,33 @@
     S.xd = prevXd;
   }
 
+  // ══════════════════ sorting the list by XD ══════════════════
+  sec('xdSortDays / xdSortCmp');
+  {
+    const prevXd = S.xd;
+    S.xd = { fetched_at: '2026-08-21T00:00:00Z', items: {
+      SOON:  { xd: '2026-08-23', conf: 'confirmed' },   // 2 days
+      MID:   { xd: '2026-10-01', conf: 'estimated' },   // 41 days
+      FAR:   { xd: '2027-02-27', conf: 'estimated' },   // 190 days
+      PAST:  { xd: '2026-08-01', conf: 'confirmed' },   // already gone
+      EMPTY: { conf: 'none' }
+    } };
+    eq('days to a near date', xdSortDays('SOON', '2026-08-21'), 2);
+    eq('days to a far date', xdSortDays('FAR', '2026-08-21'), 190);
+    eq('a date already past is not a sort position', xdSortDays('PAST', '2026-08-21'), null);
+    eq('no xd at all', xdSortDays('EMPTY', '2026-08-21'), null);
+    eq('ticker not in the cache', xdSortDays('NOSUCH', '2026-08-21'), null);
+    eq('today counts as 0, not missing', xdSortDays('PAST', '2026-08-01'), 0);
+    S.xd = prevXd;
+  }
+  eq('nearer date wins ascending', xdSortCmp(2, 41, 1) < 0, true);
+  eq('…and loses descending', xdSortCmp(2, 41, -1) > 0, true);
+  eq('no-date sorts last ascending', xdSortCmp(null, 41, 1) > 0, true);
+  eq('no-date STILL sorts last descending', xdSortCmp(null, 41, -1) > 0, true);
+  eq('…from the other side too', xdSortCmp(41, null, -1) < 0, true);
+  eq('two no-dates tie so the caller can break it', xdSortCmp(null, null, 1), 0);
+  eq('equal days tie', xdSortCmp(5, 5, 1), 0);
+
   sec('renderXD');
   {
     const prevReg = S.registry, prevXd = S.xd;
@@ -949,6 +1007,32 @@
     // Technology averages (78+50)/2 = 64 — level with Banking's 64, so the tie
     // breaks on the group name; Food (70) leads.
     eq('score sort orders groups by average score', stockGroups().map(x => x.name), ['Food', 'Banking', 'Technology']);
+
+    // ── groups sorted by XD: a group is as urgent as its nearest holding ──
+    {
+      const prevXd = S.xd;
+      // Technology holds CCC (soon) and AAA (far); Banking's BBB sits between;
+      // Food's WWW has no XD at all.
+      S.xd = { fetched_at: TODAY + 'T00:00:00Z', items: {
+        CCC: { xd: '2099-01-02', conf: 'confirmed' },
+        AAA: { xd: '2099-11-30', conf: 'estimated' },
+        BBB: { xd: '2099-05-05', conf: 'confirmed' }
+      } };
+      S.plSort = { key: 'xd', dir: 'asc' };
+      let x = stockGroups();
+      eq('a group takes the nearest XD of its members, not the first one',
+         x.map(g => g.name), ['Technology', 'Banking', 'Food']);
+      eq('a group with no XD anywhere has none', x.find(g => g.name === 'Food').xd, null);
+      eq('rows inside a group follow the same order', x[0].list.map(r => r.ticker), ['CCC', 'AAA']);
+
+      S.plSort = { key: 'xd', dir: 'desc' };
+      x = stockGroups();
+      // desc reverses the same value each group sorts on — its NEAREST XD —
+      // so Banking (May) now leads Technology (Jan)
+      eq('flipping reverses the dated groups', x.slice(0, 2).map(g => g.name), ['Banking', 'Technology']);
+      eq('…and the group with no XD is still last', x[2].name, 'Food');
+      S.xd = prevXd;
+    }
 
     S.stGroup = 'status';
     S.plSort = { key: 'value', dir: 'desc' };
