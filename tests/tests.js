@@ -318,11 +318,56 @@
     ok('row shows status emoji', aaa.querySelector('.st-emoji').textContent.length > 0);
     ok('row shows company + sector', /Alpha Co · Tech/.test(aaa.querySelector('.st-sub').textContent));
     ok('row has a sparkline canvas', !!aaa.querySelector('canvas[id="spark_AAA"]'));
-    ok('row shows trend chip', /Up|Down|Stable/.test(aaa.querySelector('.chips').textContent));
-    ok('row shows delta chip', /Δ/.test(aaa.querySelector('.chips').textContent));
-    ok('row shows notes', /a note/.test(aaa.querySelector('.c-notes').textContent));
-    ok('row shows catalysts', /launch/.test(aaa.querySelector('.cat-strip').textContent));
-    ok('row has 3 actions', aaa.querySelectorAll('.st-acts .st-act').length === 3, aaa.querySelectorAll('.st-acts .st-act').length);
+    ok('row still carries the trend chip', /Up|Down|Stable/.test(aaa.querySelector('.chips').textContent));
+    ok('row still carries the delta chip', /Δ/.test(aaa.querySelector('.chips').textContent));
+    ok('row still carries notes', /a note/.test(aaa.querySelector('.c-notes').textContent));
+    ok('row still carries catalysts', /launch/.test(aaa.querySelector('.cat-strip').textContent));
+    ok('row has 4 actions (expand + the three edits)',
+       aaa.querySelectorAll('.st-acts .st-act').length === 4, aaa.querySelectorAll('.st-acts .st-act').length);
+
+    // ── the detail band is closed until asked for ──
+    const meta = r => r.querySelector('.st-meta');
+    const expBtn = r => r.querySelector('.st-acts .st-act.exp');
+    ok('every row starts collapsed',
+       rows().every(r => meta(r).classList.contains('hidden')));
+    ok('but the quick look is untouched',
+       !aaa.querySelector('.st-id').classList.contains('hidden') &&
+       !aaa.querySelector('.st-money').classList.contains('hidden'));
+    ok('the collapsed row still carries its detail in the DOM',
+       /a note/.test(meta(aaa).textContent));
+    eq('the toggle reads "open"', expBtn(aaa).textContent, '▾');
+
+    expBtn(aaa).click();
+    ok('one tap opens that row', !meta(rows()[0]).classList.contains('hidden'));
+    eq('…and the toggle flips', expBtn(rows()[0]).textContent, '▴');
+    ok('…and only that row', meta(rows()[1]).classList.contains('hidden'));
+    ok('the open row is remembered in state, not just the DOM', !!S.stRowOpen.AAA);
+
+    // a re-render is what actually kills DOM-only state — prove it survives
+    renderStockRows();
+    ok('an open row survives a re-render', !meta(rows()[0]).classList.contains('hidden'));
+    ok('a closed row survives a re-render', meta(rows()[1]).classList.contains('hidden'));
+
+    expBtn(rows()[0]).click();
+    ok('tapping again closes it', meta(rows()[0]).classList.contains('hidden'));
+    ok('…and forgets it rather than storing false', !('AAA' in S.stRowOpen));
+
+    // opening detail must still be what a row-body tap does
+    aaa.click();
+    ok('tapping the row still opens the detail modal',
+       !document.getElementById('detailModal').classList.contains('hidden'));
+    closeM('detailModal');
+
+    // the all-toggle
+    const allBtn = document.getElementById('stRowBtn');
+    ok('the list offers one control for every row', !!allBtn);
+    ok('…labelled to open while anything is closed', /กาง/.test(allBtn.textContent));
+    allBtn.click();
+    ok('it opens every row', rows().every(r => !meta(r).classList.contains('hidden')));
+    ok('…and re-labels itself to close', /ย่อ/.test(document.getElementById('stRowBtn').textContent));
+    document.getElementById('stRowBtn').click();
+    ok('and closes every row again', rows().every(r => meta(r).classList.contains('hidden')));
+    ok('…leaving nothing behind in state', Object.keys(S.stRowOpen).length === 0);
 
     // ── money columns ──
     ok('row shows value', /฿1,200/.test(aaa.querySelector('.st-money').textContent), aaa.querySelector('.st-money').textContent);
@@ -646,6 +691,37 @@
     eq('nothing usable', xdSlotDps([0, null]), null);
     eq('all specials (nothing survives the filter) still returns the latest',
        xdSlotDps([10, 30]), 30);
+  }
+
+  sec('xdShortDate / xdRowBadge — the chip next to the score');
+  eq('this year drops the year', xdShortDate('2026-08-26', '2026-08-21'), '26 ส.ค.');
+  eq('another year keeps a พ.ศ. year so it cannot be misread',
+     xdShortDate('2027-02-27', '2026-08-21'), '27 ก.พ. 70');
+  eq('january', xdShortDate('2026-01-05', '2026-08-21'), '5 ม.ค.');
+  eq('december', xdShortDate('2026-12-01', '2026-08-21'), '1 ธ.ค.');
+  eq('garbage in, nothing invented', xdShortDate('', '2026-08-21'), '');
+  {
+    const prevXd = S.xd;
+    S.xd = { fetched_at: '2026-08-21T00:00:00Z', items: {
+      AAA: { xd: '2026-08-26', dps: 0.4, pay: '2026-09-11', conf: 'confirmed' },
+      BBB: { xd: '2026-10-01', dps: 0.9, conf: 'estimated' },
+      SOON: { xd: '2026-08-23', dps: 1, conf: 'confirmed' },
+      GONE: { xd: '2026-08-01', dps: 1, conf: 'confirmed' },   // already past
+      NONE: { conf: 'none', note: 'ไม่พบข้อมูลวัน XD' }
+    } };
+    const badge = tk => xdRowBadge(tk, '2026-08-21');
+    ok('confirmed prints the date plainly', /XD 26 ส\.ค\./.test(badge('AAA')), badge('AAA'));
+    ok('confirmed is not marked as a guess', !/~/.test(badge('AAA')));
+    ok('confirmed carries the announced amount in the tooltip',
+       /0\.4 บาท\/หุ้น/.test(badge('AAA')) && /ยืนยันแล้ว/.test(badge('AAA')));
+    ok('an estimate is prefixed with ~', /XD ~1 ต\.ค\./.test(badge('BBB')), badge('BBB'));
+    ok('an estimate is muted, never urgent-coloured',
+       /est/.test(badge('BBB')) && !/soon/.test(badge('BBB')));
+    ok('within 7 days is highlighted', /soon/.test(badge('SOON')), badge('SOON'));
+    eq('a date already past shows nothing', badge('GONE'), '');
+    eq('a holding with no XD shows nothing', badge('NONE'), '');
+    eq('a ticker not in the cache shows nothing', badge('NOSUCH'), '');
+    S.xd = prevXd;
   }
 
   sec('renderXD');

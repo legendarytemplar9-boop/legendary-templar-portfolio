@@ -99,11 +99,19 @@ hr.div{border:none;height:1px;background:var(--border);margin:20px 0}
 .st-day{font-size:11px;font-weight:700;margin-top:2px}
 .st-stale{display:inline-block;font-size:10px;font-weight:700;color:var(--orange);background:var(--oranged);border-radius:5px;padding:1px 6px;margin-top:3px}
 .st-watch{font-size:12px;color:var(--tx3);font-style:italic}
+.st-xd{font-size:10px;font-weight:700;color:var(--c1);background:var(--c1d);border-radius:5px;padding:1px 6px;line-height:1.7;white-space:nowrap}
+.st-xd.soon{color:var(--yellow);background:var(--yellowd)}
+/* an estimate never gets the urgent colour — a guess should not look announced */
+.st-xd.est{color:var(--tx2);background:var(--bg3);font-weight:600}
 .st-acts{flex:0 0 auto;display:flex;gap:4px;margin-top:2px}
 .st-act{padding:3px 7px;font-size:11px;background:transparent;color:var(--tx3);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:color .15s,border-color .15s}
 .st-act.score:hover{color:var(--yellow);border-color:var(--yellow)}
 .st-act.edit:hover{color:var(--c1);border-color:var(--c1)}
 .st-act.del:hover{color:var(--red);border-color:var(--red)}
+.grp-bar-r{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.st-act.exp{font-size:12px;line-height:1;min-width:24px;padding:3px 6px}
+.st-act.exp:hover{color:var(--tx);border-color:var(--border2)}
+.st-act.exp.on{color:var(--tx2);border-color:var(--border2);background:var(--bg3)}
 @media (max-width:700px){
   .st-spark{display:none}
   .st-money{min-width:auto}
@@ -1002,6 +1010,7 @@ let S = {
   nwRange: 'all',      // …and on the Net Worth chart
   stClosed: {},        // stock groups the user collapsed (they start expanded)
   stGroup: 'sector',   // how the stock list is grouped: sector|status|held|none
+  stRowOpen: {},       // stock rows whose detail band is open (they start closed)
   editData: {}
 };
 
@@ -1042,6 +1051,7 @@ function saveLS() {
       nwRange: S.nwRange,
       stClosed: S.stClosed,
       stGroup: S.stGroup,
+      stRowOpen: S.stRowOpen,
       // Recovery buffer ONLY — Google Drive is the source of truth. This lets a
       // failed Drive save be retried/recovered instead of lost on reload.
       registry: S.registry,
@@ -1069,6 +1079,7 @@ function loadLS() {
     if (d.nwRange && CHART_RANGES.some(r => r.key === d.nwRange)) S.nwRange = d.nwRange;
     if (d.stClosed && typeof d.stClosed === 'object') S.stClosed = d.stClosed;
     if (d.stGroup && ST_GROUPS.some(g => g.key === d.stGroup)) S.stGroup = d.stGroup;
+    if (d.stRowOpen && typeof d.stRowOpen === 'object') S.stRowOpen = d.stRowOpen;
     if (d.registry) S.cachedRegistry = d.registry; // recovery buffer
     if (d.kb) S.cachedKb = d.kb;
     if (d.assetReg) S.cachedAssetReg = d.assetReg;
@@ -4698,7 +4709,10 @@ function renderMoneyDashboard() {
         <span class="grp-bar-lb">จัดกลุ่ม</span>
         <div class="sort-bar" id="stGroupBar"></div>
       </div>
-      <button class="btn btn-g btn-sm" id="stExpandBtn" onclick="grpToggleAll('st')">⊖ ยุบทั้งหมด</button>
+      <div class="grp-bar-r">
+        <button class="btn btn-g btn-sm" id="stRowBtn" onclick="stToggleAllRows()">▾ กางรายละเอียด</button>
+        <button class="btn btn-g btn-sm" id="stExpandBtn" onclick="grpToggleAll('st')">⊖ ยุบทั้งหมด</button>
+      </div>
     </div>
     <div class="md-rows" id="plRows" data-groups="st"></div>
   </div>`;
@@ -4877,9 +4891,79 @@ function renderStockRows() {
   const btn = document.getElementById('stExpandBtn');
   if (btn) btn.classList.toggle('hidden', S.stGroup === 'none');
   grpSyncBtn('st');
+  stSyncRowBtn();
 
   // Sparklines need the canvases in the DOM first.
   setTimeout(() => rows.forEach(s => renderSparkline(s.ticker, 'spark_' + s.ticker)), 30);
+}
+
+// ── The XD chip that rides next to the score ─────────────────────
+// The list is the first thing opened, so the one date that changes what you
+// do this week belongs here, not two taps away in the XD table.
+const TH_MON = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+                'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+
+// "26 ส.ค." — the พ.ศ. year is appended only when the date is NOT this year,
+// so a round that lands in 2570 can never be misread as one days away.
+function xdShortDate(iso, today) {
+  if (!iso || iso.length < 10) return '';
+  const y = +iso.slice(0, 4), m = +iso.slice(5, 7), d = +iso.slice(8, 10);
+  if (!(m >= 1 && m <= 12) || !(d >= 1)) return iso;
+  const txt = d + ' ' + TH_MON[m - 1];
+  const nowY = +(today || xdToday()).slice(0, 4);
+  return y === nowY ? txt : txt + ' ' + String((y + 543) % 100);
+}
+
+// An estimate prints with a leading ~ and in the muted colour: the row must
+// never imply an announcement that has not happened.
+function xdRowBadge(tk, today) {
+  const items = (xdLoadCache() || {}).items || {};
+  const it = items[tk];
+  if (!it || !it.xd) return '';
+  const t = today || xdToday();
+  const days = xdDaysUntil(it.xd, t);
+  if (days == null || days < 0) return '';
+  const est = it.conf !== 'confirmed';
+  const cls = 'st-xd' + (days <= 7 ? ' soon' : '') + (est ? ' est' : '');
+  const tip = [est ? 'คาดการณ์' : 'ยืนยันแล้ว',
+               it.dps != null ? it.dps + ' บาท/หุ้น' : '',
+               xdDaysLabel(days)].filter(Boolean).join(' · ');
+  return `<span class="${cls}" title="${escHtml(tip)}">XD ${est ? '~' : ''}${escHtml(xdShortDate(it.xd, t))}</span>`;
+}
+
+// ── Row detail band, closed by default ───────────────────────────
+// A row is scanned, not read: ticker · score · XD · money is what the eye
+// compares down the column, and chips/notes/catalysts push the next row off
+// the screen. They stay one tap away. Open state lives in S because the list
+// re-renders on every price update and Drive echo — the DOM cannot hold it.
+function stToggleRow(el) {
+  const tk = el.dataset.ticker;
+  const open = !S.stRowOpen[tk];
+  if (open) S.stRowOpen[tk] = true; else delete S.stRowOpen[tk];
+  saveLS();
+  const row = el.closest('.st-row');
+  const meta = row && row.querySelector('.st-meta');
+  if (meta) meta.classList.toggle('hidden', !open);
+  el.textContent = open ? '▴' : '▾';
+  el.classList.toggle('on', open);
+  el.title = open ? 'ซ่อนรายละเอียด' : 'ดูรายละเอียด';
+  stSyncRowBtn();
+}
+
+function stToggleAllRows() {
+  const rows = sortedStockRows();
+  const openAll = rows.some(s => !S.stRowOpen[s.ticker]);
+  S.stRowOpen = {};
+  if (openAll) rows.forEach(s => { S.stRowOpen[s.ticker] = true; });
+  saveLS();
+  renderStockRows();
+}
+
+function stSyncRowBtn() {
+  const b = document.getElementById('stRowBtn');
+  if (!b) return;
+  const rows = sortedStockRows();
+  b.textContent = rows.some(s => !S.stRowOpen[s.ticker]) ? '▾ กางรายละเอียด' : '▴ ย่อรายละเอียด';
 }
 
 function stockRowHtml(s) {
@@ -4912,23 +4996,27 @@ function stockRowHtml(s) {
        ${staleHtml}`
     : `<div class="st-watch">Watch only</div>${dayHtml}`;
 
+  const open = !!S.stRowOpen[tk];
+
   return `<div class="st-row" data-ticker="${escHtml(tk)}" onclick="openDetail(this.dataset.ticker)">
     <div class="st-id">
       <div class="st-head">
         <span class="st-emoji">${scoreEmoji(s.thesis_score)}</span>
         <span class="st-ticker">${escHtml(tk)}</span>
         <span class="st-score ${scoreColor(s.thesis_score)}">${s.thesis_score}</span>
+        ${xdRowBadge(tk)}
       </div>
       ${sub ? `<div class="st-sub">${escHtml(sub)}</div>` : ''}
     </div>
     <div class="st-spark"><canvas id="spark_${escHtml(tk)}" width="110" height="32"></canvas></div>
     <div class="st-money">${money}</div>
     <div class="st-acts">
+      <button class="st-act exp${open ? ' on' : ''}" data-ticker="${escHtml(tk)}" onclick="event.stopPropagation();stToggleRow(this)" title="${open ? 'ซ่อนรายละเอียด' : 'ดูรายละเอียด'}">${open ? '▴' : '▾'}</button>
       <button class="st-act score" data-ticker="${escHtml(tk)}" onclick="event.stopPropagation();openEdit(this.dataset.ticker)" title="แก้คะแนน">★</button>
       <button class="st-act edit" data-ticker="${escHtml(tk)}" onclick="event.stopPropagation();openEditDetails(this.dataset.ticker)" title="แก้ชื่อ/จำนวน/ต้นทุน">✏️</button>
       <button class="st-act del" data-ticker="${escHtml(tk)}" onclick="event.stopPropagation();confirmDeleteStock(this.dataset.ticker)" title="ลบ">✕</button>
     </div>
-    <div class="st-meta">
+    <div class="st-meta${open ? '' : ' hidden'}">
       <div class="chips">
         <span class="chip ${trend.cls}">${trend.arrow} ${trend.cls === 'flat' ? 'Stable' : trend.cls === 'up' ? `Up ${trend.weeks}w` : `Down ${trend.weeks}w`}</span>
         <span class="chip">Δ ${deltaStr}</span>
