@@ -38,7 +38,10 @@ def main() -> int:
 
     proc = subprocess.run(
         [CHROME, "--headless", "--disable-gpu", "--no-sandbox",
-         "--virtual-time-budget=4000", "--dump-dom", OUT.as_uri()],
+         # generous: the network-layer tests deliberately let a stubbed fetch
+         # stall so the abort/budget path is exercised. Virtual time skips
+         # ahead when the page is idle, so this still runs in ~3 real seconds.
+         "--virtual-time-budget=120000", "--dump-dom", OUT.as_uri()],
         capture_output=True, text=True, timeout=120,
     )
 

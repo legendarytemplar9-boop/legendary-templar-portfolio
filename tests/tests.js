@@ -1,5 +1,5 @@
 // ── Test harness: runs inside the real page, results into <pre id="testout"> ──
-(function () {
+(async function () {
   const L = [];
   let pass = 0, fail = 0;
   function ok(name, cond, extra) {
@@ -492,6 +492,161 @@
     eq('missing item total is zero', r.total, 0);
   }
   eq('no stocks at all', buildXdRows([], {}, '2026-08-19').total, 0);
+
+  // ══════════════════ TradingView source ══════════════════
+  // Yahoo's v10/quoteSummary answers null for every symbol now, so the
+  // "ยืนยันแล้ว" tier had gone dead and everything fell through to a guess.
+  // TradingView's scanner replaces it: announced ex-date, baht per share and
+  // payment date, one POST for the whole portfolio, no CORS proxy.
+  sec('tvSymbolFor');
+  eq('SET ticker', tvSymbolFor('M'), 'SET:M');
+  eq('lowercase is normalised', tvSymbolFor('advanc'), 'SET:ADVANC');
+  eq('DR is still a SET symbol', tvSymbolFor('LVMH01'), 'SET:LVMH01');
+  eq('foreign symbol is not TV-scannable', tvSymbolFor('MC.PA'), null);
+  eq('FX symbol is not TV-scannable', tvSymbolFor('THB=X'), null);
+  eq('already-qualified symbol', tvSymbolFor('SET:M'), null);
+  eq('empty', tvSymbolFor(''), null);
+
+  sec('tvDate — TV stamps corporate actions at midday UTC');
+  eq('M ex-date', tvDate(1787745540), '2026-08-26');
+  eq('M payment date', tvDate(1789127940), '2026-09-11');
+  eq('null passes through', tvDate(null), null);
+  eq('zero is not a date', tvDate(0), null);
+
+  sec('tvQuoteFrom');
+  eq('price + previous close from change_abs',
+     tvQuoteFrom({ close: 21.8, change_abs: -0.5 }), { price: 21.8, prev: 22.3 });
+  eq('flat day', tvQuoteFrom({ close: 46.75, change_abs: 0 }), { price: 46.75, prev: 46.75 });
+  eq('missing change_abs still gives a price',
+     tvQuoteFrom({ close: 10 }), { price: 10, prev: 10 });
+  eq('no close → no quote', tvQuoteFrom({ close: null, change_abs: 1 }), null);
+  eq('undefined row', tvQuoteFrom(undefined), null);
+
+  sec('xdFromTvRow');
+  {
+    // the real M row that exposed the bug
+    const mRow = {
+      dividend_ex_date_upcoming: 1787745540, dividend_amount_upcoming: 0.400000006,
+      dividend_payment_date_upcoming: 1789127940,
+      dividend_ex_date_recent: 1778500740, dividend_amount_recent: 0.5
+    };
+    const it = xdFromTvRow('M', mRow, '2026-08-21');
+    eq('M ex-date matches the SET announcement', it.xd, '2026-08-26');
+    eq('M dps matches the SET announcement', Math.round(it.dps * 100) / 100, 0.4);
+    eq('M payment date', it.pay, '2026-09-11');
+    eq('M is confirmed, not a guess', it.conf, 'confirmed');
+    eq('M is not a DR', it.isDR, false);
+    eq('source is tagged', it.src, 'tv');
+    eq('an announced XD already past is not "upcoming"',
+       xdFromTvRow('M', mRow, '2026-08-27'), null);
+    eq('nothing announced → no row',
+       xdFromTvRow('PTT', { dividend_ex_date_upcoming: null, dividend_amount_upcoming: null }, TODAY), null);
+    eq('absent row → no row', xdFromTvRow('PTT', undefined, TODAY), null);
+  }
+  {
+    // a DR's own announcement is in baht per DR unit — usable, unlike the
+    // underlying's foreign dividend
+    const it = xdFromTvRow('LVMH01', {
+      dividend_ex_date_upcoming: 1796126340, dividend_amount_upcoming: 0.0953999981,
+      dividend_payment_date_upcoming: 1798677540
+    }, '2026-08-21');
+    eq('DR ex-date', it.xd, '2026-12-01');
+    eq('DR is flagged as a DR', it.isDR, true);
+    eq('DR figure is the native baht one', it.native, true);
+    ok('DR row explains where the number came from', /DR/.test(it.note));
+  }
+
+  sec('xdEstCash — native DR baht IS usable, the underlying is not');
+  eq('DR with its own baht figure multiplies out', xdEstCash(0.0954, 63000, true, true), 0.0954 * 63000);
+  eq('DR falling back to the underlying stays null', xdEstCash(0.91, 63000, true, false), null);
+  eq('plain stock unaffected by the new flag', xdEstCash(0.45, 6500, false, false), 2925);
+
+  sec('buildXdRows — native DR now contributes cash');
+  {
+    const r = buildXdRows(
+      [{ ticker: 'LVMH01', shares: 1000 }],
+      { LVMH01: { xd: '2026-12-01', dps: 0.1, conf: 'confirmed', isDR: true, native: true } },
+      '2026-08-21');
+    eq('native DR shows baht per unit', r.up[0].dps, 0.1);
+    eq('native DR cash', r.up[0].cash, 100);
+    eq('native DR counts in the total', r.total, 100);
+  }
+  {
+    const r = buildXdRows(
+      [{ ticker: 'XIAOMI80', shares: 1000 }],
+      { XIAOMI80: { xd: '2026-12-01', dps: 0.1, conf: 'estimated', isDR: true } },
+      '2026-08-21');
+    eq('non-native DR still shows no baht', r.up[0].dps, null);
+    eq('non-native DR still contributes no cash', r.up[0].cash, null);
+  }
+
+  // ══════════════════ the M regression ══════════════════
+  // A slot drifts a few days year to year. Keying on the raw mm-dd made the
+  // 2023 date a slot of its own, and 23 Aug sorted ahead of the real 26 Aug.
+  sec('xdProjectNext — drifting slots are ONE slot');
+  eq('day of year', xdDayOfYear('2026-01-01'), 0);
+  eq('day of year, later', xdDayOfYear('2026-08-26'), 237);
+  eq('day of year, bad input', xdDayOfYear('nonsense'), null);
+  eq('slot gap is direct', xdSlotGap(10, 20), 10);
+  eq('slot gap wraps the year end', xdSlotGap(2, 362), 5);
+  eq('make date', xdMakeDate(2027, '03-09'), '2027-03-09');
+  eq('make date rolls 29 Feb in a common year', xdMakeDate(2027, '02-29'), '2027-03-01');
+  {
+    // M's actual ex-date history from Yahoo, and the day the user reported it
+    const M_HISTORY = ['2020-08-24', '2021-05-10', '2022-05-10', '2022-08-23',
+                       '2023-05-09', '2023-08-23', '2024-05-09', '2024-08-26',
+                       '2025-05-07', '2025-08-26', '2026-05-11'];
+    const p = xdProjectNext(M_HISTORY, '2026-08-21');
+    eq('M projects onto the recent Aug slot, not the 2023 one', p.date, '2026-08-26');
+    ok('basis cites the whole drifting slot', p.basis.indexOf('2025-08-26') >= 0);
+    ok('basis does not present a lone stale year', p.basis.length > 1);
+  }
+  {
+    const p = xdProjectNext(['2024-08-23', '2025-08-26', '2026-05-11'], '2026-08-21');
+    eq('two Aug dates 3 days apart collapse into one slot', p.slot.length, 2);
+  }
+  eq('slots more than a month apart stay separate',
+     xdProjectNext(['2025-03-12', '2025-09-09', '2026-03-10'], '2026-08-19').slot.length, 1);
+  {
+    const p = xdProjectNext(['2024-12-28', '2025-01-03', '2026-01-02'], '2026-08-21');
+    eq('a slot straddling new year is not split', p.slot.length, 3);
+    eq('and projects from its newest date', p.date, '2027-01-02');
+  }
+  {
+    // PTT's real second-half history: Aug 28 → Oct 4 is a 37-day spread, and a
+    // narrower window made the stale 2024-08-28 a slot of its own and let it win
+    const PTT_HISTORY = ['2021-09-29', '2022-03-03', '2022-09-28', '2023-03-02',
+                         '2023-10-04', '2024-02-29', '2024-08-28', '2025-03-06',
+                         '2025-10-01', '2026-03-05'];
+    const p = xdProjectNext(PTT_HISTORY, '2026-08-21');
+    eq('PTT projects onto the drifted autumn slot, not the stale August one',
+       p.date, '2026-10-01');
+    ok('the August outlier is inside that slot, not beside it',
+       p.slot.indexOf('2024-08-28') >= 0);
+  }
+  {
+    // …but a quarterly payer's rounds are ~91 days apart and must stay separate
+    const q = xdProjectNext(['2025-11-14', '2026-02-13', '2026-05-15', '2026-08-14'], '2026-08-21');
+    eq('quarterly rounds are not merged', q.slot.length, 1);
+    eq('quarterly picks the next round', q.date, '2026-11-14');
+  }
+
+  sec('xdSlotDps — a special dividend must not become the forecast');
+  eq('median odd', xdMedian([1, 5, 3]), 3);
+  ok('median even', Math.abs(xdMedian([4.61, 5.74]) - 5.175) < 1e-9);
+  eq('median ignores nulls and zeros', xdMedian([0, null, 2, 4]), 3);
+  eq('median of nothing', xdMedian([]), null);
+  {
+    // ADVANC's February slot, 27.41 being the one-off
+    eq('the special is dropped, the latest ordinary one is used',
+       xdSlotDps([4.24, 4.61, 5.74, 27.41]), 5.74);
+    eq('a steadily growing slot just takes the latest',
+       xdSlotDps([4.24, 4.61, 5.74, 6.89]), 6.89);
+    eq('a single payment is its own estimate', xdSlotDps([0.5]), 0.5);
+    eq('nothing usable', xdSlotDps([0, null]), null);
+    eq('all specials (nothing survives the filter) still returns the latest',
+       xdSlotDps([10, 30]), 30);
+  }
 
   sec('renderXD');
   {
@@ -1760,6 +1915,187 @@
     closeM('rulesModal');
 
     S.registry = prevReg; S.alerts = prevAlerts; S.xd = prevXd; S.kb = prevKb; S.offline = prevOff;
+  }
+
+  // ══════════════════ network layer, with fetch stubbed ══════════════════
+  // NOTE: these are the only async assertions in the suite, which is why the
+  // harness IIFE is async. Anything added below them still runs, but it must
+  // stay ABOVE the L.push('PASS …') footer or its results are dropped.
+  sec('tvScan / fetchQuotesFor / fetchXdTV (stubbed fetch)');
+  try {
+    const realFetch = window.fetch;
+    const calls = [];
+    function stub(handler) {
+      window.fetch = function (url, opts) {
+        calls.push({ url: String(url), opts: opts });
+        return Promise.resolve(handler(String(url), opts));
+      };
+    }
+    function jsonRes(obj) {
+      return { ok: true, status: 200, json: function () { return Promise.resolve(obj); },
+               text: function () { return Promise.resolve(JSON.stringify(obj)); } };
+    }
+    const dead = { ok: false, status: 503, json: function () { return Promise.reject(new Error('no')); },
+                   text: function () { return Promise.resolve(''); } };
+
+    // — tvScan maps columns back onto ticker names
+    calls.length = 0;
+    stub(function () {
+      return jsonRes({ totalCount: 2, data: [
+        { s: 'SET:M', d: ['M', 21.8, -0.5] },
+        { s: 'SET:PTT', d: ['PTT', 41, 0.5] }
+      ] });
+    });
+    let rows = await tvScan(['M', 'PTT', 'GONE', 'MC.PA'], ['name', 'close', 'change_abs']);
+    eq('one request for the whole list', calls.length, 1);
+    eq('posts to the scanner', calls[0].url, 'https://scanner.tradingview.com/thailand/scan');
+    eq('uses POST', calls[0].opts.method, 'POST');
+    ok('text/plain body avoids a CORS preflight',
+       calls[0].opts.headers['Content-Type'] === 'text/plain');
+    ok('non-SET symbols are not sent to TV', calls[0].opts.body.indexOf('MC.PA') === -1);
+    eq('columns land on their names', rows.M, { name: 'M', close: 21.8, change_abs: -0.5 });
+    eq('a ticker TV does not know is simply absent', rows.GONE, undefined);
+
+    stub(function () { return dead; });
+    eq('a failed scan is null, not an empty result', await tvScan(['M'], ['close']), null);
+
+    calls.length = 0;
+    eq('a list with no SET tickers makes no request',
+       await tvScan(['MC.PA', 'THB=X'], ['close']), {});
+    eq('…and really made none', calls.length, 0);
+
+    // — fetchQuotesFor: TV first, Yahoo only for what is left
+    calls.length = 0;
+    stub(function (url) {
+      if (url.indexOf('scanner.tradingview.com') >= 0) {
+        return jsonRes({ totalCount: 1, data: [{ s: 'SET:M', d: [21.8, -0.5, 'THB'] }] });
+      }
+      if (url.indexOf('MSFT') >= 0) {
+        return jsonRes({ chart: { result: [{ meta: { regularMarketPrice: 500, previousClose: 490 } }] } });
+      }
+      return dead;
+    });
+    let got = await fetchQuotesFor(['M', 'MSFT', 'NOPE']);
+    eq('TV covered M', got.quotes.M, { price: 21.8, prev: 22.3 });
+    eq('Yahoo filled the foreign symbol', got.quotes.MSFT.price, 500);
+    eq('what neither source knew is reported', got.fail, ['NOPE']);
+    eq('TV was asked exactly once', calls.filter(function (c) {
+      return c.url.indexOf('scanner.tradingview') >= 0; }).length, 1);
+    ok('M never went to Yahoo', !calls.some(function (c) {
+      return c.url.indexOf('scanner.tradingview') < 0 && c.url.indexOf('M.BK') >= 0; }));
+
+    // — TV down entirely: everything falls back, nothing is silently lost
+    stub(function (url) {
+      if (url.indexOf('scanner.tradingview.com') >= 0) return dead;
+      return jsonRes({ chart: { result: [{ meta: { regularMarketPrice: 7, previousClose: 6 } }] } });
+    });
+    got = await fetchQuotesFor(['M', 'PTT']);
+    eq('TV outage falls back to Yahoo for every ticker',
+       [got.quotes.M.price, got.quotes.PTT.price], [7, 7]);
+    eq('no failures when Yahoo answers', got.fail, []);
+
+    // — a stalled proxy must not hold the button. Every remote call has a
+    // deadline, and the whole Yahoo fallback stage has a budget on top.
+    calls.length = 0;
+    stub(function (url, opts) {
+      if (url.indexOf('scanner.tradingview') >= 0) return dead;
+      // never settles on its own — only the abort signal can end it
+      return new Promise(function (resolve, reject) {
+        if (opts && opts.signal) {
+          opts.signal.addEventListener('abort', function () { reject(new Error('aborted')); });
+        }
+      });
+    });
+    {
+      const t0 = Date.now();
+      const stalled = await fetchQuotesFor(['DEAD1']);
+      const took = Date.now() - t0;
+      eq('a ticker no source answers for is reported, not hung', stalled.fail, ['DEAD1']);
+      ok('…and it gave up in seconds, not minutes', took < FALLBACK_BUDGET_MS + 5000,
+         'took ' + took + 'ms');
+    }
+    {
+      // once the stage is out of budget the rest are named immediately
+      const many = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8'];
+      const t0 = Date.now();
+      const stalled = await fetchQuotesFor(many);
+      const took = Date.now() - t0;
+      eq('every unreachable ticker is accounted for', stalled.fail.length, many.length);
+      ok('a portfolio of dead tickers still finishes on budget',
+         took < FALLBACK_BUDGET_MS + 10000, 'took ' + took + 'ms');
+    }
+
+    // — fetchXdTV keeps only what is announced and still ahead
+    stub(function () {
+      return jsonRes({ totalCount: 2, data: [
+        { s: 'SET:M', d: [1787745540, 0.4, 1789127940, 1778500740, 0.5] },
+        { s: 'SET:PTT', d: [null, null, null, 1772711940, 1.4] }
+      ] });
+    });
+    const xdRows = await fetchXdTV(['M', 'PTT'], '2026-08-21');
+    eq('announced XD is returned', xdRows.M.xd, '2026-08-26');
+    eq('a holding with nothing announced is left for the estimate tier',
+       xdRows.PTT, undefined);
+
+    stub(function () { return dead; });
+    eq('a failed XD scan is null so callers know to fall back',
+       await fetchXdTV(['M'], '2026-08-21'), null);
+
+    // — a batch caller that already has TV's answer must not ask TV again.
+    // Most holdings have nothing announced at any moment, so getting this
+    // wrong turns one request into one per holding.
+    calls.length = 0;
+    stub(function (url) {
+      if (url.indexOf('scanner.tradingview') >= 0) return jsonRes({ totalCount: 0, data: [] });
+      return jsonRes({ chart: { result: [{ events: { dividends: {
+        a: { date: Date.parse('2024-08-26T00:00:00Z') / 1000, amount: 0.5 },
+        b: { date: Date.parse('2025-08-26T00:00:00Z') / 1000, amount: 0.5 }
+      } } }] } });
+    });
+    const viaBatch = await fetchXdFor('PTT', null);
+    eq('“TV had nothing” does not re-query TV',
+       calls.filter(function (c) { return c.url.indexOf('scanner.tradingview') >= 0; }).length, 0);
+    eq('…and falls through to the estimate tier', viaBatch.conf, 'estimated');
+
+    calls.length = 0;
+    await fetchXdFor('PTT');
+    eq('a standalone call DOES ask TV itself',
+       calls.filter(function (c) { return c.url.indexOf('scanner.tradingview') >= 0; }).length, 1);
+
+    // — and the same through the real button path, which is what actually runs
+    {
+      const prevReg = S.registry, prevXd = S.xd;
+      S.registry = { stocks: [
+        { ticker: 'M', shares: 1000 }, { ticker: 'PTT', shares: 500 },
+        { ticker: 'CPALL', shares: 200 }, { ticker: 'NOSHARES', shares: 0 }
+      ] };
+      S.xd = null;
+      calls.length = 0;
+      stub(function (url) {
+        if (url.indexOf('scanner.tradingview') >= 0) {
+          return jsonRes({ totalCount: 1, data: [
+            { s: 'SET:M', d: [1787745540, 0.4, 1789127940, 1778500740, 0.5] }
+          ] });
+        }
+        return jsonRes({ chart: { result: [{ events: { dividends: {
+          a: { date: Date.parse('2025-04-22T00:00:00Z') / 1000, amount: 2 }
+        } } }] } });
+      });
+      await updateXD();
+      eq('updateXD hits the scanner exactly once for the whole portfolio',
+         calls.filter(function (c) { return c.url.indexOf('scanner.tradingview') >= 0; }).length, 1);
+      eq('the announced holding is confirmed', S.xd.items.M.conf, 'confirmed');
+      eq('…with the announced date', S.xd.items.M.xd, '2026-08-26');
+      eq('the rest fall through to the estimate tier', S.xd.items.PTT.conf, 'estimated');
+      eq('a zero-share holding is not fetched at all', S.xd.items.NOSHARES, undefined);
+      S.registry = prevReg; S.xd = prevXd;
+      try { localStorage.removeItem(XD_KEY); } catch (e) {}
+    }
+
+    window.fetch = realFetch;
+  } catch (e) {
+    fail++;
+    L.push('  FAIL network-layer block threw  → ' + (e && e.message ? e.message : e));
   }
 
   L.push('');

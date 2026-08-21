@@ -1637,13 +1637,9 @@ async function nwUpdateAll() {
     setLoadMsg('ดึงอัตราแลกเปลี่ยน USD/THB…');
     await fetchFxRate();
     const held = (S.registry?.stocks || []).filter(s => s.avg_cost > 0 && s.shares > 0);
-    let stockFail = [];
-    for (const s of held) {
-      setLoadMsg('ราคาหุ้น ' + s.ticker + '…');
-      const q = await fetchYahooQuote(s.ticker);
-      if (q) applyQuote(s, q);
-      else stockFail.push(s.ticker);
-    }
+    const gotStocks = await fetchQuotesFor(held.map(s => s.ticker), setLoadMsg);
+    let stockFail = gotStocks.fail;
+    held.forEach(s => { const q = gotStocks.quotes[s.ticker]; if (q) applyQuote(s, q); });
     if (held.length) recordValueSnapshot();
     const autos = (S.assetReg.assets || []).filter(a => a.price_mode === 'auto' && a.ticker);
     let cryptoFail = [];
@@ -2883,7 +2879,7 @@ function divForecast12m(today) {
       return;
     }
     const xd = S.xd && S.xd.items && S.xd.items[tk];
-    if (xd && xd.dps > 0 && !xd.isDR) {
+    if (xd && xd.dps > 0 && (!xd.isDR || xd.native)) {
       rows.push({ ticker: tk, shares: s.shares, dps: +xd.dps, cash: +xd.dps * s.shares, source: 'xd' });
     }
   });
@@ -3947,6 +3943,126 @@ const PRICE_PROXIES = [
   u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u)
 ];
 
+// A public CORS proxy that is refusing work does not always refuse quickly —
+// one unknown ticker used to hold the ราคา button for 40 seconds while four
+// doomed attempts each waited out the browser's own timeout. Every remote
+// call gets a deadline.
+const FETCH_TIMEOUT_MS = 6000;
+const FALLBACK_BUDGET_MS = 20000;
+
+function fetchWithTimeout(url, opts, ms) {
+  if (typeof AbortController !== 'function') return fetch(url, opts);
+  const ac = new AbortController();
+  const timer = setTimeout(function () { ac.abort(); }, ms || FETCH_TIMEOUT_MS);
+  const o = Object.assign({}, opts || {}, { signal: ac.signal });
+  return fetch(url, o).then(
+    function (r) { clearTimeout(timer); return r; },
+    function (e) { clearTimeout(timer); throw e; }
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TRADINGVIEW SCANNER — primary source for Thai prices + XD
+// One POST returns every column for the whole portfolio at once, it is
+// CORS-open (no proxy in the middle, so nothing to be blocked), and it
+// carries what SET actually announced: the ex-date, the baht per share
+// and the payment date. It also lists a Thai DR's OWN per-unit baht
+// dividend, which no Yahoo endpoint has.
+// Yahoo stays behind it for anything TV does not list (foreign symbols,
+// FX, the index series) and for the dividend HISTORY the estimate tier
+// is projected from.
+// ═══════════════════════════════════════════════════════════════
+const TV_SCAN = 'https://scanner.tradingview.com/thailand/scan';
+
+// TV lists Thai instruments as SET:<TICKER>. Anything already carrying an
+// exchange suffix ('.') or an FX '=' is not a SET symbol — Yahoo handles it.
+function tvSymbolFor(ticker) {
+  const t = (ticker || '').trim().toUpperCase();
+  if (!t || t.includes('.') || t.includes('=') || t.includes(':')) return null;
+  return 'SET:' + t;
+}
+
+// TV stamps corporate-action dates at midday UTC, so the UTC date is the date.
+function tvDate(sec) {
+  return (typeof sec === 'number' && sec > 0)
+    ? new Date(sec * 1000).toISOString().split('T')[0] : null;
+}
+
+// → { TICKER: {column: value, …} } for the tickers TV knows.
+// Unknown tickers are simply absent from the reply, never an error;
+// null means the call itself failed, so callers can fall back to Yahoo.
+async function tvScan(tickers, columns) {
+  const bySym = {};
+  (tickers || []).forEach(function (t) {
+    const sym = tvSymbolFor(t);
+    if (sym) bySym[sym] = t;
+  });
+  const syms = Object.keys(bySym);
+  if (!syms.length) return {};
+  try {
+    const r = await fetchWithTimeout(TV_SCAN, {
+      method: 'POST',
+      // text/plain keeps this a "simple" request — no CORS preflight to fail
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ symbols: { tickers: syms, query: { types: [] } }, columns: columns })
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (!j || !Array.isArray(j.data)) return null;
+    const out = {};
+    j.data.forEach(function (row) {
+      const tk = bySym[row.s];
+      if (!tk || !Array.isArray(row.d)) return;
+      const rec = {};
+      columns.forEach(function (c, i) { rec[c] = row.d[i]; });
+      out[tk] = rec;
+    });
+    return out;
+  } catch (e) { return null; }
+}
+
+const TV_PRICE_COLS = ['close', 'change_abs', 'currency'];
+const TV_XD_COLS = ['dividend_ex_date_upcoming', 'dividend_amount_upcoming',
+                    'dividend_payment_date_upcoming', 'dividend_ex_date_recent',
+                    'dividend_amount_recent'];
+
+// change_abs is the move against yesterday's close, so one row gives both
+// the price and the previous close — same shape fetchYahooQuote returns.
+function tvQuoteFrom(d) {
+  const p = d && d.close;
+  if (typeof p !== 'number' || !(p > 0)) return null;
+  const chg = typeof d.change_abs === 'number' ? d.change_abs : 0;
+  const prev = p - chg;
+  return { price: p, prev: prev > 0 ? prev : 0 };
+}
+
+// TradingView first (one call for the whole list), Yahoo per ticker for
+// whatever it did not answer for. → { quotes: {ticker:{price,prev}}, fail: [] }
+async function fetchQuotesFor(tickers, onProgress) {
+  const list = (tickers || []).slice();
+  const quotes = {}, fail = [];
+  if (onProgress) onProgress('ดึงราคาจาก TradingView…');
+  const rows = await tvScan(list, TV_PRICE_COLS);
+  if (rows) {
+    list.forEach(function (t) {
+      const q = tvQuoteFrom(rows[t]);
+      if (q) quotes[t] = q;
+    });
+  }
+  // Whatever TV did not cover goes to Yahoo one at a time, but the stage as a
+  // whole is budgeted: a portfolio holding several dead tickers must not turn
+  // the button into a minute of spinner. Anything not reached is named in fail.
+  const deadline = Date.now() + FALLBACK_BUDGET_MS;
+  for (const t of list) {
+    if (quotes[t]) continue;
+    if (Date.now() > deadline) { fail.push(t); continue; }
+    if (onProgress) onProgress('ราคา ' + t + ' (Yahoo)…');
+    const q = await fetchYahooQuote(t);
+    if (q) quotes[t] = q; else fail.push(t);
+  }
+  return { quotes: quotes, fail: fail };
+}
+
 // The same chart response already carries yesterday's close, so one call gives
 // both the price and today's move — no extra request, no extra proxy quota.
 async function fetchYahooQuote(ticker) {
@@ -3956,7 +4072,7 @@ async function fetchYahooQuote(ticker) {
   for (const wrap of PRICE_PROXIES) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const r = await fetch(wrap(yurl));
+        const r = await fetchWithTimeout(wrap(yurl));
         if (!r.ok) continue;
         const j = await r.json();
         const meta = j?.chart?.result?.[0]?.meta || {};
@@ -3981,13 +4097,12 @@ async function updatePrices() {
   const held = S.registry.stocks.filter(s => s.avg_cost > 0 && s.shares > 0);
   if (!held.length) { toast('ยังไม่มีหุ้นที่กรอกจำนวน/ต้นทุน'); return; }
   showLoading('กำลังดึงราคาตลาด…');
-  let ok = 0; const fail = [];
-  for (const s of held) {
-    setLoadMsg('ดึงราคา ' + s.ticker + '…');
-    const q = await fetchYahooQuote(s.ticker);
+  const got = await fetchQuotesFor(held.map(function (s) { return s.ticker; }), setLoadMsg);
+  let ok = 0; const fail = got.fail;
+  held.forEach(function (s) {
+    const q = got.quotes[s.ticker];
     if (q) { applyQuote(s, q); ok++; }
-    else fail.push(s.ticker);
-  }
+  });
   setLoadMsg('ดึง' + BENCH_LABEL + '…');
   await updateBench(true);       // quiet: the price toast already reports the run
   recordValueSnapshot();
@@ -4042,30 +4157,98 @@ function xdDaysUntil(dateStr, today) {
 }
 
 // Project the next ex-date from history. A twice-yearly payer has two
-// recurring month/day slots, so consider every distinct slot in recent
-// history and take whichever comes round first — not just the latest.
+// recurring slots, so consider every slot in recent history and take
+// whichever comes round first — not just the latest.
+// A slot DRIFTS year to year, so dates within a few weeks of each other are
+// ONE slot. Matching on the raw mm-dd made a stale year look like a round of
+// its own and win the sort — that is the bug that put M at 23 Aug / 0.60 when
+// the real announcement was 26 Aug / 0.40, and PTT at 28 Aug instead of 1 Oct.
+// 45 days, because the drift is wider than it looks (PTT's second-half
+// ex-dates run 2023-10-04 · 2024-08-28 · 2025-10-01, a 37-day spread) yet
+// still well inside the ~91 days between quarters, so a quarterly payer's
+// rounds never merge.
+const XD_SLOT_DAYS = 45;
+
+// One-off special dividends are real history but a bad basis for the NEXT
+// regular payment — ADVANC's February slot reads 4.24 · 4.61 · 5.74 · 27.41.
+// Drop anything far above the slot's median, then take the most recent
+// survivor: dividends grow, so the latest ordinary one is the best estimate.
+const XD_SPECIAL_FACTOR = 2.5;
+
+function xdMedian(nums) {
+  const a = (nums || []).filter(function (n) { return typeof n === 'number' && n > 0; })
+    .slice().sort(function (x, y) { return x - y; });
+  if (!a.length) return null;
+  const m = Math.floor(a.length / 2);
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+}
+
+// amounts: oldest → newest, all from the same slot
+function xdSlotDps(amounts) {
+  const pos = (amounts || []).filter(function (n) { return typeof n === 'number' && n > 0; });
+  const med = xdMedian(pos);
+  if (med == null) return null;
+  const normal = pos.filter(function (n) { return n <= med * XD_SPECIAL_FACTOR; });
+  const use = normal.length ? normal : pos;
+  return use[use.length - 1];
+}
+
+function xdDayOfYear(dateStr) {
+  const t = Date.parse(dateStr + 'T00:00:00Z');
+  if (isNaN(t)) return null;
+  return Math.round((t - Date.parse(dateStr.slice(0, 4) + '-01-01T00:00:00Z')) / 86400000);
+}
+
+// Distance around the year, so late-December and early-January are one slot.
+function xdSlotGap(a, b) {
+  const d = Math.abs(a - b);
+  return Math.min(d, 365 - d);
+}
+
+// Build a real date from a year + mm-dd, rolling 29 Feb into a common year
+// instead of producing an unparseable string.
+function xdMakeDate(year, mmdd) {
+  const dt = new Date(Date.UTC(year, Number(mmdd.slice(0, 2)) - 1, Number(mmdd.slice(3, 5))));
+  return isNaN(dt.getTime()) ? null : dt.toISOString().split('T')[0];
+}
+
 function xdProjectNext(dates, today) {
   const t = today || xdToday();
   const past = (dates || []).filter(Boolean).slice().sort();
   if (!past.length) return null;
-  const recent = past.slice(-6);
-  const seen = {}, cands = [];
+  const recent = past.slice(-8);
+  const slots = [];
   recent.forEach(function (d) {
-    const mmdd = d.slice(5);
-    if (seen[mmdd]) return;
-    seen[mmdd] = 1;
-    const y = Number(t.slice(0, 4));
-    let c = y + '-' + mmdd;
-    if (c <= t) c = (y + 1) + '-' + mmdd;
-    cands.push(c);
+    const doy = xdDayOfYear(d);
+    if (doy == null) return;
+    let hit = null;
+    for (let i = 0; i < slots.length; i++) {
+      if (xdSlotGap(slots[i].doy, doy) <= XD_SLOT_DAYS) { hit = slots[i]; break; }
+    }
+    // `recent` is ascending, so the newest date in a slot defines where it sits now
+    if (hit) { hit.dates.push(d); hit.doy = doy; }
+    else slots.push({ doy: doy, dates: [d] });
   });
-  cands.sort();
+  const cands = [];
+  slots.forEach(function (sl) {
+    const last = sl.dates[sl.dates.length - 1];
+    const y = Number(t.slice(0, 4));
+    let c = xdMakeDate(y, last.slice(5));
+    if (!c) return;
+    if (c <= t) c = xdMakeDate(y + 1, last.slice(5));
+    if (c) cands.push({ date: c, dates: sl.dates });
+  });
+  if (!cands.length) return null;
+  cands.sort(function (a, b) { return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0); });
   const pick = cands[0];
-  return { date: pick, basis: recent.filter(function (d) { return d.slice(5) === pick.slice(5); }).slice(-3) };
+  return { date: pick.date, basis: pick.dates.slice(-3), slot: pick.dates };
 }
 
-function xdEstCash(dps, shares, isDR) {
-  if (isDR) return null;                       // wrong currency + wrong ratio
+// `native` = this dps is the SET-listed instrument's own figure, in baht.
+// TradingView publishes that for a Thai DR; the underlying's foreign
+// dividend times DR units would be a wrong number, not an approximate one.
+function xdEstCash(dps, shares, isDR, native) {
+  if (isDR && !native) return null;            // wrong currency + wrong ratio
   if (!(dps > 0) || !(shares > 0)) return null;
   return dps * shares;
 }
@@ -4079,11 +4262,12 @@ function buildXdRows(stocks, items, today) {
     const days = it.xd ? xdDaysUntil(it.xd, t) : null;
     rows.push({
       ticker: s.ticker, shares: s.shares,
-      dps: it.isDR ? null : (it.dps != null ? it.dps : null),
+      dps: (it.isDR && !it.native) ? null : (it.dps != null ? it.dps : null),
       xd: it.xd || null, pay: it.pay || null, days: days,
-      cash: xdEstCash(it.dps, s.shares, it.isDR),
-      conf: it.conf || 'none', isDR: !!it.isDR, sym: it.sym || null,
-      basis: it.basis || null, note: it.note || ''
+      cash: xdEstCash(it.dps, s.shares, it.isDR, it.native),
+      conf: it.conf || 'none', isDR: !!it.isDR, native: !!it.native,
+      sym: it.sym || null, basis: it.basis || null, note: it.note || '',
+      src: it.src || null
     });
   });
   const up = rows.filter(function (r) { return r.xd && r.days >= 0; })
@@ -4098,7 +4282,7 @@ async function xdFetchJSON(url, tries) {
   for (const wrap of PRICE_PROXIES) {
     for (let attempt = 0; attempt < (tries || 2); attempt++) {
       try {
-        const r = await fetch(wrap(url));
+        const r = await fetchWithTimeout(wrap(url));
         if (!r.ok) continue;
         return await r.json();
       } catch (e) { /* try next proxy/attempt */ }
@@ -4107,35 +4291,59 @@ async function xdFetchJSON(url, tries) {
   return null;
 }
 
-async function fetchXdFor(ticker) {
+// Turn one TradingView row into an XD item, but only when the announced
+// ex-date is still ahead of us. This is the SET-listed instrument's own
+// announcement — for a DR that means the DR's own baht-per-unit figure.
+function xdFromTvRow(ticker, d, today) {
+  if (!d) return null;
+  const t = today || xdToday();
+  const xd = tvDate(d.dividend_ex_date_upcoming);
+  if (!xd || xd < t) return null;
+  const pay = tvDate(d.dividend_payment_date_upcoming);
+  const dps = d.dividend_amount_upcoming;
+  const isDR = !!DR_UNDERLYING[ticker];
+  return {
+    sym: tvSymbolFor(ticker), isDR: isDR, native: true, src: 'tv',
+    dps: (typeof dps === 'number' && dps > 0) ? dps : null,
+    xd: xd, pay: (pay && pay >= xd) ? pay : null,
+    conf: 'confirmed', basis: null,
+    note: isDR ? 'ประกาศของ DR เอง (บาทต่อหน่วย)' : ''
+  };
+}
+
+// One call for the whole portfolio → { ticker: item } for the holdings that
+// have an announced upcoming ex-date. Absent = nothing announced yet.
+async function fetchXdTV(tickers, today) {
+  const rows = await tvScan(tickers, TV_XD_COLS);
+  if (!rows) return null;
+  const out = {};
+  (tickers || []).forEach(function (t) {
+    const it = xdFromTvRow(t, rows[t], today);
+    if (it) out[t] = it;
+  });
+  return out;
+}
+
+// tvRow: undefined = "go ask TradingView yourself"; a row or null = "already
+// asked, here is the answer" — so a batch caller never re-queries per ticker.
+async function fetchXdFor(ticker, tvRow) {
   const info = xdSymbolFor(ticker);
-  const out = { sym: info.sym, isDR: info.isDR, dps: null, xd: null, pay: null,
-                conf: 'none', basis: null, note: '' };
+  const out = { sym: info.sym, isDR: info.isDR, native: false, dps: null, xd: null,
+                pay: null, conf: 'none', basis: null, note: '', src: null };
   const today = xdToday();
 
-  // 1 — announced upcoming ex-date
-  // One shot per proxy: this endpoint is sometimes gated for every symbol,
-  // and 13 holdings x 4 doomed attempts is a slow way to learn that.
-  const qs = await xdFetchJSON('https://query1.finance.yahoo.com/v10/finance/quoteSummary/' +
-    encodeURIComponent(info.sym) + '?modules=calendarEvents,summaryDetail', 1);
-  const res = qs && qs.quoteSummary && qs.quoteSummary.result && qs.quoteSummary.result[0];
-  const ex = xdFromEpoch(res && res.calendarEvents && res.calendarEvents.exDividendDate &&
-                         res.calendarEvents.exDividendDate.raw);
-  const pay = xdFromEpoch(res && res.calendarEvents && res.calendarEvents.dividendDate &&
-                          res.calendarEvents.dividendDate.raw);
-  const sd = (res && res.summaryDetail) || {};
-  const rate = (sd.dividendRate && sd.dividendRate.raw) != null ? sd.dividendRate.raw
-             : ((sd.trailingAnnualDividendRate && sd.trailingAnnualDividendRate.raw) != null
-                ? sd.trailingAnnualDividendRate.raw : null);
-  if (ex && ex >= today) {
-    out.xd = ex;
-    out.pay = (pay && pay >= ex) ? pay : null;
-    out.conf = 'confirmed';
-    if (!info.isDR && typeof rate === 'number' && rate > 0) out.dps = rate;
-  }
+  // 1 — announced upcoming ex-date, straight from TradingView.
+  // (Yahoo's v10/quoteSummary used to fill this slot and now answers null for
+  // every symbol — which is why every row had degraded to a guess.)
+  const tv = tvRow !== undefined ? xdFromTvRow(ticker, tvRow, today)
+                                 : ((await fetchXdTV([ticker], today)) || {})[ticker];
+  if (tv) return tv;
 
-  // 2 — nothing announced → project from this stock's own history
-  if (!out.xd) {
+  // 2 — nothing announced → project from this stock's own history.
+  // Yahoo's chart events are the only free source with a full ex-date
+  // history, so this tier stays on Yahoo (via the proxy chain).
+  out.src = 'yahoo-est';
+  {
     const ch = await xdFetchJSON('https://query1.finance.yahoo.com/v8/finance/chart/' +
       encodeURIComponent(info.sym) + '?interval=1d&range=5y&events=div');
     const r0 = ch && ch.chart && ch.chart.result && ch.chart.result[0];
@@ -4148,9 +4356,12 @@ async function fetchXdFor(ticker) {
       const proj = xdProjectNext(list.map(function (d) { return d.date; }), today);
       if (proj) {
         out.xd = proj.date; out.conf = 'estimated'; out.basis = proj.basis;
-        const same = list.filter(function (d) { return d.date.slice(5) === proj.date.slice(5); });
-        const ref = same.length ? same[same.length - 1] : list[list.length - 1];
-        if (!info.isDR && ref && ref.amount > 0) out.dps = ref.amount;
+        const inSlot = {};
+        (proj.slot || []).forEach(function (d) { inSlot[d] = 1; });
+        const same = list.filter(function (d) { return inSlot[d.date]; });
+        const src = same.length ? same : list;
+        const dps = xdSlotDps(src.map(function (d) { return d.amount; }));
+        if (!info.isDR && dps > 0) out.dps = dps;
       }
     }
   }
@@ -4177,10 +4388,21 @@ async function updateXD() {
   const held = S.registry.stocks.filter(function (s) { return s.shares > 0; });
   if (!held.length) { toast('ยังไม่มีหุ้นที่กรอกจำนวน'); return; }
   showLoading('กำลังดึงวัน XD…');
+  const today = xdToday();
+  // One TradingView call covers every announced XD in the portfolio; only the
+  // holdings with nothing announced still need a per-ticker history pull.
+  setLoadMsg('ดึงประกาศ XD จาก TradingView…');
+  const tickers = held.map(function (s) { return s.ticker; });
+  const tvRows = await tvScan(tickers, TV_XD_COLS);
   const items = {};
   for (const s of held) {
+    const tv = tvRows ? xdFromTvRow(s.ticker, tvRows[s.ticker], today) : null;
+    if (tv) { items[s.ticker] = tv; continue; }
     setLoadMsg('XD ' + s.ticker + '…');
-    try { items[s.ticker] = await fetchXdFor(s.ticker); }
+    // null (not undefined) says "TV already answered, it has nothing" — with
+    // undefined the fallback would re-ask TV once per holding, which is most
+    // of them, since only a handful have an announcement pending at any time
+    try { items[s.ticker] = await fetchXdFor(s.ticker, tvRows ? (tvRows[s.ticker] || null) : undefined); }
     catch (e) { items[s.ticker] = { conf: 'none', note: 'ดึงข้อมูลไม่สำเร็จ' }; }
   }
   S.xd = { fetched_at: new Date().toISOString(), items: items };
@@ -4271,10 +4493,10 @@ function renderXD() {
     h += '</ul>';
   }
   h += '<div class="xd-warn">' +
-    '<strong>ยืนยันแล้ว</strong> = Yahoo มีวัน XD ล่วงหน้าที่ประกาศแล้ว · ' +
+    '<strong>ยืนยันแล้ว</strong> = TradingView มีวัน XD · บาท/หุ้น · วันจ่าย ที่ประกาศกับ SET แล้ว · ' +
     '<strong>คาดการณ์</strong> = ยังไม่ประกาศ คำนวณจากรอบปีก่อนของหุ้นตัวนั้นเอง — อย่าใช้ตัดสินใจซื้อขาย ให้ตรวจที่ SET อีกครั้ง<br>' +
-    'DR (LVMH01 / MSFT80 / XIAOMI80 / ASML01) แสดงวัน ex-dividend ของ<em>หุ้นแม่</em> ' +
-    'ผู้ออก DR กำหนดวัน XD และจำนวนต่อหน่วยเอง จึงไม่คำนวณเป็นบาทให้ (คนละสกุลเงินและคนละอัตราส่วน)' +
+    'DR (LVMH01 / MSFT80 / XIAOMI80 / ASML01): ถ้า “ยืนยันแล้ว” = ประกาศของตัว DR เอง เป็นบาทต่อหน่วย คำนวณเงินที่จะได้รับให้ได้ · ' +
+    'ถ้าเป็น “คาดการณ์” = อิงวัน ex-dividend ของ<em>หุ้นแม่</em> ผู้ออก DR กำหนดวันและจำนวนต่อหน่วยเอง จึงไม่คำนวณเป็นบาทให้' +
     '</div></div>';
   box.innerHTML = h;
 }
