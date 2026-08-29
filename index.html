@@ -99,6 +99,7 @@ hr.div{border:none;height:1px;background:var(--border);margin:20px 0}
 .st-day{font-size:11px;font-weight:700;margin-top:2px}
 .st-stale{display:inline-block;font-size:10px;font-weight:700;color:var(--orange);background:var(--oranged);border-radius:5px;padding:1px 6px;margin-top:3px}
 .st-watch{font-size:12px;color:var(--tx3);font-style:italic}
+.st-closed{font-size:12px;font-weight:700;color:var(--tx2)}
 .st-xd{font-size:10px;font-weight:700;color:var(--c1);background:var(--c1d);border-radius:5px;padding:1px 6px;line-height:1.7;white-space:nowrap}
 .st-xd.soon{color:var(--yellow);background:var(--yellowd)}
 /* an estimate never gets the urgent colour — a guess should not look announced */
@@ -1087,6 +1088,7 @@ let S = {
   stClosed: {},        // stock groups the user collapsed (they start expanded)
   stGroup: 'sector',   // how the stock list is grouped: sector|status|held|none
   stRowOpen: {},       // stock rows whose detail band is open (they start closed)
+  stShowClosed: false, // show holdings you have sold out of, in the stock list
   editData: {}
 };
 
@@ -1127,6 +1129,7 @@ function saveLS() {
       nwRange: S.nwRange,
       stClosed: S.stClosed,
       stGroup: S.stGroup,
+      stShowClosed: S.stShowClosed,
       stRowOpen: S.stRowOpen,
       // Recovery buffer ONLY — Google Drive is the source of truth. This lets a
       // failed Drive save be retried/recovered instead of lost on reload.
@@ -1155,6 +1158,7 @@ function loadLS() {
     if (d.nwRange && CHART_RANGES.some(r => r.key === d.nwRange)) S.nwRange = d.nwRange;
     if (d.stClosed && typeof d.stClosed === 'object') S.stClosed = d.stClosed;
     if (d.stGroup && ST_GROUPS.some(g => g.key === d.stGroup)) S.stGroup = d.stGroup;
+    if (typeof d.stShowClosed === 'boolean') S.stShowClosed = d.stShowClosed;
     if (d.stRowOpen && typeof d.stRowOpen === 'object') S.stRowOpen = d.stRowOpen;
     if (d.registry) S.cachedRegistry = d.registry; // recovery buffer
     if (d.kb) S.cachedKb = d.kb;
@@ -3990,6 +3994,18 @@ function syncPositionsFromTrades() {
 
 function fromTrades(s) { return !!s && s.pos_source === 'trades'; }
 
+// A holding you have sold out of is NOT a watchlist entry. Both end up at
+// shares 0, which is why a sold stock used to sit in the list captioned
+// "Watch only" as though you had never owned it. The book tells them apart:
+// only a stock the trade log has driven carries pos_source, so trade-sourced
+// with nothing left is a closed position — it keeps its realized P/L, its
+// score and its history, but it is out of the portfolio.
+function closedPosition(s) { return fromTrades(s) && !(+s.shares > 0); }
+
+function closedPositions() {
+  return ((S.registry && S.registry.stocks) || []).filter(closedPosition);
+}
+
 // Stocks holding a position that the log doesn't know about yet.
 function stocksNeedingOpening() {
   return (S.registry?.stocks || []).filter(s => !fromTrades(s) && s.shares > 0 && s.avg_cost > 0);
@@ -5547,7 +5563,7 @@ function renderMoneyDashboard() {
   el.innerHTML = heroHtml + `
   <div class="md-card">
     <div class="md-card-head">
-      <div class="md-card-t">📊 หุ้นทั้งหมด (${stocks.length})</div>
+      <div class="md-card-t">📊 หุ้นทั้งหมด (${stocks.length - (S.stShowClosed ? 0 : closedPositions().length)})</div>
       <div class="sort-bar" id="plSortBar"></div>
     </div>
     <div class="grp-bar">
@@ -5556,6 +5572,7 @@ function renderMoneyDashboard() {
         <div class="sort-bar" id="stGroupBar"></div>
       </div>
       <div class="grp-bar-r">
+        <button class="btn btn-g btn-sm hidden" id="stClosedBtn" onclick="stToggleClosed()"></button>
         <button class="btn btn-g btn-sm" id="stRowBtn" onclick="stToggleAllRows()">▾ กางรายละเอียด</button>
         <button class="btn btn-g btn-sm" id="stExpandBtn" onclick="grpToggleAll('st')">⊖ ยุบทั้งหมด</button>
       </div>
@@ -5614,7 +5631,9 @@ function sortedStockRows() {
   const { key, dir } = S.plSort;
   const mul = dir === 'asc' ? 1 : -1;
   const today = key === 'xd' ? xdToday() : null;
-  return (S.registry?.stocks || []).slice().sort((a, b) => {
+  return (S.registry?.stocks || [])
+    .filter(s => S.stShowClosed || !closedPosition(s))
+    .slice().sort((a, b) => {
     if (key === 'ticker') return mul * a.ticker.localeCompare(b.ticker, 'th');
     if (key === 'xd') {
       const c = xdSortCmp(xdSortDays(a.ticker, today), xdSortDays(b.ticker, today), mul);
@@ -5693,9 +5712,9 @@ function stGroupOf(s) {
     return { key: 'sc:' + name, name, icon: scoreEmoji(sc) };
   }
   if (S.stGroup === 'held') {
-    return (s.avg_cost > 0 && s.shares > 0)
-      ? { key: 'hd:held', name: 'ถือครองอยู่', icon: '💼' }
-      : { key: 'hd:watch', name: 'เฝ้าดู (Watch only)', icon: '👀' };
+    if (s.avg_cost > 0 && s.shares > 0) return { key: 'hd:held', name: 'ถือครองอยู่', icon: '💼' };
+    if (closedPosition(s)) return { key: 'hd:closed', name: 'ขายหมดแล้ว', icon: '✅' };
+    return { key: 'hd:watch', name: 'เฝ้าดู (Watch only)', icon: '👀' };
   }
   const sec = (s.sector && s.sector !== '—') ? s.sector : 'ไม่ระบุกลุ่ม';
   return { key: 'sec:' + sec, name: sec, icon: stSectorIcon(sec) };
@@ -5775,6 +5794,7 @@ function renderStockRows() {
   const btn = document.getElementById('stExpandBtn');
   if (btn) btn.classList.toggle('hidden', S.stGroup === 'none');
   grpSyncBtn('st');
+  stSyncClosedBtn();
   stSyncRowBtn();
 
   // Sparklines need the canvases in the DOM first.
@@ -5843,6 +5863,24 @@ function stToggleAllRows() {
   renderStockRows();
 }
 
+function stToggleClosed() {
+  S.stShowClosed = !S.stShowClosed;
+  saveLS();
+  renderMoneyDashboard();
+}
+
+function stSyncClosedBtn() {
+  const b = document.getElementById('stClosedBtn');
+  if (!b) return;
+  const n = closedPositions().length;
+  b.classList.toggle('hidden', n === 0);
+  b.textContent = (S.stShowClosed ? '✕ ซ่อนที่ขายหมดแล้ว' : '✅ ขายหมดแล้ว ' + n) ;
+  b.title = S.stShowClosed
+    ? 'ซ่อนหุ้นที่ขายหมดแล้วออกจากรายการ'
+    : 'หุ้นที่ขายหมดแล้ว ' + n + ' ตัว ถูกซ่อนอยู่ — แตะเพื่อดู';
+  b.classList.toggle('on', !!S.stShowClosed);
+}
+
 function stSyncRowBtn() {
   const b = document.getElementById('stRowBtn');
   if (!b) return;
@@ -5872,12 +5910,17 @@ function stockRowHtml(s) {
   const stale = staleDays(s);
   const staleHtml = stale ? `<div class="st-stale">ราคาเก่า ${stale} วัน</div>` : '';
 
+  const closed = closedPosition(s);
   const money = held
     ? `<div class="st-val">${fmtBaht(st.value)}</div>
        <div class="st-pl" style="color:${col}">${sg}${fmtBaht(Math.abs(st.pl))} (${sg}${Math.abs(st.pct).toFixed(2)}%)</div>
        ${dayHtml}
        <div class="st-qty">${s.shares.toLocaleString()} × ${st.hasP ? '฿' + s.current_price : 'ยังไม่มีราคา'} · ทุน ${fmtBaht(st.cost)}</div>
        ${staleHtml}`
+    : closed
+    ? `<div class="st-closed">ขายหมดแล้ว</div>
+       ${+s.realized_pl ? `<div class="st-pl" style="color:${+s.realized_pl >= 0 ? 'var(--green)' : 'var(--red)'}">รับรู้ ${+s.realized_pl >= 0 ? '+' : '−'}${fmtBaht(Math.abs(+s.realized_pl))}</div>` : ''}
+       <div class="st-qty">${s.position_date ? 'ขายล่าสุด ' + escHtml(s.position_date) : 'ไม่เหลือหุ้นในสมุด'}</div>`
     : `<div class="st-watch">Watch only</div>${dayHtml}`;
 
   const open = !!S.stRowOpen[tk];
@@ -6051,7 +6094,9 @@ function renderDashboard() {
 }
 
 function renderSummary() {
-  const stocks = S.registry?.stocks || [];
+  // Closed positions are out of the portfolio, so they no longer pull on its
+  // average score or its colour counts.
+  const stocks = (S.registry?.stocks || []).filter(s => !closedPosition(s));
   const withPos = stocks.filter(s => s.avg_cost > 0 && s.shares > 0);
   const totalCost = withPos.reduce((a, s) => a + s.avg_cost * s.shares, 0);
   const avgScore = Math.round(stocks.reduce((a, s) => a + s.thesis_score, 0) / stocks.length);

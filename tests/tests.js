@@ -14,6 +14,12 @@
 
   const TODAY = new Date().toISOString().split('T')[0];
 
+  // One throw anywhere below used to lose every result collected so far: the
+  // harness is async, so it surfaced as an unhandled rejection and the page
+  // simply never wrote its <pre>. A run that dies must still report what it
+  // had, and name where it stopped.
+  try {
+
   // ══════════════════ number / date helpers ══════════════════
   sec('ppNum / ppDate');
   eq('ppNum plain', ppNum('245.50'), 245.5);
@@ -1999,6 +2005,118 @@
     S.tradeLog = prevLog;
   }
 
+  // ══════════════════ selling out of a holding ══════════════════
+  sec('closedPosition — sold out is not the same as never owned');
+  {
+    const prevReg = S.registry, prevLog = S.tradeLog, prevShow = S.stShowClosed,
+          prevGroup = S.stGroup, prevClosed = S.stClosed, prevRowOpen = S.stRowOpen,
+          prevSort = S.plSort;
+    S.stGroup = 'none'; S.stClosed = {}; S.stRowOpen = {}; S.stShowClosed = false;
+    // Group order follows the sort key, so pin it rather than inheriting
+    // whatever an earlier section left behind.
+    S.plSort = { key: 'value', dir: 'desc' };
+    S.registry = { portfolio_name: 't', stocks: [
+      { ticker: 'CPF',  avg_cost: 22, shares: 1000, thesis_score: 40, current_price: 24,
+        catalysts: [], thesis_breakers: [] },
+      { ticker: 'BDMS', avg_cost: 22, shares: 1000, thesis_score: 75, current_price: 24,
+        catalysts: [], thesis_breakers: [] },
+      { ticker: 'CPN',  avg_cost: 0,  shares: 0,    thesis_score: 70,
+        catalysts: [], thesis_breakers: [] }
+    ] };
+    S.tradeLog = { version: 1, trades: [
+      { id: 'a', date: '2026-01-05', ticker: 'CPF', type: 'buy',  qty: 1000, price: 22, fee: 37 },
+      { id: 'b', date: '2026-08-20', ticker: 'CPF', type: 'sell', qty: 1000, price: 24, fee: 40 }
+    ] };
+    syncPositionsFromTrades();
+    const cpf = S.registry.stocks.find(s => s.ticker === 'CPF');
+    const cpn = S.registry.stocks.find(s => s.ticker === 'CPN');
+    const bdms = S.registry.stocks.find(s => s.ticker === 'BDMS');
+
+    eq('selling everything leaves no shares', cpf.shares, 0);
+    ok('a sold-out holding is a closed position', closedPosition(cpf));
+    ok('a stock never owned is NOT a closed position — it is a watchlist entry',
+       !closedPosition(cpn));
+    ok('a stock you still hold is not closed', !closedPosition(bdms));
+    eq('the realized profit is kept, not thrown away', cpf.realized_pl, 1923);
+    ok('and so is the row itself, for its history',
+       !!S.registry.stocks.find(s => s.ticker === 'CPF'));
+    eq('closedPositions lists it', closedPositions().map(s => s.ticker), ['CPF']);
+
+    // The complaint: it stayed in the main list, captioned like a watchlist item.
+    eq('a sold-out holding drops out of the stock list',
+       sortedStockRows().map(s => s.ticker), ['BDMS', 'CPN']);
+    renderDashboard();
+    let rows = [].slice.call(document.querySelectorAll('#plRows .st-row'))
+      .map(r => r.dataset.ticker);
+    eq('…and out of the rendered rows', rows, ['BDMS', 'CPN']);
+    // Every DOM lookup here is guarded: a regression must show up as one red
+    // line, not as a null-deref that takes the whole run down with it.
+    const rowText = tk => ([].slice.call(document.querySelectorAll('#plRows .st-row'))
+      .filter(r => r.dataset.ticker === tk)[0] || { textContent: '' }).textContent;
+    const hdr = ([].slice.call(document.querySelectorAll('.md-card-t'))
+      .filter(e => e.textContent.indexOf('หุ้นทั้งหมด') !== -1)[0] || { textContent: '' }).textContent;
+    ok('the header counts what you can actually see', hdr.indexOf('(2)') !== -1, hdr);
+
+    // A closed position must not keep voting on the portfolio's score.
+    const sum = document.getElementById('portfolioSummary').textContent;
+    ok('its score is out of the average', sum.indexOf('73') !== -1, sum.slice(0, 80));
+    ok('…and out of the colour counts (CPF was the only 🔴)', sum.indexOf('🔴') === -1);
+
+    // Hidden, not deleted: one tap brings it back.
+    const btn = document.getElementById('stClosedBtn') || { classList: { contains: () => true }, textContent: '' };
+    ok('the list says how many are hidden', !btn.classList.contains('hidden') &&
+       btn.textContent.indexOf('1') !== -1, btn.textContent);
+    stToggleClosed();
+    rows = [].slice.call(document.querySelectorAll('#plRows .st-row')).map(r => r.dataset.ticker);
+    eq('showing them puts it back in the list', rows, ['BDMS', 'CPF', 'CPN']);
+    const txt = rowText('CPF');
+    ok('and it reads as sold, not as a watchlist item', txt.indexOf('ขายหมดแล้ว') !== -1);
+    ok('"Watch only" is gone from it', txt.indexOf('Watch only') === -1);
+    ok('it shows what you actually made', txt.indexOf('1,923') !== -1, txt.slice(0, 120));
+    ok('and when you sold', txt.indexOf('2026-08-20') !== -1);
+    ok('a real watchlist row still says Watch only',
+       rowText('CPN').indexOf('Watch only') !== -1, rowText('CPN').slice(0, 80));
+
+    // Grouping gains the third bucket rather than lumping sold in with watched.
+    S.stGroup = 'held';
+    eq('ถือ/เฝ้าดู now has three buckets',
+       stockGroups().map(g => g.name + ':' + g.list.map(x => x.ticker).join('/')),
+       ['ถือครองอยู่:BDMS', 'ขายหมดแล้ว:CPF', 'เฝ้าดู (Watch only):CPN']);
+    S.stGroup = 'none';
+
+    stToggleClosed();
+    eq('hiding them again works', sortedStockRows().map(s => s.ticker), ['BDMS', 'CPN']);
+
+    // Buying back makes it a live holding again, with no leftover state.
+    S.tradeLog.trades.push({ id: 'c', date: '2026-08-25', ticker: 'CPF', type: 'buy',
+                             qty: 500, price: 23, fee: 19 });
+    syncPositionsFromTrades();
+    ok('buying back reopens the position', !closedPosition(cpf));
+    eq('…and it returns to the list on its own',
+       sortedStockRows().map(s => s.ticker), ['BDMS', 'CPF', 'CPN']);
+
+    // Deleting the trades hands the stock back to manual editing, and a
+    // hand-edited zero is a watchlist entry, not a sale.
+    S.tradeLog = { version: 1, trades: [] };
+    syncPositionsFromTrades();
+    ok('with no trades left it is not a closed position', !closedPosition(cpf));
+
+    // Choosing to see them has to survive a reload, like the other list
+    // preferences — otherwise it silently re-hides on every visit.
+    S.stShowClosed = true;
+    saveLS();
+    ok('the choice is written to localStorage',
+       JSON.parse(localStorage.getItem(LS_KEY) || '{}').stShowClosed === true);
+    S.stShowClosed = false;
+    loadLS();
+    eq('…and comes back on load', S.stShowClosed, true);
+
+    S.registry = prevReg; S.tradeLog = prevLog; S.stShowClosed = prevShow;
+    S.stGroup = prevGroup; S.stClosed = prevClosed; S.stRowOpen = prevRowOpen;
+    S.plSort = prevSort;
+    saveLS();
+  }
+
   sec('syncPositionsFromTrades');
   {
     const prevLog = S.tradeLog, prevReg = S.registry, prevKb = S.kb;
@@ -2791,6 +2909,13 @@
   } catch (e) {
     fail++;
     L.push('  FAIL network-layer block threw  → ' + (e && e.message ? e.message : e));
+  }
+
+  } catch (e) {
+    fail++;
+    L.push('');
+    L.push('  FAIL harness threw and stopped early  → ' + (e && e.message ? e.message : e));
+    L.push((e && e.stack ? e.stack : '').split('\n').slice(1, 4).join('\n'));
   }
 
   L.push('');
