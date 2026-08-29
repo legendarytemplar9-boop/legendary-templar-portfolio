@@ -805,6 +805,436 @@
     S.registry = prevReg; S.xd = prevXd;
   }
 
+  // ══════════════════ XD strategy: tick, fees, tax, calc, screen ══════════════════
+  sec('xdTickSize / xdSnap');
+  eq('under 2 baht', xdTickSize(1.99), 0.01);
+  eq('2–5', xdTickSize(2), 0.02);
+  eq('5–10', xdTickSize(9.5), 0.05);
+  eq('10–25', xdTickSize(23.8), 0.10);
+  eq('25–100', xdTickSize(25), 0.25);
+  eq('100–200', xdTickSize(105), 0.50);
+  eq('200–400', xdTickSize(200), 1);
+  eq('400 and up', xdTickSize(500), 2);
+  // A tick-snapped price must be enterable, so it must survive the float
+  // division that produced it — 9.1087/0.05 floors to 9.100000000000001 raw.
+  eq('snap down lands on a real price', xdSnap(9.1087, 0.05, 'down'), 9.1);
+  eq('snap up lands on a real price', xdSnap(9.1087, 0.05, 'up'), 9.15);
+  eq('a price already on a tick does not move down', xdSnap(9.1, 0.05, 'down'), 9.1);
+  eq('a price already on a tick does not move up', xdSnap(9.1, 0.05, 'up'), 9.1);
+  eq('never more than 2 decimals', xdSnap(23.777, 0.1, 'down'), 23.7);
+
+  sec('commRate — the fee is per leg, on the price');
+  ok('0.15% base becomes 0.168% with fees + VAT',
+     Math.abs(commRate(0.15) - 0.00168) < 1e-6, String(commRate(0.15)));
+  ok('0.20% base becomes 0.2215%',
+     Math.abs(commRate(0.20) - 0.0022149) < 1e-6, String(commRate(0.20)));
+  ok('zero commission still carries the exchange fees',
+     commRate(0) > 0, String(commRate(0)));
+
+  sec('divTaxEffPct — 10% final is not always the cheapest');
+  eq('final mode ignores the bracket', divTaxEffPct('final', 35, 20), 10);
+  eq('filing at the 20% bracket costs nothing', divTaxEffPct('file', 20, 20), 0);
+  eq('filing at 10% is a refund', divTaxEffPct('file', 10, 20), -12.5);
+  eq('filing at 25% still beats the 10% final', divTaxEffPct('file', 25, 20), 6.25);
+  eq('30% is where the final withholding wins', divTaxEffPct('file', 30, 20), 12.5);
+  eq('filing at 35%', divTaxEffPct('file', 35, 20), 18.75);
+  // A blank corporate rate falls back to the ordinary 20% rather than quietly
+  // dropping the credit — which would overstate the tax and make selling look
+  // better than it is. For a genuinely tax-free dividend (BOI), set the tax
+  // itself to zero, not the corporate rate.
+  eq('a blank corporate rate falls back to the ordinary 20%', divTaxEffPct('file', 30, 0), 12.5);
+  eq('…and so does an out-of-range one', divTaxEffPct('file', 30, 100), 12.5);
+
+  sec('xdCalc — the split that decides it');
+  {
+    // The worked example from the standalone calculator:
+    // 1,000 × 23.80, dividend 0.45, buy back 22.40, 0.15% commission, 10% tax.
+    const c = xdCalc({ shares: 1000, price: 23.80, dps: 0.45, buyback: 22.40,
+                       commPct: 0.15, divTaxPct: 10 });
+    ok('theoretical ex-price is P0 − D', Math.abs(c.px - 23.35) < 1e-9, String(c.px));
+    ok('total gain matches the round trip',
+       Math.abs(c.gain - 917.39) < 0.01, String(c.gain));
+    // The whole point: at the TEXTBOOK price this trade loses money, so the
+    // "certain" half must be negative. Q·D·(T−C) would say +44.24 instead.
+    ok('the certain half is negative here',
+       Math.abs(c.certain - (-34.21)) < 0.01, String(c.certain));
+    ok('the bet half carries the rest',
+       Math.abs(c.bet - 951.60) < 0.01, String(c.bet));
+    ok('certain + bet reconstructs the gain exactly',
+       Math.abs((c.certain + c.bet) - c.gain) < 1e-6,
+       c.certain + ' + ' + c.bet + ' vs ' + c.gain);
+    ok('buying back at the theoretical price gives exactly the certain half',
+       Math.abs(xdCalc({ shares: 1000, price: 23.80, dps: 0.45, buyback: 23.35,
+                         commPct: 0.15, divTaxPct: 10 }).gain - c.certain) < 1e-6);
+    // Break-evens: at each one, the alternative ties with holding.
+    ok('the buyback break-even ties with the dividend',
+       Math.abs(xdCalc({ shares: 1000, price: 23.80, dps: 0.45, buyback: c.beBuyRaw,
+                         commPct: 0.15, divTaxPct: 10 }).gain) < 1e-6);
+    eq('…snapped down onto a tick', c.beBuy, 23.3);
+    ok('selling at the sell break-even ties with holding', (function () {
+      const q = 1000, C = commRate(0.15);
+      const net = q * c.beSellRaw * (1 - C);
+      return Math.abs(net - c.holdVal) < 1e-6;
+    })());
+    eq('…snapped up onto a tick', c.beSell, 23.8);
+    eq('buffer is measured in ticks', c.bufferTicks, 9);
+    eq('the sell ladder brackets the break-even', c.sellRows.length, 5);
+    eq('the middle rung IS the break-even', c.sellRows[2].be, true);
+    eq('the buy ladder runs deeper below', c.buyRows.length, 7);
+    ok('a target far outside the ladder window is simply not marked',
+       !c.buyRows.some(function (r) { return r.target; }));
+  }
+  {
+    // M, the shape that passes the screen: 4.21% in one round.
+    const c = xdCalc({ shares: 4000, price: 9.50, dps: 0.40, buyback: 9.05,
+                       commPct: 0.15, divTaxPct: 10 });
+    ok('a high-yield round makes the certain half positive',
+       Math.abs(c.certain - 35.02) < 0.01, String(c.certain));
+    ok('and the total still reconciles',
+       Math.abs((c.certain + c.bet) - c.gain) < 1e-6);
+    eq('tick comes from the price band', c.tick, 0.05);
+    eq('break-even buyback', c.beBuy, 9.1);
+    ok('a target inside the ladder window is flagged on its rung',
+       c.buyRows.filter(function (r) { return r.target; })
+        .every(function (r) { return r.price === 9.05; }) &&
+       c.buyRows.some(function (r) { return r.target; }));
+  }
+  {
+    // Filing at a low bracket makes the dividend worth MORE than face value,
+    // so no buyback price can beat holding on the certain half.
+    const c = xdCalc({ shares: 1000, price: 20, dps: 1, buyback: 19,
+                       commPct: 0.15, divTaxPct: -12.5 });
+    ok('a negative dividend tax can never make selling certain',
+       c.certain < 0, String(c.certain));
+  }
+  eq('no shares → no answer', xdCalc({ shares: 0, price: 10, dps: 1 }), null);
+  eq('no price → no answer', xdCalc({ shares: 100, price: 0, dps: 1 }), null);
+  ok('no buyback target is still a valid calculation', (function () {
+    const c = xdCalc({ shares: 100, price: 10, dps: 0.5, commPct: 0.15, divTaxPct: 10 });
+    return c && c.gain === null && c.bet === null && c.certain != null && c.beBuy > 0;
+  })());
+
+  sec('xdScreen — the zero-input verdict');
+  {
+    const cfg = { C: commRate(0.15), divTaxPct: 10 };
+    const go = xdScreen({ shares: 4000, price: 9.5, dps: 0.4, conf: 'confirmed' }, cfg);
+    eq('a 4.21% round clears the bar', go.state, 'go');
+    ok('…because it beats the threshold', go.yieldPct > go.threshPct,
+       go.yieldPct + ' vs ' + go.threshPct);
+    ok('the threshold is 2C/T = 3.36%', Math.abs(go.threshPct - 3.36) < 0.01,
+       String(go.threshPct));
+    const hold = xdScreen({ shares: 1000, price: 24.65, dps: 0.35, conf: 'confirmed' }, cfg);
+    eq('a 1.42% round does not', hold.state, 'hold');
+    ok('and its certain half is negative', hold.certain < 0, String(hold.certain));
+    // A guess is not a small answer, it is no answer — it must never be graded
+    // on the same scale as an announcement, in EITHER direction.
+    eq('an estimated row is never graded',
+       xdScreen({ shares: 4000, price: 9.5, dps: 0.4, conf: 'estimated' }, cfg).state,
+       'unannounced');
+    eq('…not even when it would fail',
+       xdScreen({ shares: 1000, price: 24.65, dps: 0.35, conf: 'estimated' }, cfg).state,
+       'unannounced');
+    // A DR with no baht figure of its own must not read as 0% and get graded.
+    eq('no dps → no data', xdScreen({ shares: 100, price: 10, dps: null, conf: 'confirmed' }, cfg).state, 'nodata');
+    eq('no price → no data', xdScreen({ shares: 100, price: 0, dps: 1, conf: 'confirmed' }, cfg).state, 'nodata');
+    eq('no dps → no tax figure either',
+       xdScreen({ shares: 100, price: 10, dps: null, conf: 'confirmed' }, cfg).divTax, null);
+    const neg = xdScreen({ shares: 1000, price: 20, dps: 1, conf: 'confirmed' },
+                         { C: commRate(0.15), divTaxPct: -12.5 });
+    eq('a refunded dividend can never say "go"', neg.state, 'hold');
+    eq('…and has no threshold to show', neg.threshPct, null);
+    ok('…and the tax column shows the refund as negative', neg.divTax < 0, String(neg.divTax));
+  }
+
+  sec('xdSettings — what the app calculates with');
+  {
+    const prev = S.assetReg;
+    S.assetReg = { settings: {} };
+    eq('commission defaults to 0.15%', xdSettings().commPct, 0.15);
+    eq('dividend tax defaults to the 10% withholding', xdSettings().divTaxPct, 10);
+    eq('mode defaults to final', xdSettings().mode, 'final');
+    S.assetReg = { settings: { comm_pct: 0.25, div_tax_mode: 'file', tax_bracket: 10, corp_tax: 20 } };
+    eq('a saved commission is used', xdSettings().commPct, 0.25);
+    eq('filing mode is honoured', xdSettings().divTaxPct, -12.5);
+    S.assetReg = { settings: { comm_pct: 0 } };
+    eq('a zero commission falls back to the default rather than being free',
+       xdSettings().commPct, 0.15);
+    S.assetReg = prev;
+  }
+
+  sec('buildXdRows — screening + plans');
+  {
+    const prevReg = S.registry, prevPlans = S.xdPlans, prevAsset = S.assetReg;
+    S.assetReg = { settings: {} };
+    S.xdPlans = {};
+    const stocks = [
+      { ticker: 'M', shares: 4000, current_price: 9.5 },
+      { ticker: 'BDMS', shares: 1000, current_price: 24.65 },
+      { ticker: 'LVMH01', shares: 500, current_price: 40 }
+    ];
+    const items = {
+      M: { xd: '2099-09-04', dps: 0.40, conf: 'confirmed' },
+      BDMS: { xd: '2099-09-08', dps: 0.35, conf: 'confirmed' },
+      LVMH01: { xd: '2099-09-15', dps: 3, conf: 'estimated', isDR: true, native: false }
+    };
+    let r = buildXdRows(stocks, items, '2099-09-01');
+    eq('rows carry the market price', r.up[0].price, 9.5);
+    eq('the high-yield round is flagged', r.up[0].scr.state, 'go');
+    eq('the low-yield one is not', r.up[1].scr.state, 'hold');
+    eq('a DR with no baht figure of its own has nothing to screen',
+       r.up[2].scr.state, 'nodata');
+    ok('the dividend tax total is real money',
+       Math.abs(r.tax - (4000 * 0.4 * 0.1 + 1000 * 0.35 * 0.1)) < 1e-9, String(r.tax));
+    eq('with no plans the two totals agree', r.total, r.totalAll);
+
+    // A row you have planned to sell out of will not pay you.
+    S.xdPlans = { M: { ticker: 'M', sell: 9.5, buyback: 9.05, dps: 0.4, shares: 4000, xd: '2099-09-04' } };
+    r = buildXdRows(stocks, items, '2099-09-01');
+    ok('the plan is attached to its row', !!r.up[0].plan);
+    eq('a planned row drops out of the expected total', r.total, 350);
+    eq('…but the untouched total still shows what it gives up', r.totalAll, 1950);
+    eq('…and its tax stops counting too', r.tax, 35);
+    S.registry = prevReg; S.xdPlans = prevPlans; S.assetReg = prevAsset;
+  }
+
+  sec('renderXD — screening column and the inline calculator');
+  {
+    const prevReg = S.registry, prevXd = S.xd, prevPlans = S.xdPlans,
+          prevOpen = S.xdOpen, prevAsset = S.assetReg, prevEdit = S.xdCalcEdit;
+    S.assetReg = { settings: {} };
+    S.xdPlans = {}; S.xdOpen = {}; S.xdCalcEdit = {};
+    S.registry = { stocks: [
+      { ticker: 'M', shares: 4000, current_price: 9.5 },
+      { ticker: 'BDMS', shares: 1000, current_price: 24.65 }
+    ] };
+    S.xd = { fetched_at: '2026-08-19T10:00:00.000Z', items: {
+      M: { xd: '2099-09-04', dps: 0.40, conf: 'confirmed' },
+      BDMS: { xd: '2099-09-08', dps: 0.35, conf: 'confirmed' }
+    } };
+    renderXD();
+    let h = document.getElementById('xdContent').innerHTML;
+    ok('the yield column is printed', h.indexOf('4.21%') !== -1);
+    ok('a passing row says so', h.indexOf('คิดต่อได้') !== -1);
+    ok('a failing row says hold', h.indexOf('ถือดีกว่า') !== -1);
+    ok('the confirmed badge survived the new columns', h.indexOf('ยืนยันแล้ว') !== -1);
+    ok('the threshold is spelled out in the caption', h.indexOf('3.36%') !== -1);
+    ok('the calculator button is offered', h.indexOf('xdToggleCalc') !== -1);
+    ok('the panel is closed until asked for', h.indexOf('xd-cbox') === -1);
+
+    // Open it the way a tap does, then assert on what the DOM actually holds.
+    xdToggleCalc('M');
+    h = document.getElementById('xdContent').innerHTML;
+    ok('the panel opens under its row', h.indexOf('xd-cbox') !== -1);
+    ok('inputs are prefilled from the portfolio',
+       document.getElementById('shares_M').value === '4000');
+    ok('…including the market price', document.getElementById('price_M').value === '9.5');
+    ok('…and the announced dividend', document.getElementById('dps_M').value === '0.4');
+    ok('the buyback target seeds one tick below break-even',
+       document.getElementById('buyback_M').value === '9.05',
+       document.getElementById('buyback_M').value);
+    ok('the verdict is rendered', h.indexOf('ดีกว่าถือปันผล') !== -1);
+    ok('both halves of the gain are shown', h.indexOf('ส่วนที่แน่นอน') !== -1 &&
+       h.indexOf('ส่วนที่เดิมพัน') !== -1);
+    ok('a confirmed row can be planned', h.indexOf('xdSavePlan') !== -1);
+
+    // Typing must not replace the field being typed into.
+    const before = document.getElementById('buyback_M');
+    xdSetCalcField('M', 'buyback', '8.90');
+    ok('the input element survives a recalculation',
+       document.getElementById('buyback_M') === before);
+    ok('the result updated anyway',
+       document.getElementById('xdcr_M').innerHTML.indexOf('8.90') !== -1);
+
+    xdToggleCalc('M');
+    ok('tapping again closes it',
+       document.getElementById('xdContent').innerHTML.indexOf('xd-cbox') === -1);
+
+    // A planned row is struck out of the total and says why.
+    S.xdPlans = { M: { ticker: 'M', sell: 9.5, buyback: 9.05, dps: 0.4, shares: 4000, xd: '2099-09-04' } };
+    renderXD();
+    h = document.getElementById('xdContent').innerHTML;
+    ok('the plan is shown on the row', h.indexOf('📌 แผน') !== -1);
+    ok('and the total explains what it excludes', h.indexOf('ไม่รวมตัวที่ตั้งแผนขาย') !== -1);
+
+    // An estimated row must not be plannable — a guessed dividend is not a
+    // number to place a real order against.
+    S.xdPlans = {};
+    S.xd.items.BDMS.conf = 'estimated';
+    renderXD();
+    xdToggleCalc('BDMS');
+    h = document.getElementById('xdContent').innerHTML;
+    // Scoped to the row itself: the footnote text mentions every pill name, so
+    // searching the whole panel would pass no matter what the row rendered.
+    const bdmsPills = [].slice.call(document.querySelectorAll('#xdContent tbody tr'))
+      .filter(function (tr) { return tr.textContent.indexOf('BDMS') === 0; })
+      .map(function (tr) { return tr.querySelector('.xd-pills').textContent.trim(); })[0];
+    eq('an estimated row carries the คาดการณ์ badge and no verdict beside it',
+       bdmsPills, 'คาดการณ์');
+    ok('…and offers no plan button',
+       h.indexOf('xdSavePlan') === -1 && h.indexOf('ตัวเลขคาดการณ์ยังเปลี่ยนได้') !== -1);
+    xdToggleCalc('BDMS');
+
+    S.registry = prevReg; S.xd = prevXd; S.xdPlans = prevPlans;
+    S.xdOpen = prevOpen; S.assetReg = prevAsset; S.xdCalcEdit = prevEdit;
+  }
+
+  sec('plans — saving, the alert it creates, and surviving a reload');
+  {
+    const prevReg = S.registry, prevXd = S.xd, prevPlans = S.xdPlans, prevAlerts = S.alerts,
+          prevAsset = S.assetReg, prevEdit = S.xdCalcEdit, prevOpen = S.xdOpen,
+          prevOffline = S.offline;
+    S.offline = true;                      // keep every save local to this page
+    S.assetReg = { settings: {} };
+    S.alerts = { version: 1, rules: [] };
+    S.xdPlans = {}; S.xdCalcEdit = {}; S.xdOpen = {};
+    S.registry = { stocks: [{ ticker: 'M', shares: 4000, current_price: 9.5 }] };
+    S.xd = { fetched_at: '2026-08-29T00:00:00.000Z',
+             items: { M: { xd: '2099-09-04', dps: 0.4, conf: 'confirmed' } } };
+
+    await xdSavePlan('M');
+    const pl = xdPlanFor('M');
+    ok('the plan is stored under the ticker', !!pl);
+    eq('…with the sell price from the panel', (pl || {}).sell, 9.5);
+    eq('…and the buyback target', (pl || {}).buyback, 9.05);
+    eq('…and the ex-date it belongs to', (pl || {}).xd, '2099-09-04');
+    eq('an alert is created for the buyback price', S.alerts.rules.length, 1);
+    eq('…of the right kind', S.alerts.rules[0].type, 'price_below');
+    eq('…at the target', S.alerts.rules[0].value, 9.05);
+    ok('…tagged as belonging to an XD plan', S.alerts.rules[0].xdPlan === true);
+
+    // Re-planning at a new target must MOVE the alert, not stack another one.
+    xdSetCalcField('M', 'buyback', '8.90');
+    await xdSavePlan('M');
+    eq('re-planning does not stack a second alert', S.alerts.rules.length, 1);
+    eq('…it moves the existing one', S.alerts.rules[0].value, 8.9);
+    eq('…and the plan follows', (xdPlanFor('M') || {}).buyback, 8.9);
+
+    // A rule you made yourself for the same stock is not the plan's rule.
+    S.alerts.rules.push({ id: 'mine', ticker: 'M', type: 'price_below', value: 7, enabled: true });
+    xdSetCalcField('M', 'buyback', '9.00');
+    await xdSavePlan('M');
+    eq('a hand-made rule for the same stock is left alone', S.alerts.rules.length, 2);
+    eq('…and keeps its own value',
+       (S.alerts.rules.find(function (r) { return r.id === 'mine'; }) || {}).value, 7);
+
+    // The plan rides in the same cache as the XD items, so a reload keeps it.
+    xdSaveCache();
+    const prevMem = S.xd;
+    S.xd = null; S.xdPlans = null;
+    xdLoadCache();
+    eq('a reload restores the plan', (xdPlanFor('M') || {}).buyback, 9);
+    eq('…and the XD items with it', ((S.xd || {}).items || {}).M.xd, '2099-09-04');
+    S.xd = prevMem;
+
+    // Refetching XD data must not wipe the plans stored beside it.
+    xdSaveCache();
+    ok('a refetch keeps the plans in the cache',
+       ((JSON.parse(localStorage.getItem(XD_KEY) || '{}').plans || {}).M || {}).buyback === 9);
+
+    xdClearPlan('M');
+    eq('clearing removes the plan', xdPlanFor('M'), null);
+    ok('…and says the alert is still yours to delete',
+       S.alerts.rules.some(function (r) { return r.xdPlan; }));
+
+    try { localStorage.removeItem(XD_KEY); } catch (e) {}
+    S.registry = prevReg; S.xd = prevXd; S.xdPlans = prevPlans; S.alerts = prevAlerts;
+    S.assetReg = prevAsset; S.xdCalcEdit = prevEdit; S.xdOpen = prevOpen; S.offline = prevOffline;
+  }
+
+  sec('fee & tax settings — the form round-trip');
+  {
+    const prevAsset = S.assetReg, prevOffline = S.offline, prevOpen = S.xdSetOpen,
+          prevReg = S.registry, prevXd = S.xd;
+    S.offline = true;
+    S.assetReg = { version: 1, assets: [], snapshots: [], settings: {} };
+    S.registry = { stocks: [] };
+    S.xd = { fetched_at: null, items: {} };
+    S.xdSetOpen = true;
+    renderXD();
+    ok('the settings form is rendered when opened',
+       !!document.getElementById('xdSetComm'));
+    document.getElementById('xdSetComm').value = '0.25';
+    document.getElementById('xdSetMode').value = 'file';
+    xdSetModeChange();
+    ok('the bracket field appears in filing mode',
+       !document.getElementById('xdSetBracketGroup').classList.contains('hidden'));
+    document.getElementById('xdSetBracket').value = '10';
+    document.getElementById('xdSetCorp').value = '20';
+    xdSetModeChange();
+    ok('the preview shows the refund before you save',
+       document.getElementById('xdSetPreview').innerHTML.indexOf('-12.50%') !== -1 ||
+       document.getElementById('xdSetPreview').innerHTML.indexOf('−12.50%') !== -1,
+       document.getElementById('xdSetPreview').innerHTML);
+    await xdSaveSettingsForm();
+    eq('the commission is persisted', S.assetReg.settings.comm_pct, 0.25);
+    eq('the mode is persisted', S.assetReg.settings.div_tax_mode, 'file');
+    eq('the bracket is persisted', S.assetReg.settings.tax_bracket, 10);
+    eq('and the app now calculates with a negative dividend tax',
+       xdSettings().divTaxPct, -12.5);
+    // The same field feeds the year report's tax credit, so it must not fork.
+    eq('the corporate rate is the one the year report uses',
+       S.assetReg.settings.corp_tax, 20);
+    S.assetReg = prevAsset; S.offline = prevOffline; S.xdSetOpen = prevOpen;
+    S.registry = prevReg; S.xd = prevXd;
+  }
+
+  sec('xd_repurchase alert — a plan left hanging after the ex-date');
+  {
+    const prevAlerts = S.alerts, prevPlans = S.xdPlans, prevLog = S.tradeLog, prevReg = S.registry;
+    S.registry = { stocks: [{ ticker: 'M', shares: 0, current_price: 9 }] };
+    const past = new Date(Date.now() - 10 * 86400000).toISOString().split('T')[0];
+    S.xdPlans = { M: { ticker: 'M', sell: 9.5, buyback: 9.05, xd: past } };
+    S.tradeLog = { trades: [] };
+    S.alerts = { rules: [{ id: 'r1', ticker: '', type: 'xd_repurchase', value: 3, enabled: true }] };
+    let res = evalAlertRules();
+    eq('an unbought plan past its ex-date fires', res[0].hit, true);
+    ok('and names the stock', res[0].detail.indexOf('M') !== -1, res[0].detail);
+
+    S.tradeLog = { trades: [{ id: 't1', date: past, ticker: 'M', type: 'buy', qty: 4000, price: 9.05 }] };
+    eq('a recorded buy back clears it', evalAlertRules()[0].hit, false);
+
+    // A buy from BEFORE the ex-date is not the repurchase.
+    S.tradeLog = { trades: [{ id: 't2', date: '2000-01-01', ticker: 'M', type: 'buy', qty: 4000, price: 9.05 }] };
+    eq('an old buy does not count as the repurchase', evalAlertRules()[0].hit, true);
+
+    // Inside the grace period it stays quiet.
+    S.alerts.rules[0].value = 30;
+    eq('inside the grace window it stays quiet', evalAlertRules()[0].hit, false);
+
+    S.alerts.rules[0].value = 3;
+    S.xdPlans = {};
+    eq('no plans, nothing to chase', evalAlertRules()[0].hit, false);
+    S.alerts = prevAlerts; S.xdPlans = prevPlans; S.tradeLog = prevLog; S.registry = prevReg;
+  }
+
+  sec('trade form — the commission fills itself in');
+  {
+    const prevLog = S.tradeLog, prevReg = S.registry, prevAsset = S.assetReg;
+    S.assetReg = { settings: { comm_pct: 0.15 } };
+    S.registry = { stocks: [{ ticker: 'M', shares: 0, avg_cost: 0 }] };
+    S.tradeLog = { trades: [] };
+    openTrades('M');
+    openTradeForm();
+    const qty = document.getElementById('tfQty'), price = document.getElementById('tfPrice'),
+          fee = document.getElementById('tfFee');
+    qty.value = '4000'; price.value = '9.5';
+    updateTradeFee();
+    ok('the fee is computed from the saved broker rate',
+       Math.abs(+fee.value - 4000 * 9.5 * commRate(0.15)) < 0.01, fee.value);
+    // Once you correct it by hand, the app must stop overwriting your number.
+    fee.value = '50'; fee.dataset.touched = '1';
+    price.value = '10';
+    updateTradeFee();
+    eq('a hand-typed fee is never overwritten', fee.value, '50');
+    // Dividends have no commission leg at all.
+    fee.dataset.touched = '0';
+    document.getElementById('tfType').value = 'div';
+    updateTradeFee();
+    eq('a dividend row is left alone', fee.value, '50');
+    closeTradeForm();
+    S.tradeLog = prevLog; S.registry = prevReg; S.assetReg = prevAsset;
+  }
+
   // ══════════════════ net worth: icons, groups, donut legend ══════════════════
   sec('nwIconFor');
   eq('crypto category', nwIconFor('Crypto'), '🪙');
@@ -2231,10 +2661,14 @@
       ] };
       S.xd = null;
       calls.length = 0;
+      // updateXD reads the real clock, so this fixture's ex-date has to move
+      // with it — a hardcoded one turns green into red the day it goes past.
+      const soonXd = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+      const soonEpoch = Date.parse(soonXd + 'T12:00:00Z') / 1000;
       stub(function (url) {
         if (url.indexOf('scanner.tradingview') >= 0) {
           return jsonRes({ totalCount: 1, data: [
-            { s: 'SET:M', d: [1787745540, 0.4, 1789127940, 1778500740, 0.5] }
+            { s: 'SET:M', d: [soonEpoch, 0.4, soonEpoch + 86400 * 14, 1778500740, 0.5] }
           ] });
         }
         return jsonRes({ chart: { result: [{ events: { dividends: {
@@ -2245,7 +2679,7 @@
       eq('updateXD hits the scanner exactly once for the whole portfolio',
          calls.filter(function (c) { return c.url.indexOf('scanner.tradingview') >= 0; }).length, 1);
       eq('the announced holding is confirmed', S.xd.items.M.conf, 'confirmed');
-      eq('…with the announced date', S.xd.items.M.xd, '2026-08-26');
+      eq('…with the announced date', S.xd.items.M.xd, soonXd);
       eq('the rest fall through to the estimate tier', S.xd.items.PTT.conf, 'estimated');
       eq('a zero-share holding is not fetched at all', S.xd.items.NOSHARES, undefined);
       S.registry = prevReg; S.xd = prevXd;

@@ -258,6 +258,57 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 .xd-tot td{font-weight:800;border-top:2px solid var(--border2);border-bottom:none}
 .xd-cash{font-weight:800;color:var(--green);white-space:nowrap}
 .xd-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+/* ── XD strategy: screening column + inline calculator ── */
+.xd-tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.xd-tbl{min-width:560px}
+.xd-pills{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.rpt .xd-tbl th,.rpt .xd-tbl td{padding:7px 6px;white-space:nowrap}
+.rpt .xd-tbl td:first-child{white-space:normal;min-width:150px}
+.xd-acts{display:flex;gap:4px;justify-content:flex-end}
+.xd-acts .nw-act.on{border-color:var(--c1);color:var(--c1)}
+.xd-acts .nw-act[disabled]{opacity:.3;pointer-events:none}
+.xd-plan{color:var(--c1)}
+.xd-setline{font-size:11.5px;color:var(--tx3);display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.xd-setline b{color:var(--tx2)}
+.xd-cbox{background:var(--bg3);border:1px solid var(--border2);border-radius:12px;padding:12px 13px;margin:10px 0}
+.xd-chead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:11.5px;color:var(--tx3);margin-bottom:10px}
+.xd-chead b{color:var(--tx)}
+.xd-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(122px,1fr));gap:9px;margin-bottom:12px}
+.xd-f label{display:block;font-size:10.5px;color:var(--tx3);margin-bottom:3px}
+.xd-f input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--tx);font-size:14px;padding:7px 9px;outline:none;font-variant-numeric:tabular-nums;-webkit-appearance:none}
+.xd-f input:focus{border-color:var(--c1)}
+.xd-vd{border-radius:10px;padding:11px 13px;margin-bottom:10px;border:1px solid}
+.xd-vd.ok{background:rgba(34,197,94,.07);border-color:rgba(34,197,94,.3)}
+.xd-vd.ok .xd-vb{color:var(--green)}
+.xd-vd.bad{background:rgba(239,68,68,.07);border-color:rgba(239,68,68,.3)}
+.xd-vd.bad .xd-vb{color:var(--red)}
+.xd-vt{font-size:11px;color:var(--tx3)}
+.xd-vb{font-size:18px;font-weight:800;margin:2px 0;font-variant-numeric:tabular-nums}
+.xd-vs{font-size:11px;color:var(--tx3)}
+.xd-split{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:10px}
+@media(max-width:520px){.xd-split{grid-template-columns:1fr}}
+.xd-sb{background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:9px 11px}
+.xd-sb .k{font-size:10.5px;color:var(--tx3);line-height:1.4}
+.xd-sb .n{font-size:17px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums}
+.xd-sb .n.up{color:var(--green)}.xd-sb .n.dn{color:var(--red)}
+.xd-cwarn{background:var(--yellowd);border:1px solid rgba(255,184,0,.3);border-radius:9px;padding:9px 11px;font-size:11.5px;color:var(--yellow);line-height:1.55;margin-bottom:10px}
+.xd-cnote{font-size:11px;color:var(--tx3);line-height:1.55;margin-bottom:10px}
+.xd-cempty{font-size:12px;color:var(--tx3);padding:14px 2px}
+.xd-lads{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px}
+@media(max-width:560px){.xd-lads{grid-template-columns:1fr}}
+.xd-ladt{font-size:11px;color:var(--tx2);margin-bottom:4px}
+.xd-ladt span{color:var(--tx3)}
+.rpt .xd-lad{margin:0;font-size:11.5px;font-variant-numeric:tabular-nums}
+.rpt .xd-lad th,.rpt .xd-lad td{padding:5px 4px;white-space:nowrap}
+.rpt .xd-lad th.r,.rpt .xd-lad td.r{text-align:right}
+.rpt .xd-lad tr.be td{font-weight:800;color:var(--tx)}
+.rpt .xd-lad tr.tgt td{background:var(--c1d)}
+.rpt .xd-lad tr.tgt td:first-child{color:var(--c1)}
+.rpt .xd-lad td.up{color:var(--green)}.rpt .xd-lad td.dn{color:var(--red)}
+.xd-lt{font-size:9px;color:var(--tx3);margin-left:4px;font-weight:400}
+.xd-lt.on{color:var(--c1)}
+.xd-cacts{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.xd-cfoot{font-size:10.5px;color:var(--tx3);line-height:1.6}
 .tl-tools{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 10px}
 .tl-sel{padding:5px 8px;font-size:12px;width:auto;min-width:112px}
 .tl-sum{display:flex;gap:8px;flex-wrap:wrap}
@@ -941,6 +992,7 @@ HANA   | 2000 | 38 | 35.75"></textarea>
         <button class="btn btn-p btn-sm" onclick="updateXD()">🔄 ดึงข้อมูล XD</button>
         <span class="rpt-meta" id="xdMeta" style="margin:0"></span>
       </div>
+      <div id="xdSettingsBox"></div>
       <div id="xdContent"><div class="rpt-empty">Loading…</div></div>
       <div id="divBook"></div>
     </div>
@@ -2403,11 +2455,11 @@ function openTradeForm(id, prefill) {
         <input class="form-input" id="tfTicker" list="tfTickerList" placeholder="เช่น CPF" value="${escHtml(t ? tradeTicker(t) : (tradeFilter.ticker !== 'all' ? tradeFilter.ticker : ''))}">
         <datalist id="tfTickerList">${tickers.map(x => `<option value="${escHtml(x)}"></option>`).join('')}</datalist></div>
       <div class="form-group"><label class="form-label" id="tfQtyLabel">จำนวนหุ้น</label>
-        <input class="form-input" id="tfQty" type="number" step="any" min="0" value="${t ? (+t.qty || 0) : ''}" oninput="updateTradePreview()"></div>
+        <input class="form-input" id="tfQty" type="number" step="any" min="0" value="${t ? (+t.qty || 0) : ''}" oninput="updateTradeFee();updateTradePreview()"></div>
       <div class="form-group"><label class="form-label" id="tfPriceLabel">ราคา/หุ้น (฿)</label>
-        <input class="form-input" id="tfPrice" type="number" step="any" min="0" value="${t ? (+t.price || 0) : ''}" oninput="updateTradePreview()"></div>
+        <input class="form-input" id="tfPrice" type="number" step="any" min="0" value="${t ? (+t.price || 0) : ''}" oninput="updateTradeFee();updateTradePreview()"></div>
       <div class="form-group" id="tfFeeGroup"><label class="form-label">ค่าคอม + VAT (฿)</label>
-        <input class="form-input" id="tfFee" type="number" step="any" min="0" value="${t ? (+t.fee || 0) : 0}" oninput="updateTradePreview()"></div>
+        <input class="form-input" id="tfFee" type="number" step="any" min="0" value="${t ? (+t.fee || 0) : 0}" data-touched="${t && +t.fee > 0 ? 1 : 0}" oninput="this.dataset.touched='1';updateTradePreview()"></div>
       <div class="form-group hidden" id="tfTaxGroup"><label class="form-label">หัก ณ ที่จ่าย (฿)</label>
         <input class="form-input" id="tfTax" type="number" step="any" min="0" value="${t ? (+t.tax || 0) : 0}" oninput="updateTradePreview()"></div>
       <div class="form-group"><label class="form-label">บันทึกย่อ</label>
@@ -2441,7 +2493,21 @@ function onTradeTypeChange() {
     const q = +document.getElementById('tfQty').value || 0, p = +document.getElementById('tfPrice').value || 0;
     if (q > 0 && p > 0) tax.value = +(q * p * DIV_TAX_PCT / 100).toFixed(2);
   }
+  updateTradeFee();
   updateTradePreview();
+}
+
+// Commission is a rate, not a number worth retyping on every row. It stays an
+// editable field: once you have touched it the app stops guessing, because a
+// real contract note can carry a minimum fee or a promo rate.
+function updateTradeFee() {
+  const feeEl = document.getElementById('tfFee');
+  if (!feeEl || feeEl.dataset.touched === '1') return;
+  if (document.getElementById('tfType').value === 'div') return;
+  const q = +document.getElementById('tfQty').value || 0;
+  const p = +document.getElementById('tfPrice').value || 0;
+  if (!(q > 0) || !(p > 0)) return;
+  feeEl.value = +(q * p * xdSettings().C).toFixed(2);
 }
 
 function updateTradePreview() {
@@ -2980,7 +3046,8 @@ const RULE_TYPES = [
   { key: 'price_below',    label: 'ราคาลงถึง',          unit: '฿',   needsTicker: true  },
   { key: 'below_cost_pct', label: 'ต่ำกว่าต้นทุนเกิน',   unit: '%',   needsTicker: true  },
   { key: 'gain_pct',       label: 'กำไรเกิน',            unit: '%',   needsTicker: true  },
-  { key: 'xd_within',      label: 'XD ภายใน',            unit: 'วัน', needsTicker: false }
+  { key: 'xd_within',      label: 'XD ภายใน',            unit: 'วัน', needsTicker: false },
+  { key: 'xd_repurchase',  label: 'ผ่าน XD แล้วยังไม่ซื้อคืน', unit: 'วัน', needsTicker: false }
 ];
 function ruleTypeOf(k) { return RULE_TYPES.find(r => r.key === k) || RULE_TYPES[0]; }
 function ruleGenId() { return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
@@ -3006,6 +3073,24 @@ function evalAlertRules() {
       });
       hit = soon.length > 0;
       detail = hit ? `${soon.join(', ')} มี XD ภายใน ${v} วัน` : `ยังไม่มีตัวไหน XD ภายใน ${v} วัน`;
+    } else if (r.type === 'xd_repurchase') {
+      // The plan said sell, then buy back. Once the ex-date is behind us an
+      // unbought plan is money sitting out of the market by accident, so this
+      // fires on the ABSENCE of a buy — checked against the trade book, the
+      // only place a real repurchase is ever recorded.
+      const plans = xdPlans();
+      const stale = Object.keys(plans).filter(k => {
+        const pl = plans[k];
+        if (!pl || !pl.xd) return false;
+        if (tk && k !== tk) return false;
+        const since = -xdDaysUntil(pl.xd, today);
+        if (!(since >= v)) return false;
+        return !(S.tradeLog?.trades || []).some(t =>
+          t.type === 'buy' && tradeTicker(t) === k && t.date >= pl.xd);
+      });
+      hit = stale.length > 0;
+      detail = hit ? `${stale.join(', ')} ผ่าน XD มาแล้วยังไม่มีรายการซื้อคืนในสมุด`
+                   : 'ไม่มีแผนไหนค้างซื้อคืน';
     } else if (!s) {
       detail = `ไม่พบ ${tk} ในพอร์ต`;
     } else {
@@ -4255,6 +4340,191 @@ function xdProjectNext(dates, today) {
   return { date: pick.date, basis: pick.dates.slice(-3), slot: pick.dates };
 }
 
+// ═══════════════════════════════════════════════════════════════
+// XD STRATEGY — ขายก่อน XD vs ถือรับปันผล
+// One comparison underlies every number here. Shares held through the
+// ex-date are marked at the theoretical ex-price P0 − D and carry the
+// dividend net of tax; selling instead ends in cash, and buying back
+// restores the same share count at a lower price.
+//
+// What matters is not "gain or loss" but WHERE the gain comes from,
+// because only one half of it is knowable in advance:
+//   certain = Q · [ D·T − C·(P0 + Px) ]   tax avoided, minus BOTH commissions
+//   bet     = Q · (1+C) · (Px − Pb)       how much deeper than theory you buy back
+// Commission is charged on the PRICE and on both legs. Charging it
+// against the dividend instead — Q·D·(T−C) — understates it by roughly
+// P0/D, which on a 2% round turns a real −34 baht into a +44 that looks
+// like free money. That mistake is the reason this module exists.
+//
+// Setting certain > 0 and solving gives the rule the table screens on:
+//   D / P0 ≥ 2C / T
+// At 0.15% commission and 10% tax the round must pay more than 3.36% of
+// the price before selling can pay for itself. Most Thai rounds pay
+// 1.5–2.5%, so the honest verdict is usually "hold" — which is precisely
+// what the column exists to say, in one glance, without any typing.
+// ═══════════════════════════════════════════════════════════════
+const FEE_EXTRA_PCT = 0.007;    // trading + clearing + regulatory, per leg
+const VAT_MULT = 1.07;
+const COMM_DEFAULT = 0.15;
+const COMM_PRESETS = [
+  { v: 0.15, label: 'Cash Balance — ส่งคำสั่งเอง 0.15%' },
+  { v: 0.20, label: 'Cash / Credit Balance 0.20%' },
+  { v: 0.25, label: 'ผ่านผู้แนะนำการลงทุน 0.25%' }
+];
+const XD_LADDER_UP = 2, XD_LADDER_DN = 4;
+
+// SET tick sizes. Every price the calculator suggests is rounded onto one,
+// because a target that cannot be entered is not a target.
+function xdTickSize(p) {
+  if (p < 2) return 0.01;
+  if (p < 5) return 0.02;
+  if (p < 10) return 0.05;
+  if (p < 25) return 0.10;
+  if (p < 100) return 0.25;
+  if (p < 200) return 0.50;
+  if (p < 400) return 1.00;
+  return 2.00;
+}
+
+// SET quotes never carry more than 2 decimals, so snapping to a tick must
+// land on one too — 9.1087/0.05 floors to 9.100000000000001 otherwise.
+function xdSnap(price, tick, dir) {
+  const t = tick > 0 ? tick : 0.01;
+  const n = dir === 'up' ? Math.ceil(price / t - 1e-9) : Math.floor(price / t + 1e-9);
+  return +(n * t).toFixed(2);
+}
+
+function commRate(commPct) {
+  return ((+commPct || 0) + FEE_EXTRA_PCT) * VAT_MULT / 100;
+}
+
+// The tax you actually pay on a dividend, which is NOT always 10%.
+// Filing the dividend instead of letting the 10% stand grosses it up by the
+// tax credit and taxes the whole thing at your own rate:
+//   effective = (1 + credit) × bracket − credit,   credit = corp / (100 − corp)
+// At the ordinary 20% corporate rate that is 0% for a 20% bracket, −12.5%
+// (a refund) at 10%, and only above the 30% bracket does the 10% final
+// withholding start to win. A negative rate means holding the dividend is
+// worth MORE than its face value, so selling to dodge it can never pay.
+function divTaxEffPct(mode, bracketPct, corpTaxPct) {
+  if (mode !== 'file') return DIV_TAX_PCT;
+  const corp = +corpTaxPct > 0 && +corpTaxPct < 100 ? +corpTaxPct : CORP_TAX_DEFAULT;
+  const credit = corp / (100 - corp);
+  return +(((1 + credit) * (+bracketPct || 0) / 100 - credit) * 100).toFixed(4);
+}
+
+function xdSettings() {
+  const st = (S.assetReg && S.assetReg.settings) || {};
+  const commPct = +st.comm_pct > 0 ? +st.comm_pct : COMM_DEFAULT;
+  const corpTax = +st.corp_tax > 0 ? +st.corp_tax : CORP_TAX_DEFAULT;
+  const mode = st.div_tax_mode === 'file' ? 'file' : 'final';
+  const bracket = +st.tax_bracket || 0;
+  return {
+    commPct: commPct, C: commRate(commPct),
+    mode: mode, bracket: bracket, corpTax: corpTax,
+    divTaxPct: divTaxEffPct(mode, bracket, corpTax)
+  };
+}
+
+async function saveXdSettings(patch) {
+  if (!S.assetReg) S.assetReg = emptyAssetReg();
+  if (!S.assetReg.settings) S.assetReg.settings = {};
+  Object.keys(patch).forEach(function (k) { S.assetReg.settings[k] = patch[k]; });
+  saveLS();
+  await saveAssetReg();
+}
+
+// ── Plans ────────────────────────────────────────────────────────────────
+// A plan is a decision you already made: sell this one before XD and buy it
+// back at Pb. It lives beside the XD cache, never in the registry, whose
+// schema the cloud routine also writes.
+function xdPlans() {
+  if (!S.xdPlans) S.xdPlans = {};
+  return S.xdPlans;
+}
+
+function xdPlanFor(ticker) {
+  return xdPlans()[String(ticker || '').toUpperCase()] || null;
+}
+
+// ── The calculation ──────────────────────────────────────────────────────
+// Returns null rather than NaN-filled fields when the inputs cannot support
+// an answer, so every caller has one thing to check.
+function xdCalc(p) {
+  const Q = +p.shares || 0;
+  const P0 = +p.price || 0;
+  const D = +p.dps || 0;
+  if (!(Q > 0) || !(P0 > 0) || !(D >= 0)) return null;
+  const C = p.C != null ? +p.C : commRate(p.commPct != null ? p.commPct : COMM_DEFAULT);
+  const T = (p.divTaxPct != null ? +p.divTaxPct : DIV_TAX_PCT) / 100;
+  const px = +(P0 - D).toFixed(4);
+  const tick = xdTickSize(P0);
+  const Pb = +p.buyback > 0 ? +p.buyback : null;
+
+  const divNet = Q * D * (1 - T);
+  const holdVal = Q * px * (1 - C) + divNet;
+
+  // Sell and never come back: the price that ties with holding through XD.
+  const beSellRaw = px + D * (1 - T) / (1 - C);
+  const beSell = xdSnap(beSellRaw, tick, 'up');
+  // Sell now, buy the same shares back: the highest buyback that still ties.
+  const beBuyRaw = (P0 * (1 - C) - D * (1 - T)) / (1 + C);
+  const beBuy = xdSnap(beBuyRaw, tick, 'down');
+
+  const certain = Q * (D * T - C * (P0 + px));
+  const cash = Pb != null ? Q * (P0 * (1 - C) - Pb * (1 + C)) : null;
+  const gain = cash != null ? cash - divNet : null;
+  const bet = Pb != null ? Q * (1 + C) * (px - Pb) : null;
+
+  const sellRows = [];
+  for (let i = XD_LADDER_UP; i >= -XD_LADDER_UP; i--) {
+    const pr = +(beSell + i * tick).toFixed(2);
+    if (pr <= 0) continue;
+    const net = Q * pr * (1 - C);
+    sellRows.push({ price: pr, net: net, vs: net - holdVal, be: i === 0,
+                    target: Math.abs(pr - P0) < tick / 2 });
+  }
+  const buyRows = [];
+  for (let j = XD_LADDER_UP; j >= -XD_LADDER_DN; j--) {
+    const pr = +(beBuy + j * tick).toFixed(2);
+    if (pr <= 0) continue;
+    const cs = Q * (P0 * (1 - C) - pr * (1 + C));
+    buyRows.push({ price: pr, cash: cs, vs: cs - divNet, be: j === 0,
+                   target: Pb != null && Math.abs(pr - Pb) < tick / 2 });
+  }
+
+  return {
+    Q: Q, P0: P0, D: D, C: C, T: T, px: px, tick: tick, buyback: Pb,
+    divNet: divNet, holdVal: holdVal,
+    beSellRaw: beSellRaw, beSell: beSell, beBuyRaw: beBuyRaw, beBuy: beBuy,
+    certain: certain, cash: cash, gain: gain, bet: bet,
+    bufferTicks: Pb != null ? Math.round((beBuy - Pb) / tick) : null,
+    sellRows: sellRows, buyRows: buyRows
+  };
+}
+
+// The zero-input verdict for one XD row. Four states, never three: a guessed
+// dividend is not a small answer, it is no answer, and must not be graded on
+// the same scale as an announced one.
+function xdScreen(row, cfg) {
+  const c = cfg || xdSettings();
+  const T = c.divTaxPct / 100, C = c.C;
+  const Q = +row.shares || 0, P0 = +row.price || 0, D = +row.dps || 0;
+  if (!(Q > 0) || !(P0 > 0) || !(D > 0)) {
+    return { state: 'nodata', certain: null, divTax: null, yieldPct: null, threshPct: null };
+  }
+  const px = P0 - D;
+  const threshPct = T > 0 ? 2 * C / T * 100 : null;
+  const out = {
+    certain: Q * (D * T - C * (P0 + px)),
+    divTax: Q * D * T,
+    yieldPct: D / P0 * 100,
+    threshPct: threshPct
+  };
+  out.state = row.conf === 'estimated' ? 'unannounced' : (out.certain > 0 ? 'go' : 'hold');
+  return out;
+}
+
 // `native` = this dps is the SET-listed instrument's own figure, in baht.
 // TradingView publishes that for a Thai DR; the underlying's foreign
 // dividend times DR units would be a wrong number, not an approximate one.
@@ -4264,29 +4534,41 @@ function xdEstCash(dps, shares, isDR, native) {
   return dps * shares;
 }
 
-function buildXdRows(stocks, items, today) {
+function buildXdRows(stocks, items, today, cfg) {
   const t = today || xdToday();
+  const c = cfg || xdSettings();
+  const plans = (cfg && cfg.plans) || xdPlans();
   const rows = [];
   (stocks || []).forEach(function (s) {
     if (!(s.shares > 0)) return;
     const it = (items || {})[s.ticker] || {};
     const days = it.xd ? xdDaysUntil(it.xd, t) : null;
-    rows.push({
-      ticker: s.ticker, shares: s.shares,
+    const row = {
+      ticker: s.ticker, shares: s.shares, price: +s.current_price || 0,
       dps: (it.isDR && !it.native) ? null : (it.dps != null ? it.dps : null),
       xd: it.xd || null, pay: it.pay || null, days: days,
       cash: xdEstCash(it.dps, s.shares, it.isDR, it.native),
       conf: it.conf || 'none', isDR: !!it.isDR, native: !!it.native,
       sym: it.sym || null, basis: it.basis || null, note: it.note || '',
-      src: it.src || null
-    });
+      src: it.src || null,
+      plan: plans[String(s.ticker).toUpperCase()] || null
+    };
+    row.scr = xdScreen(row, c);
+    rows.push(row);
   });
   const up = rows.filter(function (r) { return r.xd && r.days >= 0; })
     .sort(function (a, b) { return a.days - b.days || a.ticker.localeCompare(b.ticker); });
   const none = rows.filter(function (r) { return !(r.xd && r.days >= 0); })
     .sort(function (a, b) { return a.ticker.localeCompare(b.ticker); });
-  const total = up.reduce(function (n, r) { return n + (r.cash || 0); }, 0);
-  return { up: up, none: none, total: total };
+  // A row you have planned to sell out of will not pay you, so it cannot sit
+  // in the expected-cash total — but the untouched total stays visible next
+  // to it, because that is the number the plan is giving up.
+  const totalAll = up.reduce(function (n, r) { return n + (r.cash || 0); }, 0);
+  const total = up.reduce(function (n, r) { return n + (r.plan ? 0 : (r.cash || 0)); }, 0);
+  const tax = up.reduce(function (n, r) {
+    return n + (r.plan || !r.scr || r.scr.divTax == null ? 0 : r.scr.divTax);
+  }, 0);
+  return { up: up, none: none, total: total, totalAll: totalAll, tax: tax, cfg: c };
 }
 
 async function xdFetchJSON(url, tries) {
@@ -4396,7 +4678,11 @@ function xdLoadCache() {
   if (S.xd) return S.xd;
   try {
     const raw = localStorage.getItem(XD_KEY);
-    if (raw) S.xd = JSON.parse(raw);
+    if (raw) {
+      const o = JSON.parse(raw);
+      if (o && o.plans) S.xdPlans = o.plans;
+      if (o && o.items) S.xd = { fetched_at: o.fetched_at || null, items: o.items };
+    }
   } catch (e) { /* ignore a corrupt cache */ }
   return S.xd;
 }
@@ -4424,7 +4710,7 @@ async function updateXD() {
     catch (e) { items[s.ticker] = { conf: 'none', note: 'ดึงข้อมูลไม่สำเร็จ' }; }
   }
   S.xd = { fetched_at: new Date().toISOString(), items: items };
-  try { localStorage.setItem(XD_KEY, JSON.stringify(S.xd)); } catch (e) { /* quota */ }
+  xdSaveCache();
   hideLoading();
   renderXD();
   renderDivBook();
@@ -4435,10 +4721,320 @@ async function updateXD() {
 
 function openXD() {
   document.getElementById('xdModal').classList.remove('hidden');
+  S.xdSetOpen = false;
   xdLoadCache();
   renderXD();
   renderDivBook();
   if (!S.xd) updateXD();          // first tap does the fetch for you
+}
+
+// ── XD strategy UI ───────────────────────────────────────────────────────
+// The calculator panel re-renders its RESULTS on every keystroke but never
+// its INPUTS: replacing the input you are typing into loses the caret, and
+// on a number field it silently loses the half-typed value too.
+function xdSlug(tk) { return String(tk || '').replace(/[^A-Za-z0-9]/g, '_'); }
+
+function xdScrPill(scr) {
+  if (!scr || scr.state === 'nodata') return '<span class="xd-b xd-n">ไม่มีข้อมูล</span>';
+  if (scr.state === 'unannounced') return '';   // the คาดการณ์ badge beside it already says this
+  if (scr.state === 'go') return '<span class="xd-b xd-c">คิดต่อได้</span>';
+  return '<span class="xd-b xd-n">ถือดีกว่า</span>';
+}
+
+function xdSignedBaht(n) {
+  return (n >= 0 ? '+' : '−') + fmtBaht(Math.abs(n));
+}
+
+function xdMoney(n) {
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function xdSignedMoney(n) {
+  return (n >= 0 ? '+' : '−') + xdMoney(Math.abs(n));
+}
+
+// Values the panel starts from: the portfolio's own, unless you have typed
+// over them or already saved a plan.
+function xdCalcInput(row) {
+  const tk = String(row.ticker).toUpperCase();
+  const edit = (S.xdCalcEdit || {})[tk] || {};
+  const plan = row.plan || {};
+  const cfg = xdSettings();
+  const shares = edit.shares != null ? +edit.shares : (+plan.shares || +row.shares || 0);
+  const price = edit.price != null ? +edit.price : (+plan.sell || +row.price || 0);
+  const dps = edit.dps != null ? +edit.dps : (+plan.dps || +row.dps || 0);
+  let buyback = edit.buyback != null ? +edit.buyback : +plan.buyback || 0;
+  const seedIt = edit.buyback == null && !(+plan.buyback > 0);
+  if (seedIt && price > 0 && dps >= 0) {
+    // Default the target one tick below break-even: at break-even exactly the
+    // trade is pointless, so the first useful number is one tick better.
+    const seed = xdCalc({ shares: shares, price: price, dps: dps, C: cfg.C, divTaxPct: cfg.divTaxPct });
+    if (seed) buyback = +(seed.beBuy - seed.tick).toFixed(2);
+  }
+  return { shares: shares, price: price, dps: dps, buyback: buyback, cfg: cfg };
+}
+
+function xdSetCalcField(tk, field, value) {
+  const key = String(tk).toUpperCase();
+  if (!S.xdCalcEdit) S.xdCalcEdit = {};
+  if (!S.xdCalcEdit[key]) S.xdCalcEdit[key] = {};
+  S.xdCalcEdit[key][field] = value;
+  xdRenderCalcResult(key);
+}
+
+function xdToggleCalc(tk) {
+  const key = String(tk).toUpperCase();
+  if (!S.xdOpen) S.xdOpen = {};
+  if (S.xdOpen[key]) delete S.xdOpen[key]; else S.xdOpen[key] = 1;
+  renderXD();
+}
+
+function xdLadderHtml(rows, cols, colA, colB) {
+  let h = '<table class="xd-lad"><thead><tr><th>' + cols[0] + '</th>' +
+          '<th class="r">' + cols[1] + '</th><th class="r">' + cols[2] + '</th></tr></thead><tbody>';
+  rows.forEach(function (r) {
+    const cls = (r.be ? 'be' : '') + (r.target ? ' tgt' : '');
+    let tag = '';
+    if (r.be) tag += '<span class="xd-lt">คุ้มทุน</span>';
+    if (r.target) tag += '<span class="xd-lt on">เป้า</span>';
+    h += '<tr class="' + cls + '"><td>' + r.price.toFixed(2) + tag + '</td>' +
+         '<td class="r">' + xdMoney(r[colA]) + '</td>' +
+         '<td class="r ' + (r[colB] >= 0 ? 'up' : 'dn') + '">' + xdSignedMoney(r[colB]) + '</td></tr>';
+  });
+  return h + '</tbody></table>';
+}
+
+// The results half of the panel — everything that changes as you type.
+function xdCalcResultHtml(row) {
+  const inp = xdCalcInput(row);
+  const c = xdCalc({ shares: inp.shares, price: inp.price, dps: inp.dps,
+                     buyback: inp.buyback, C: inp.cfg.C, divTaxPct: inp.cfg.divTaxPct });
+  if (!c) return '<div class="xd-cempty">ใส่จำนวนหุ้น ราคา และปันผล/หุ้น เพื่อคำนวณ</div>';
+  const ok = c.gain != null && c.gain >= 0;
+  let h = '';
+
+  if (c.gain != null) {
+    h += '<div class="xd-vd ' + (ok ? 'ok' : 'bad') + '">' +
+      '<div class="xd-vt">ขาย ' + c.P0.toFixed(2) + ' → ซื้อคืน ' + c.buyback.toFixed(2) +
+        ' · ราคาทฤษฎีหลัง XD ' + c.px.toFixed(2) + ' · tick ' + c.tick.toFixed(2) + '</div>' +
+      '<div class="xd-vb">' + (ok ? 'ดีกว่าถือปันผล ' : 'แย่กว่าถือปันผล ') + xdMoney(Math.abs(c.gain)) + ' ฿</div>' +
+      '<div class="xd-vs">คุ้มทุนซื้อคืนที่ ' + c.beBuy.toFixed(2) + ' · ' +
+        (c.bufferTicks > 0 ? 'เหลือ buffer ' + c.bufferTicks + ' tick'
+         : c.bufferTicks === 0 ? 'ไม่เหลือ buffer' : 'เกินคุ้มทุนไป ' + Math.abs(c.bufferTicks) + ' tick') +
+      '</div></div>';
+  }
+
+  h += '<div class="xd-split">' +
+    '<div class="xd-sb"><div class="k">ส่วนที่แน่นอน<br>ภาษีที่เลี่ยงได้ − ค่าคอมไป-กลับ</div>' +
+      '<div class="n ' + (c.certain >= 0 ? 'up' : 'dn') + '">' + xdSignedMoney(c.certain) + '</div></div>' +
+    '<div class="xd-sb"><div class="k">ส่วนที่เดิมพัน<br>' +
+      (c.bet != null ? 'ลงลึกกว่าทฤษฎี ' + (c.px - c.buyback).toFixed(2) : 'ยังไม่ได้ตั้งราคาซื้อคืน') + '</div>' +
+      '<div class="n ' + (c.bet != null && c.bet >= 0 ? 'up' : 'dn') + '">' +
+        (c.bet != null ? xdSignedMoney(c.bet) : '—') + '</div></div>' +
+  '</div>';
+
+  if (c.certain <= 0) {
+    h += '<div class="xd-cwarn">ส่วนที่แน่นอนติดลบ — ค่าคอมไป-กลับแพงกว่าภาษีที่เลี่ยงได้ ' +
+         'กำไรทั้งหมดต้องมาจากการเดิมพันราคาล้วน ๆ</div>';
+  } else {
+    const tickBaht = c.tick * c.Q;
+    h += '<div class="xd-cnote">ส่วนที่แน่นอนคิดเป็น ' + (c.certain / (c.P0 * c.Q) * 100).toFixed(2) +
+         '% ของเงินก้อนนี้ · ราคาขยับ 1 tick = ' + fmtBaht(tickBaht) + ' — ' +
+         (c.certain < tickBaht ? 'เล็กกว่า 1 tick' : 'ประมาณ ' + (c.certain / tickBaht).toFixed(1) + ' tick') + '</div>';
+  }
+
+  h += '<div class="xd-lads">' +
+    '<div><div class="xd-ladt">ขายขาด — ไล่ราคาขาย <span>ตรึงราคาหลัง XD ที่ ' + c.px.toFixed(2) +
+      ' · เสมอตัวจริงที่ ' + c.beSellRaw.toFixed(4) + '</span></div>' +
+      xdLadderHtml(c.sellRows, ['ขายที่', 'รับสุทธิ', 'vs ถือปันผล'], 'net', 'vs') + '</div>' +
+    '<div><div class="xd-ladt">ขาย + ซื้อคืน — ไล่ราคาซื้อคืน <span>เสมอตัวจริงที่ ' + c.beBuyRaw.toFixed(4) + '</span></div>' +
+      xdLadderHtml(c.buyRows, ['ซื้อคืนที่', 'เงินสดเหลือ', 'vs ปันผล'], 'cash', 'vs') + '</div>' +
+  '</div>';
+
+  const canPlan = row.conf === 'confirmed' && c.buyback > 0;
+  h += '<div class="xd-cacts">' +
+    (row.plan
+      ? '<button class="btn btn-g btn-sm" data-tk="' + escHtml(row.ticker) + '" onclick="xdClearPlan(this.dataset.tk)">✕ ยกเลิกแผน</button>' +
+        '<span class="xd-cnote" style="margin:0">มีแผนอยู่: ขาย ' + (+row.plan.sell).toFixed(2) +
+        ' → ซื้อคืน ' + (+row.plan.buyback).toFixed(2) + '</span>'
+      : canPlan
+        ? '<button class="btn btn-p btn-sm" data-tk="' + escHtml(row.ticker) + '" onclick="xdSavePlan(this.dataset.tk)">📌 ตั้งเป็นแผน</button>' +
+          '<span class="xd-cnote" style="margin:0">จะตั้งเงื่อนไขเตือนราคา ' + c.buyback.toFixed(2) + ' ให้อัตโนมัติ</span>'
+        : '<span class="xd-cnote" style="margin:0">' +
+          (row.conf === 'confirmed' ? 'ใส่ราคาซื้อคืนก่อนจึงตั้งเป็นแผนได้'
+           : 'ตั้งเป็นแผนได้เฉพาะรอบที่ประกาศแล้ว — ตัวเลขคาดการณ์ยังเปลี่ยนได้') + '</span>') +
+  '</div>';
+
+  h += '<div class="xd-cfoot">ราคาจริงวัน XD มักลงไม่ครบปันผล เพราะแรงซื้อก่อนขึ้นเครื่องหมาย — ' +
+       'ยิ่งลงไม่ครบ ฝั่งขายยิ่งเสียเปรียบ · ขายแล้วซื้อคืนถูกลง ต้นทุนเฉลี่ยจะลด %กำไรในหน้าแรกจะกระโดดขึ้นทั้งที่เงินเท่าเดิม · ' +
+       'ยังไม่รวมความเสี่ยงคิวไม่ match · spread · gap เปิดตลาด';
+  h += '</div>';
+  return h;
+}
+
+function xdRenderCalcResult(tk) {
+  const key = String(tk).toUpperCase();
+  const box = document.getElementById('xdcr_' + xdSlug(key));
+  if (!box) return;
+  const held = ((S.registry && S.registry.stocks) || []).filter(function (s) { return s.shares > 0; });
+  const r = buildXdRows(held, (S.xd && S.xd.items) || {});
+  const row = r.up.concat(r.none).find(function (x) { return String(x.ticker).toUpperCase() === key; });
+  if (row) box.innerHTML = xdCalcResultHtml(row);
+}
+
+function xdCalcPanelHtml(row) {
+  const inp = xdCalcInput(row);
+  const sl = xdSlug(row.ticker);
+  const tk = escHtml(String(row.ticker).toUpperCase());
+  const fld = function (id, label, val, step) {
+    return '<div class="xd-f"><label>' + label + '</label>' +
+      '<input type="number" step="' + step + '" min="0" id="' + id + '_' + sl + '" value="' + val + '"' +
+      ' data-tk="' + tk + '" data-f="' + id + '"' +
+      ' oninput="xdSetCalcField(this.dataset.tk,this.dataset.f,this.value)"></div>';
+  };
+  return '<div class="xd-cbox">' +
+      '<div class="xd-chead"><span><b>' + escHtml(row.ticker) + '</b> · ค่าคอม ' +
+        (inp.cfg.C * 100).toFixed(3) + '%/ขา · ภาษีปันผล ' + inp.cfg.divTaxPct.toFixed(2) + '%</span>' +
+        '<button class="btn btn-g btn-sm" data-tk="' + tk + '" onclick="xdToggleCalc(this.dataset.tk)">✕ ปิด</button></div>' +
+      '<div class="xd-fields">' +
+        fld('shares', 'จำนวนหุ้น', inp.shares, '1') +
+        fld('price', 'ราคาขายก่อน XD', inp.price, '0.01') +
+        fld('dps', 'ปันผล/หุ้น', inp.dps, '0.01') +
+        fld('buyback', 'ราคาซื้อคืนเป้า', inp.buyback ? inp.buyback.toFixed(2) : '', '0.01') +
+      '</div>' +
+      '<div id="xdcr_' + sl + '">' + xdCalcResultHtml(row) + '</div>' +
+    '</div>';
+}
+
+async function xdSavePlan(tk) {
+  const key = String(tk).toUpperCase();
+  const held = ((S.registry && S.registry.stocks) || []).filter(function (s) { return s.shares > 0; });
+  const r = buildXdRows(held, (S.xd && S.xd.items) || {});
+  const row = r.up.concat(r.none).find(function (x) { return String(x.ticker).toUpperCase() === key; });
+  if (!row) return;
+  const inp = xdCalcInput(row);
+  if (!(inp.buyback > 0) || !(inp.price > 0)) { toast('⚠️ ใส่ราคาขายและราคาซื้อคืนก่อน'); return; }
+  xdPlans()[key] = {
+    ticker: row.ticker, sell: inp.price, buyback: inp.buyback, dps: inp.dps,
+    shares: inp.shares, xd: row.xd || null, created: new Date().toISOString()
+  };
+  xdSaveCache();
+  await xdEnsureBuybackRule(row.ticker, inp.buyback);
+  renderXD();
+  renderDashboard();
+  toast('📌 ตั้งแผน ' + row.ticker + ' แล้ว — ตั้งเงื่อนไขเตือนราคา ' + inp.buyback.toFixed(2) + ' ให้ด้วย');
+}
+
+function xdClearPlan(tk) {
+  const key = String(tk).toUpperCase();
+  delete xdPlans()[key];
+  xdSaveCache();
+  renderXD();
+  renderDashboard();
+  toast('ยกเลิกแผน ' + key + ' แล้ว (เงื่อนไขเตือนยังอยู่ ลบเองได้ที่ 🔔)');
+}
+
+// One rule per ticker per target — re-planning the same price must not stack
+// duplicate alerts, and moving the target should move the rule, not add one.
+async function xdEnsureBuybackRule(ticker, price) {
+  if (!S.alerts) S.alerts = S.cachedAlerts || emptyAlertRules();
+  const tk = String(ticker).toUpperCase();
+  const mine = S.alerts.rules.filter(function (r) {
+    return r.type === 'price_below' && String(r.ticker).toUpperCase() === tk && r.xdPlan;
+  });
+  if (mine.length) {
+    mine.forEach(function (r) { r.value = price; });
+  } else {
+    S.alerts.rules.push({
+      id: ruleGenId(), ticker: tk, type: 'price_below', value: price,
+      note: 'ซื้อคืนตามแผน XD', enabled: true, xdPlan: true
+    });
+  }
+  await saveAlertRules();
+}
+
+function xdSaveCache() {
+  try {
+    localStorage.setItem(XD_KEY, JSON.stringify({
+      fetched_at: (S.xd && S.xd.fetched_at) || null,
+      items: (S.xd && S.xd.items) || {},
+      plans: xdPlans()
+    }));
+  } catch (e) { /* quota */ }
+}
+
+// ── Fee & tax settings, right where they change the answer ──────────────
+function xdToggleSettings() {
+  S.xdSetOpen = !S.xdSetOpen;
+  renderXD();
+}
+
+function xdSettingsHtml() {
+  const c = xdSettings();
+  const line = '<div class="xd-setline">ค่าคอม <b>' + c.commPct.toFixed(2) + '%</b> (รวม fee+VAT ' +
+    (c.C * 100).toFixed(3) + '%/ขา) · ภาษีปันผล <b>' + c.divTaxPct.toFixed(2) + '%</b>' +
+    (c.mode === 'file' ? ' (ยื่นรวม ฐานภาษี ' + c.bracket + '%)' : ' (หัก ณ ที่จ่าย final)') +
+    ' <button class="btn btn-g btn-sm" onclick="xdToggleSettings()">' +
+    (S.xdSetOpen ? '✕ ปิด' : '⚙️ แก้') + '</button></div>';
+  if (!S.xdSetOpen) return line;
+  return line + '<div class="tl-form" style="margin:8px 0 12px">' +
+    '<div class="tl-grid">' +
+      '<div class="form-group"><label class="form-label">ค่าคอมมิชชั่นฐาน %</label>' +
+        '<input class="form-input" id="xdSetComm" type="number" step="0.01" min="0" value="' + c.commPct + '">' +
+        '<div class="tl-note" style="margin-top:5px">' + COMM_PRESETS.map(function (p) {
+          return '<button class="btn btn-g btn-sm" style="margin:3px 4px 0 0" data-v="' + p.v +
+                 '" onclick="xdPickComm(this.dataset.v)">' + p.label + '</button>';
+        }).join('') + '</div></div>' +
+      '<div class="form-group"><label class="form-label">ภาษีปันผล</label>' +
+        '<select class="form-input" id="xdSetMode" onchange="xdSetModeChange()">' +
+          '<option value="final"' + (c.mode === 'final' ? ' selected' : '') + '>หัก ณ ที่จ่าย 10% (final)</option>' +
+          '<option value="file"' + (c.mode === 'file' ? ' selected' : '') + '>ยื่นรวม ใช้เครดิตภาษี</option>' +
+        '</select></div>' +
+      '<div class="form-group' + (c.mode === 'file' ? '' : ' hidden') + '" id="xdSetBracketGroup">' +
+        '<label class="form-label">ฐานภาษีเงินได้ของคุณ %</label>' +
+        '<input class="form-input" id="xdSetBracket" type="number" step="1" min="0" max="35" value="' + c.bracket + '"' +
+        ' oninput="xdSetModeChange()"></div>' +
+      '<div class="form-group"><label class="form-label">อัตราภาษีนิติบุคคลของผู้จ่าย %</label>' +
+        '<input class="form-input" id="xdSetCorp" type="number" step="1" min="0" max="99" value="' + c.corpTax + '"' +
+        ' oninput="xdSetModeChange()"></div>' +
+    '</div>' +
+    '<div class="tl-note" id="xdSetPreview"></div>' +
+    '<button class="btn btn-p btn-sm" style="margin-top:8px" onclick="xdSaveSettingsForm()">💾 บันทึกค่าตั้ง</button>' +
+    '<div class="tl-note">ค่าคอมนี้จะถูกเติมให้อัตโนมัติในฟอร์ม 📒 สมุดซื้อ-ขาย ด้วย · ' +
+      'ยื่นรวมได้เครดิตภาษี = เงินปันผล × นิติบุคคล ÷ (100 − นิติบุคคล) แล้วเสียภาษีตามฐานของคุณ — ' +
+      'ที่นิติบุคคล 20% การยื่นรวมถูกกว่า 10% final จนถึงฐานภาษี 25% และแพงกว่าตั้งแต่ฐาน 30% ขึ้นไป</div>' +
+  '</div>';
+}
+
+function xdSetModeChange() {
+  const mode = document.getElementById('xdSetMode').value;
+  const grp = document.getElementById('xdSetBracketGroup');
+  if (grp) grp.classList.toggle('hidden', mode !== 'file');
+  const pv = document.getElementById('xdSetPreview');
+  if (!pv) return;
+  const b = +(document.getElementById('xdSetBracket') || {}).value || 0;
+  const corp = +(document.getElementById('xdSetCorp') || {}).value || CORP_TAX_DEFAULT;
+  const eff = divTaxEffPct(mode, b, corp);
+  pv.innerHTML = 'ภาษีปันผลที่จะใช้คำนวณ <b>' + eff.toFixed(2) + '%</b>' +
+    (eff < 0 ? ' — ติดลบ แปลว่าได้ภาษีคืน การถือรับปันผลจึงคุ้มกว่าเสมอ' : '');
+}
+
+function xdPickComm(v) {
+  const el = document.getElementById('xdSetComm');
+  if (el) el.value = v;
+}
+
+async function xdSaveSettingsForm() {
+  const comm = +document.getElementById('xdSetComm').value;
+  const mode = document.getElementById('xdSetMode').value;
+  const bracket = +(document.getElementById('xdSetBracket') || {}).value || 0;
+  const corp = +(document.getElementById('xdSetCorp') || {}).value || CORP_TAX_DEFAULT;
+  if (!(comm >= 0)) { toast('⚠️ ค่าคอมต้องไม่ติดลบ'); return; }
+  if (mode === 'file' && !(bracket >= 0 && bracket <= 100)) { toast('⚠️ ฐานภาษีต้องอยู่ระหว่าง 0–100'); return; }
+  S.xdSetOpen = false;
+  await saveXdSettings({ comm_pct: comm, div_tax_mode: mode, tax_bracket: bracket, corp_tax: corp });
+  renderXD();
+  toast('✅ บันทึกค่าตั้งแล้ว — ภาษีปันผลที่ใช้คำนวณ ' + divTaxEffPct(mode, bracket, corp).toFixed(2) + '%');
 }
 
 function xdConfBadge(c) {
@@ -4463,45 +5059,72 @@ function renderXD() {
       ? 'ดึงล่าสุด ' + new Date(S.xd.fetched_at).toLocaleString('th-TH')
       : '';
   }
+  const setEl = document.getElementById('xdSettingsBox');
+  if (setEl) setEl.innerHTML = xdSettingsHtml();
+  if (S.xdSetOpen) xdSetModeChange();
   if (!S.xd) {
     box.innerHTML = '<div class="rpt-empty">ยังไม่ได้ดึงข้อมูล<br>กด “🔄 ดึงข้อมูล XD” ด้านบน</div>';
     return;
   }
   const r = buildXdRows(held, S.xd.items);
+  const panels = [];
   let h = '<div class="rpt">';
   if (!r.up.length) {
     h += '<div class="rpt-empty">ไม่พบวัน XD ที่กำลังจะถึงสำหรับหุ้นในพอร์ต</div>';
   } else {
-    h += '<table><thead><tr><th>หุ้น</th><th style="text-align:right">฿/หุ้น</th>' +
+    h += '<div class="xd-tw"><table class="xd-tbl"><thead><tr><th>หุ้น</th><th style="text-align:right">฿/หุ้น</th>' +
+         '<th style="text-align:right">%รอบนี้</th>' +
          '<th>วัน XD</th><th style="text-align:right">อีก</th>' +
          '<th style="text-align:right">จำนวน</th><th style="text-align:right">ได้รับ</th>' +
-         '<th>สถานะ</th><th></th></tr></thead><tbody>';
+         '<th style="text-align:right">ภาษี</th><th></th></tr></thead><tbody>';
     r.up.forEach(function (x) {
       const soon = x.days <= 7 ? ' class="xd-soon"' : '';
+      const sc = x.scr || {};
       let note = '';
       if (x.note) note += escHtml(x.note);
       if (x.conf === 'estimated' && x.basis && x.basis.length) {
         note += (note ? '<br>' : '') + 'อิงจากปีก่อน: ' + escHtml(x.basis.join(', '));
       }
       if (x.pay) note += (note ? '<br>' : '') + 'จ่าย ' + escHtml(x.pay);
+      if (x.plan) {
+        note += (note ? '<br>' : '') + '<span class="xd-plan">📌 แผน: ขาย ' +
+          (+x.plan.sell).toFixed(2) + ' → ซื้อคืน ' + (+x.plan.buyback).toFixed(2) + '</span>';
+      }
+      const open = !!(S.xdOpen && S.xdOpen[String(x.ticker).toUpperCase()]);
+      const canCalc = sc.state !== 'nodata';
       h += '<tr' + soon + '>' +
         '<td><strong>' + escHtml(x.ticker) + '</strong>' +
+          '<div class="xd-pills">' + xdConfBadge(x.conf) + xdScrPill(sc) + '</div>' +
           (note ? '<div class="xd-note">' + note + '</div>' : '') + '</td>' +
         '<td style="text-align:right">' + (x.dps != null ? x.dps.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '<span style="color:var(--tx3)">—</span>') + '</td>' +
+        '<td style="text-align:right" class="' + (sc.state === 'go' ? 'xd-cash' : '') + '">' +
+          (sc.yieldPct != null ? sc.yieldPct.toFixed(2) + '%' : '<span style="color:var(--tx3)">—</span>') + '</td>' +
         '<td class="xd-d">' + escHtml(x.xd) + '</td>' +
         '<td style="text-align:right" class="xd-d">' + xdDaysLabel(x.days) + '</td>' +
         '<td style="text-align:right">' + x.shares.toLocaleString() + '</td>' +
-        '<td style="text-align:right" class="' + (x.cash != null ? 'xd-cash' : '') + '">' +
-          (x.cash != null ? fmtBaht(x.cash) : '<span style="color:var(--tx3)">—</span>') + '</td>' +
-        '<td>' + xdConfBadge(x.conf) + '</td>' +
-        '<td><button class="nw-act" title="บันทึกว่าได้รับปันผลแล้ว"' +
-          ' data-tk="' + escHtml(x.ticker) + '" data-dps="' + (x.dps != null ? x.dps : 0) + '"' +
-          ' data-shares="' + x.shares + '" data-date="' + escHtml(x.xd || '') + '"' +
-          ' onclick="logDividendFor(this)">📒</button></td></tr>';
+        '<td style="text-align:right" class="' + (x.cash != null && !x.plan ? 'xd-cash' : '') + '">' +
+          (x.cash != null
+            ? (x.plan ? '<s style="color:var(--tx3)">' + fmtBaht(x.cash) + '</s>' : fmtBaht(x.cash))
+            : '<span style="color:var(--tx3)">—</span>') + '</td>' +
+        '<td style="text-align:right" class="' + (sc.divTax != null && sc.divTax < 0 ? 'xd-cash' : '') + '">' +
+          (sc.divTax != null ? (sc.divTax < 0 ? '−' : '') + fmtBaht(Math.abs(sc.divTax)) : '<span style="color:var(--tx3)">—</span>') + '</td>' +
+        '<td class="xd-acts">' +
+          '<button class="nw-act' + (open ? ' on' : '') + '" title="คำนวณขายก่อน XD"' +
+            (canCalc ? '' : ' disabled') +
+            ' data-tk="' + escHtml(x.ticker) + '" onclick="xdToggleCalc(this.dataset.tk)">🧮</button>' +
+          '<button class="nw-act" title="บันทึกว่าได้รับปันผลแล้ว"' +
+            ' data-tk="' + escHtml(x.ticker) + '" data-dps="' + (x.dps != null ? x.dps : 0) + '"' +
+            ' data-shares="' + x.shares + '" data-date="' + escHtml(x.xd || '') + '"' +
+            ' onclick="logDividendFor(this)">📒</button></td></tr>';
+      if (open && canCalc) panels.push(x);
     });
-    h += '<tr class="xd-tot"><td colspan="5">รวมที่คาดว่าจะได้รับ</td>' +
-         '<td style="text-align:right" class="xd-cash">' + fmtBaht(r.total) + '</td><td></td><td></td></tr>';
-    h += '</tbody></table>';
+    h += '<tr class="xd-tot"><td colspan="6">รวมที่คาดว่าจะได้รับ' +
+         (r.total !== r.totalAll ? ' <span class="xd-note" style="display:inline">(ไม่รวมตัวที่ตั้งแผนขาย — ถ้าไม่ขายจะได้ ' + fmtBaht(r.totalAll) + ')</span>' : '') +
+         '</td>' +
+         '<td style="text-align:right" class="xd-cash">' + fmtBaht(r.total) + '</td>' +
+         '<td style="text-align:right">' + (r.tax < 0 ? '−' : '') + fmtBaht(Math.abs(r.tax)) + '</td><td></td></tr>';
+    h += '</tbody></table></div>';
+    panels.forEach(function (x) { h += xdCalcPanelHtml(x); });
   }
   if (r.none.length) {
     h += '<h2>ไม่มี XD ที่กำลังจะถึง</h2><ul>';
@@ -4516,10 +5139,18 @@ function renderXD() {
     '<strong>คาดการณ์</strong> = ยังไม่ประกาศ คำนวณจากรอบปีก่อนของหุ้นตัวนั้นเอง — อย่าใช้ตัดสินใจซื้อขาย ให้ตรวจที่ SET อีกครั้ง<br>' +
     'DR (LVMH01 / MSFT80 / XIAOMI80 / ASML01): ถ้า “ยืนยันแล้ว” = ประกาศของตัว DR เอง เป็นบาทต่อหน่วย คำนวณเงินที่จะได้รับให้ได้ · ' +
     'ถ้าเป็น “คาดการณ์” = อิงวัน ex-dividend ของ<em>หุ้นแม่</em> ผู้ออก DR กำหนดวันและจำนวนต่อหน่วยเอง จึงไม่คำนวณเป็นบาทให้' +
+    '</div>' +
+    '<div class="xd-warn">' +
+    '<strong>คุ้มไหม</strong> เทียบปันผลรอบนี้กับค่าคอมไป-กลับ: ขายก่อน XD จะเริ่มมีเหตุผลก็ต่อเมื่อ ' +
+    'ปันผลรอบนั้น ÷ ราคา ≥ 2 × ค่าคอม ÷ ภาษีปันผล' +
+    (r.cfg.divTaxPct > 0
+      ? ' — ตอนนี้คือ <strong>' + (2 * r.cfg.C / (r.cfg.divTaxPct / 100) * 100).toFixed(2) + '%</strong> ของราคา'
+      : ' — ตอนนี้ภาษีปันผลที่ตั้งไว้ไม่เป็นบวก การถือรับปันผลจึงคุ้มกว่าเสมอ') + '<br>' +
+    '<strong>คิดต่อได้</strong> ไม่ได้แปลว่าให้ขาย แปลว่าผ่านด่านแรกเท่านั้น — กด 🧮 ดูว่าต้องซื้อคืนที่ราคาไหนถึงจะคุ้มจริง · ' +
+    'แถวที่เป็น <strong>คาดการณ์</strong> ไม่ตัดสินให้ทั้งสองทาง เพราะปันผลที่ใช้คำนวณยังเป็นตัวเลขของรอบปีก่อน' +
     '</div></div>';
   box.innerHTML = h;
 }
-
 // ── Today's move, price freshness, chart ranges ─────────────────────────
 // A quote carries yesterday's close, so "วันนี้" is (price − prev) × shares.
 // Everything degrades quietly: no prev_close yet → the day line is hidden
