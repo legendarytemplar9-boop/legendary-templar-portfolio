@@ -997,12 +997,12 @@
     S.registry = prevReg; S.xdPlans = prevPlans; S.assetReg = prevAsset;
   }
 
-  sec('renderXD — screening column and the inline calculator');
+  sec('renderXD — screening column');
   {
     const prevReg = S.registry, prevXd = S.xd, prevPlans = S.xdPlans,
-          prevOpen = S.xdOpen, prevAsset = S.assetReg, prevEdit = S.xdCalcEdit;
+          prevAsset = S.assetReg, prevXdc = S.xdc;
     S.assetReg = { settings: {} };
-    S.xdPlans = {}; S.xdOpen = {}; S.xdCalcEdit = {};
+    S.xdPlans = {}; S.xdc = null;
     S.registry = { stocks: [
       { ticker: 'M', shares: 4000, current_price: 9.5 },
       { ticker: 'BDMS', shares: 1000, current_price: 24.65 }
@@ -1018,36 +1018,7 @@
     ok('a failing row says hold', h.indexOf('ถือดีกว่า') !== -1);
     ok('the confirmed badge survived the new columns', h.indexOf('ยืนยันแล้ว') !== -1);
     ok('the threshold is spelled out in the caption', h.indexOf('3.36%') !== -1);
-    ok('the calculator button is offered', h.indexOf('xdToggleCalc') !== -1);
-    ok('the panel is closed until asked for', h.indexOf('xd-cbox') === -1);
-
-    // Open it the way a tap does, then assert on what the DOM actually holds.
-    xdToggleCalc('M');
-    h = document.getElementById('xdContent').innerHTML;
-    ok('the panel opens under its row', h.indexOf('xd-cbox') !== -1);
-    ok('inputs are prefilled from the portfolio',
-       document.getElementById('shares_M').value === '4000');
-    ok('…including the market price', document.getElementById('price_M').value === '9.5');
-    ok('…and the announced dividend', document.getElementById('dps_M').value === '0.4');
-    ok('the buyback target seeds one tick below break-even',
-       document.getElementById('buyback_M').value === '9.05',
-       document.getElementById('buyback_M').value);
-    ok('the verdict is rendered', h.indexOf('ดีกว่าถือปันผล') !== -1);
-    ok('both halves of the gain are shown', h.indexOf('ส่วนที่แน่นอน') !== -1 &&
-       h.indexOf('ส่วนที่เดิมพัน') !== -1);
-    ok('a confirmed row can be planned', h.indexOf('xdSavePlan') !== -1);
-
-    // Typing must not replace the field being typed into.
-    const before = document.getElementById('buyback_M');
-    xdSetCalcField('M', 'buyback', '8.90');
-    ok('the input element survives a recalculation',
-       document.getElementById('buyback_M') === before);
-    ok('the result updated anyway',
-       document.getElementById('xdcr_M').innerHTML.indexOf('8.90') !== -1);
-
-    xdToggleCalc('M');
-    ok('tapping again closes it',
-       document.getElementById('xdContent').innerHTML.indexOf('xd-cbox') === -1);
+    ok('every row offers the calculator', h.indexOf('openXdCalc') !== -1);
 
     // A planned row is struck out of the total and says why.
     S.xdPlans = { M: { ticker: 'M', sell: 9.5, buyback: 9.05, dps: 0.4, shares: 4000, xd: '2099-09-04' } };
@@ -1056,13 +1027,9 @@
     ok('the plan is shown on the row', h.indexOf('📌 แผน') !== -1);
     ok('and the total explains what it excludes', h.indexOf('ไม่รวมตัวที่ตั้งแผนขาย') !== -1);
 
-    // An estimated row must not be plannable — a guessed dividend is not a
-    // number to place a real order against.
     S.xdPlans = {};
     S.xd.items.BDMS.conf = 'estimated';
     renderXD();
-    xdToggleCalc('BDMS');
-    h = document.getElementById('xdContent').innerHTML;
     // Scoped to the row itself: the footnote text mentions every pill name, so
     // searching the whole panel would pass no matter what the row rendered.
     const bdmsPills = [].slice.call(document.querySelectorAll('#xdContent tbody tr'))
@@ -1070,27 +1037,160 @@
       .map(function (tr) { return tr.querySelector('.xd-pills').textContent.trim(); })[0];
     eq('an estimated row carries the คาดการณ์ badge and no verdict beside it',
        bdmsPills, 'คาดการณ์');
-    ok('…and offers no plan button',
-       h.indexOf('xdSavePlan') === -1 && h.indexOf('ตัวเลขคาดการณ์ยังเปลี่ยนได้') !== -1);
-    xdToggleCalc('BDMS');
 
     S.registry = prevReg; S.xd = prevXd; S.xdPlans = prevPlans;
-    S.xdOpen = prevOpen; S.assetReg = prevAsset; S.xdCalcEdit = prevEdit;
+    S.assetReg = prevAsset; S.xdc = prevXdc;
+  }
+
+  sec('XD Calculator screen — the standalone layout, prefilled');
+  {
+    const prevReg = S.registry, prevXd = S.xd, prevPlans = S.xdPlans,
+          prevAsset = S.assetReg, prevXdc = S.xdc;
+    S.assetReg = { settings: {} };
+    S.xdPlans = {}; S.xdc = null;
+    S.registry = { stocks: [
+      { ticker: 'M', shares: 4000, current_price: 9.5 },
+      { ticker: 'BDMS', shares: 1000, current_price: 24.65 }
+    ] };
+    S.xd = { fetched_at: '2026-08-19T10:00:00.000Z', items: {
+      M: { xd: '2099-09-04', pay: '2099-09-12', dps: 0.40, conf: 'confirmed' },
+      BDMS: { xd: '2099-09-08', dps: 0.35, conf: 'estimated' }
+    } };
+    try { localStorage.removeItem(XDC_KEY); } catch (e) {}
+
+    openXdCalc('M');
+    ok('the screen opens',
+       !document.getElementById('xdCalcModal').classList.contains('hidden'));
+    eq('…titled for the stock it was opened from',
+       document.getElementById('xdcTitle').textContent, '🧮 XD Calculator — M');
+
+    // Every block of the standalone file has to be here, in order.
+    const screen = document.getElementById('xdCalcModal').textContent;
+    ['ข้อมูลนำเข้า', 'ค่าธรรมเนียม & ภาษี', 'คุ้มทุนซื้อคืน', 'คุ้มทุนราคาขาย',
+     'ขายขาด — ไล่ราคาขาย', 'ขาย + ซื้อคืน — ไล่ราคาซื้อคืน', 'แยกที่มาของกำไร',
+     'เกือบแน่นอน', 'เดิมพันราคา', 'ไม่ใช่คำแนะนำการลงทุน'].forEach(function (block) {
+      ok('the screen has the "' + block + '" block', screen.indexOf(block) !== -1);
+    });
+    ok('the broker preset is offered', !!document.getElementById('xdcPre'));
+    eq('…seeded from the saved rate', document.getElementById('xdcPre').value, '0.15');
+
+    // Prefilled from the portfolio, not from thin air.
+    eq('shares come from the holding', document.getElementById('xdc_shares').value, '4000');
+    eq('price comes from the market', document.getElementById('xdc_price').value, '9.5');
+    eq('dividend comes from the announcement', document.getElementById('xdc_dps').value, '0.4');
+    eq('the buyback seeds one tick below break-even',
+       document.getElementById('xdc_buyback').value, '9.05');
+    eq('commission seeds from the saved rate', document.getElementById('xdc_comm').value, '0.15');
+    eq('tax seeds from the saved mode', document.getElementById('xdc_tax').value, '10');
+    ok('the ex-date is shown so you know which round this is',
+       document.getElementById('xdcForm').textContent.indexOf('2099-09-04') !== -1);
+    ok('the verdict is rendered',
+       document.getElementById('xdcResult').textContent.indexOf('ดีกว่าถือปันผล 235.35') !== -1);
+    ok('both break-even tiles carry their raw price too',
+       document.getElementById('xdcResult').innerHTML.indexOf('9.1087') !== -1);
+
+    // Typing must not replace the field being typed into.
+    const before = document.getElementById('xdc_buyback');
+    xdcSet('buyback', '8.90');
+    ok('the input element survives a recalculation',
+       document.getElementById('xdc_buyback') === before);
+    ok('…and the result still updated',
+       document.getElementById('xdcResult').textContent.indexOf('8.90') !== -1);
+
+    // Fee and tax are per-scenario: changing them here must not touch the
+    // settings the XD table and the trade book run on.
+    // A BOI dividend is the reason this field is editable at all: tax 0 turns
+    // the certain half from +35.02 into −124.98, which is the whole answer.
+    ok('at 10% the certain half is positive',
+       document.getElementById('xdcResult').textContent.indexOf('+35.02') !== -1);
+    xdcSet('tax', '0');
+    eq('a one-off tax change does not write back to the settings',
+       xdSettings().divTaxPct, 10);
+    ok('…but this screen really recalculates with it',
+       document.getElementById('xdcResult').textContent.indexOf('−124.98') !== -1,
+       document.getElementById('xdcResult').textContent.slice(0, 200));
+    xdcSet('tax', '10');
+    xdcPreset('0.25');
+    eq('picking a preset fills the commission box',
+       document.getElementById('xdc_comm').value, '0.25');
+    eq('…and the calculation actually uses it',
+       document.getElementById('xdcCeff').textContent, '0.275%');
+    eq('…without touching the saved rate', xdSettings().commPct, 0.15);
+    xdcSet('comm', '0.15');
+    eq('typing a commission by hand also reaches the calculation',
+       document.getElementById('xdcCeff').textContent, '0.168%');
+
+    // Switching stock starts that sheet from the portfolio, not from the
+    // numbers left in it from last time.
+    xdcSet('shares', '111');
+    xdcPick('BDMS');
+    xdcPick('M');
+    eq('coming back to a stock re-reads the portfolio, not the old sheet',
+       document.getElementById('xdc_shares').value, '4000');
+    xdcPick('BDMS');
+    eq('the picker switches stock', document.getElementById('xdc_shares').value, '1000');
+    eq('…with that stock\'s price', document.getElementById('xdc_price').value, '24.65');
+    eq('…and the title follows',
+       document.getElementById('xdcTitle').textContent, '🧮 XD Calculator — BDMS');
+    ok('an estimated round is labelled as not yet announced',
+       document.getElementById('xdcForm').textContent.indexOf('คาดการณ์') !== -1);
+    ok('…and cannot be turned into a plan',
+       document.getElementById('xdcResult').innerHTML.indexOf('xdSavePlan') === -1);
+
+    // Manual mode: no stock, your own numbers, remembered across reloads.
+    xdcPick(XDC_MANUAL);
+    eq('manual mode drops the stock from the title',
+       document.getElementById('xdcTitle').textContent, '🧮 XD Calculator');
+    xdcSet('shares', '2500');
+    xdcSet('price', '23.80');
+    xdcSet('dps', '0.45');
+    xdcSet('buyback', '22.40');
+    ok('manual numbers are remembered for next time',
+       JSON.parse(localStorage.getItem(XDC_KEY) || '{}').shares === '2500');
+    S.xdc = null;                       // as if the app had been reloaded
+    xdcLoadManual();
+    eq('…and come back', xdcValues(XDC_MANUAL).shares, 2500);
+    eq('…all of them', xdcValues(XDC_MANUAL).buyback, 22.4);
+
+    // The nav button opens the same screen with no stock attached.
+    S.xdc = null;
+    openXdCalc();
+    eq('the navbar entry lands in manual mode',
+       document.getElementById('xdcTitle').textContent, '🧮 XD Calculator');
+    ok('…still restoring what you last typed',
+       document.getElementById('xdc_shares').value === '2500');
+
+    // Opening from a row again re-reads the live portfolio rather than
+    // reusing whatever was in that sheet before.
+    openXdCalc('M');
+    xdcSet('price', '1.23');
+    eq('a typed price holds while the screen is open',
+       xdcValues('M').price, 1.23);
+    S.registry.stocks[0].current_price = 9.75;
+    openXdCalc('M');
+    eq('but reopening from a row refreshes it from the portfolio',
+       document.getElementById('xdc_price').value, '9.75');
+
+    closeM('xdCalcModal');
+    try { localStorage.removeItem(XDC_KEY); } catch (e) {}
+    S.registry = prevReg; S.xd = prevXd; S.xdPlans = prevPlans;
+    S.assetReg = prevAsset; S.xdc = prevXdc;
   }
 
   sec('plans — saving, the alert it creates, and surviving a reload');
   {
     const prevReg = S.registry, prevXd = S.xd, prevPlans = S.xdPlans, prevAlerts = S.alerts,
-          prevAsset = S.assetReg, prevEdit = S.xdCalcEdit, prevOpen = S.xdOpen,
+          prevAsset = S.assetReg, prevXdc = S.xdc,
           prevOffline = S.offline;
     S.offline = true;                      // keep every save local to this page
     S.assetReg = { settings: {} };
     S.alerts = { version: 1, rules: [] };
-    S.xdPlans = {}; S.xdCalcEdit = {}; S.xdOpen = {};
+    S.xdPlans = {}; S.xdc = null;
     S.registry = { stocks: [{ ticker: 'M', shares: 4000, current_price: 9.5 }] };
     S.xd = { fetched_at: '2026-08-29T00:00:00.000Z',
              items: { M: { xd: '2099-09-04', dps: 0.4, conf: 'confirmed' } } };
 
+    openXdCalc('M');
     await xdSavePlan('M');
     const pl = xdPlanFor('M');
     ok('the plan is stored under the ticker', !!pl);
@@ -1103,7 +1203,7 @@
     ok('…tagged as belonging to an XD plan', S.alerts.rules[0].xdPlan === true);
 
     // Re-planning at a new target must MOVE the alert, not stack another one.
-    xdSetCalcField('M', 'buyback', '8.90');
+    xdcSet('buyback', '8.90');
     await xdSavePlan('M');
     eq('re-planning does not stack a second alert', S.alerts.rules.length, 1);
     eq('…it moves the existing one', S.alerts.rules[0].value, 8.9);
@@ -1111,7 +1211,7 @@
 
     // A rule you made yourself for the same stock is not the plan's rule.
     S.alerts.rules.push({ id: 'mine', ticker: 'M', type: 'price_below', value: 7, enabled: true });
-    xdSetCalcField('M', 'buyback', '9.00');
+    xdcSet('buyback', '9.00');
     await xdSavePlan('M');
     eq('a hand-made rule for the same stock is left alone', S.alerts.rules.length, 2);
     eq('…and keeps its own value',
@@ -1138,7 +1238,8 @@
 
     try { localStorage.removeItem(XD_KEY); } catch (e) {}
     S.registry = prevReg; S.xd = prevXd; S.xdPlans = prevPlans; S.alerts = prevAlerts;
-    S.assetReg = prevAsset; S.xdCalcEdit = prevEdit; S.xdOpen = prevOpen; S.offline = prevOffline;
+    closeM('xdCalcModal');
+    S.assetReg = prevAsset; S.xdc = prevXdc; S.offline = prevOffline;
   }
 
   sec('fee & tax settings — the form round-trip');
