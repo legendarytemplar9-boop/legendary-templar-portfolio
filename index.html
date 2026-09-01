@@ -7250,5 +7250,126 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 </script>
+<!-- ══ build stamp ══════════════════════════════════════════════════════════
+     แสดง "เวอร์ชัน + วันอัปเดตล่าสุด" ท้ายหน้า (หรือที่ element ซึ่งมี data-build)
+     และคอยเช็คว่ามีรุ่นใหม่บนเซิร์ฟเวอร์ไหม → ขึ้นปุ่มให้โหลดใหม่
+     บรรทัด window.APP_BUILD ถูกเขียนทับอัตโนมัติตอน deploy โดย
+     ~/dev/tools/buildstamp/stamp.sh — อย่าแก้เลขด้วยมือ                       -->
+<script>/*BUILDSTAMP*/window.APP_BUILD={app:"portfolio",v:2,date:"2026-09-01",hash:"1179e43",lang:"th"};/*BUILDSTAMP-END*/</script>
+<style>
+.bstamp{font:500 11.5px/1.55 system-ui,-apple-system,"Sarabun",sans-serif;letter-spacing:.2px;
+  opacity:.42;cursor:pointer;-webkit-user-select:none;user-select:none;display:inline-block;
+  color:inherit;background:none;border:0;padding:0;text-align:inherit}
+.bstamp:hover,.bstamp:focus-visible{opacity:.78}
+.bstamp-auto{display:block;width:100%;text-align:center;
+  padding:20px 12px calc(20px + var(--nh,0px) + var(--sb,0px))}
+.bstamp-pill{position:fixed;left:50%;bottom:calc(18px + var(--nh,0px) + var(--sb,0px));
+  transform:translateX(-50%);z-index:2147483000;display:flex;align-items:center;gap:10px;
+  max-width:calc(100vw - 24px);padding:9px 10px 9px 15px;border-radius:999px;
+  background:#111827;color:#fff;border:1px solid rgba(255,255,255,.16);
+  font:600 13px/1.3 system-ui,-apple-system,"Sarabun",sans-serif;
+  box-shadow:0 10px 30px rgba(0,0,0,.38);animation:bstampIn .22s ease}
+@keyframes bstampIn{from{opacity:0;transform:translate(-50%,14px)}to{opacity:1;transform:translate(-50%,0)}}
+.bstamp-pill b{font-weight:700;white-space:nowrap}
+.bstamp-pill button{font:inherit;cursor:pointer;border-radius:999px;border:0;padding:6px 13px;
+  background:#22c55e;color:#04220f;font-weight:700;white-space:nowrap}
+.bstamp-pill .bstamp-x{background:transparent;color:#fff;opacity:.6;padding:6px 9px;font-size:15px;line-height:1}
+</style>
+<script>
+(function(){
+  var B = window.APP_BUILD || {};
+  var TH = (B.lang || document.documentElement.lang || '').slice(0,2) === 'th';
+  var T = TH
+    ? {upd:'อัปเดต ', dev:'ยังไม่ได้ deploy', latest:'ล่าสุดแล้ว ✓', neu:'มีรุ่นใหม่ v', go:'โหลดใหม่',
+       tip:'แตะเพื่อตรวจว่ามีรุ่นใหม่ไหม'}
+    : {upd:'updated ', dev:'not deployed yet', latest:'up to date ✓', neu:'new version v', go:'reload',
+       tip:'tap to check for a newer version'};
+
+  function label(){
+    return B.date ? 'v' + B.v + ' · ' + T.upd + B.date : 'v' + B.v + ' · ' + T.dev;
+  }
+  function mount(){
+    var els = document.querySelectorAll('[data-build]');
+    if (!els.length) {
+      var d = document.createElement('div');
+      d.className = 'bstamp-auto';
+      d.setAttribute('data-build','');
+      document.body.appendChild(d);
+      els = [d];
+    }
+    for (var i=0;i<els.length;i++){
+      var e = els[i];
+      if (e.querySelector('.bstamp')) continue;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'bstamp';
+      b.textContent = label();
+      b.title = T.tip + (B.hash ? '  ·  ' + B.hash : '');
+      b.onclick = function(){ check(true); };
+      e.appendChild(b);
+    }
+  }
+  function flash(msg){
+    var els = document.querySelectorAll('.bstamp');
+    for (var i=0;i<els.length;i++){
+      (function(el){
+        el.textContent = msg; el.style.opacity = '.85';
+        setTimeout(function(){ el.textContent = label(); el.style.opacity = ''; }, 2200);
+      })(els[i]);
+    }
+  }
+
+  var pill = null;
+  function offer(v){
+    if (pill) return;
+    pill = document.createElement('div');
+    pill.className = 'bstamp-pill';
+    var txt = document.createElement('b'); txt.textContent = T.neu + v;
+    var go = document.createElement('button'); go.type='button'; go.textContent = T.go;
+    go.onclick = reload;
+    var x = document.createElement('button'); x.type='button'; x.className='bstamp-x';
+    x.textContent = '✕'; x.setAttribute('aria-label','dismiss');
+    x.onclick = function(){ pill.remove(); pill = null; };
+    pill.appendChild(txt); pill.appendChild(go); pill.appendChild(x);
+    document.body.appendChild(pill);
+  }
+  function reload(){
+    // ล้าง cache ของ service worker ก่อน ไม่งั้น PWA บน iOS อาจยังเสิร์ฟไฟล์เดิม
+    var done = function(){ location.reload(); };
+    if (window.caches && caches.keys) {
+      caches.keys().then(function(ks){
+        return Promise.all(ks.map(function(k){ return caches.delete(k); }));
+      }).then(done, done);
+    } else done();
+  }
+
+  var busy = false, last = 0;
+  function check(manual){
+    if (busy) return;
+    if (!manual && Date.now() - last < 300000) return;
+    busy = true; last = Date.now();
+    var url;
+    try { url = new URL('version.json', location.href.split('#')[0]).href + '?t=' + Date.now(); }
+    catch(e){ busy = false; return; }
+    fetch(url, {cache:'no-store'})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(j){
+        busy = false;
+        if (j && +j.v > +B.v) { offer(j.v); if (manual) flash(T.neu + j.v); }
+        else if (manual) flash(T.latest);
+      })
+      .catch(function(){ busy = false; if (manual) flash(label()); });
+  }
+
+  function start(){ mount(); check(false); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+  document.addEventListener('visibilitychange', function(){
+    if (!document.hidden) check(false);
+  });
+  window.__buildCheck = check;   // เรียกเองได้จาก console เวลาไล่ปัญหา
+})();
+</script>
+<!-- ══ end build stamp ══ -->
 </body>
 </html>
