@@ -2905,6 +2905,181 @@
       try { localStorage.removeItem(XD_KEY); } catch (e) {}
     }
 
+  // ══════════════════ SET x-calendar import ══════════════════
+  // The bookmarklet's payload is the ONLY way set.or.th data reaches this app,
+  // so the parser is a trust boundary: it is handed a URL fragment that may be
+  // truncated, stale, or hand-edited, and it must never half-load.
+  sec('setXdParse / setXdNext / setXdHist');
+  {
+    const prevStore = S.setxd;
+    const PAY = {
+      v: 1, at: '2026-09-02T04:00:00.000Z',
+      cal: [
+        ['TISCO-P', '2026-09-07', 2, '2026-09-21'],
+        ['stm03',   '2026-12-15', 0.00239, '2027-01-19'],
+        ['STM03',   '2026-09-22', 0.00239, '2026-10-27'],
+        ['LVMH01',  '2026-12-01', 0.0954, '2026-12-30'],
+        ['GONE',    '2026-01-05', 1, '2026-02-01']
+      ],
+      hist: {
+        PTT: [['2025-03-06', 1.3], ['2025-10-01', 0.9], ['2026-03-05', 1.4]],
+        MSFT80: [['2025-11-20', 0.01163], ['2026-02-19', 0.01179],
+                 ['2026-05-21', 0.01205], ['2026-08-20', 0.0149]],
+        EMPTY: []
+      }
+    };
+    const st = setXdParse(PAY);
+    ok('a well-formed payload parses', !!st);
+    eq('every calendar row is counted', st.nCal, 5);
+    eq('tickers are upper-cased, so one stock is one key', Object.keys(st.cal).sort(),
+       ['GONE', 'LVMH01', 'STM03', 'TISCO-P']);
+    eq('a history with no rows is dropped, not stored empty',
+       Object.keys(st.hist).sort(), ['MSFT80', 'PTT']);
+
+    // Both of STM03's rounds are announced; the table is about the near one.
+    eq('two announced rounds → the nearer one wins',
+       setXdNext(st, 'STM03', '2026-09-02').xd, '2026-09-22');
+    eq('…and once it has passed, the later round takes over',
+       setXdNext(st, 'STM03', '2026-10-01').xd, '2026-12-15');
+    eq('a round already gone answers nothing', setXdNext(st, 'GONE', '2026-09-02'), null);
+    eq('the ex-date itself still counts as upcoming',
+       setXdNext(st, 'TISCO-P', '2026-09-07').xd, '2026-09-07');
+    eq('lower case asks the same question', setXdNext(st, 'tisco-p', '2026-09-02').dps, 2);
+    eq('a stock SET never mentioned answers nothing', setXdNext(st, 'NOSUCH', '2026-09-02'), null);
+    eq('history comes back oldest first', setXdHist(st, 'PTT').map(function (r) { return r.date; }),
+       ['2025-03-06', '2025-10-01', '2026-03-05']);
+    eq('no history is null, not an empty list', setXdHist(st, 'NOSUCH'), null);
+
+    // A truncated fragment is the realistic failure: the URL got cut, so the
+    // JSON does not close. Half a store is worse than no store.
+    eq('truncated JSON → null', setXdParse('{"v":1,"cal":[["PTT","2026-'), null);
+    eq('not JSON at all → null', setXdParse('hello'), null);
+    eq('empty string → null', setXdParse(''), null);
+    eq('null → null', setXdParse(null), null);
+    eq('a payload from a future format → null', setXdParse({ v: 2, cal: [['PTT', '2026-09-07', 1, null]] }), null);
+    eq('a payload with no rows at all → null', setXdParse({ v: 1, cal: [], hist: {} }), null);
+    eq('an object that is not a payload → null', setXdParse({ hello: 'world' }), null);
+
+    // Bad rows are dropped, and dropping them must not take the good ones down.
+    const mixed = setXdParse({ v: 1, cal: [
+      ['OK', '2026-09-07', 1, '2026-09-21'],
+      ['BAD', '2026-13-40', 1, null],
+      ['NODATE', null, 1, null],
+      [null, '2026-09-07', 1, null],
+      'notarow',
+      ['OK2', '2026-09-08', 'not a number', 'also not a date']
+    ] });
+    eq('only the valid rows survive', Object.keys(mixed.cal).sort(), ['OK', 'OK2']);
+    eq('an impossible date is rejected, not rolled over', setXdDate('2026-02-30'), null);
+    eq('a real leap day is kept', setXdDate('2024-02-29'), '2024-02-29');
+    eq('a non-numeric amount becomes no amount', mixed.cal.OK2[0].dps, null);
+    eq('a junk payment date becomes no payment date', mixed.cal.OK2[0].pay, null);
+    eq('zero baht is no baht, not a real dividend', setXdNum(0), null);
+    eq('a negative amount is refused', setXdNum(-1), null);
+    eq('a numeric string is accepted — SET sends tentativeDividend as text', setXdNum('0.0842'), 0.0842);
+
+    // ── the tiers ──
+    sec('SET tiers: announced, then estimated');
+    const item = xdFromSetRow('TISCO-P', st, '2026-09-02');
+    eq('an announced SET row is confirmed', item.conf, 'confirmed');
+    eq('…and says so', item.src, 'set');
+    eq('…with the amount', item.dps, 2);
+    eq('…and the payment date', item.pay, '2026-09-21');
+    // This is the whole reason a DR row could never show money before: Yahoo
+    // has only the underlying, in euros. SET publishes the DR's own baht.
+    const dr = xdFromSetRow('LVMH01', st, '2026-09-02');
+    eq('a DR announced by SET is native, so its baht is shown', dr.native, true);
+    eq('…and it is the DR\'s own figure', dr.dps, 0.0954);
+    eq('…flagged as such', dr.isDR, true);
+    eq('nothing announced → no row from this tier', xdFromSetRow('PTT', st, '2026-09-02'), null);
+
+    const est = xdEstimateFromSet('PTT', st, '2026-09-02');
+    eq('a projection off SET history is an estimate', est.conf, 'estimated');
+    eq('…named apart from the Yahoo projection', est.src, 'set-est');
+    eq('…landing on the autumn slot', est.xd, '2026-10-01');
+    // The basis names the dates of THAT slot only. PTT pays twice a year, so
+    // quoting the spring rounds under an autumn projection would be a lie
+    // about where the date came from.
+    eq('…showing only the slot it was projected from', est.basis, ['2025-10-01']);
+    // A DR's SET history IS in baht per unit, so unlike the Yahoo tier this
+    // estimate is allowed to carry money.
+    const drEst = xdEstimateFromSet('MSFT80', st, '2026-09-02');
+    eq('a DR estimated off SET history keeps its baht', drEst.dps, 0.01163);
+    eq('…because the figure is the DR\'s own', drEst.native, true);
+    eq('one lone history row is not a pattern', xdEstimateFromSet('EMPTY', st, '2026-09-02'), null);
+    eq('no history, no estimate', xdEstimateFromSet('NOSUCH', st, '2026-09-02'), null);
+
+    // ── staleness ──
+    sec('SET staleness');
+    eq('a store fetched today is fresh', setXdAgeDays(st, '2026-09-02'), 0);
+    eq('…and ages by the day', setXdAgeDays(st, '2026-09-12'), 10);
+    ok('two weeks old is still usable', !setXdIsStale(st, '2026-09-15'));
+    ok('past two weeks it is called out', setXdIsStale(st, '2026-09-20'));
+    ok('a store that never existed counts as stale', setXdIsStale(null, '2026-09-02'));
+
+    // ── the round trip through the URL ──
+    sec('setXdTakeHash / setXdSave round trip');
+    const frag = 'https://example.com/app/#setxd=' + encodeURIComponent(JSON.stringify(PAY));
+    const fromUrl = setXdTakeHash(frag);
+    ok('the fragment the bookmarklet writes parses back', !!fromUrl);
+    eq('…with every row intact', fromUrl.nCal, 5);
+    eq('a URL with no fragment yields nothing', setXdTakeHash('https://example.com/app/'), null);
+    eq('a fragment about something else yields nothing',
+       setXdTakeHash('https://example.com/app/#tab=networth'), null);
+    eq('a fragment that is not valid JSON yields nothing',
+       setXdTakeHash('https://example.com/app/#setxd=%7Bbroken'), null);
+
+    setXdSave(st);
+    S.setxd = undefined;                    // force a real read back off disk
+    const reread = setXdLoad();
+    ok('what was saved can be read back', !!reread);
+    eq('…with the same calendar rows', reread.nCal, 5);
+    eq('…the same next date', setXdNext(reread, 'STM03', '2026-09-02').xd, '2026-09-22');
+    eq('…and the same history', setXdHist(reread, 'PTT').length, 3);
+    eq('…keeping the original fetch time, not the save time', reread.fetched_at, PAY.at);
+    setXdSave(null);
+    S.setxd = undefined;
+    eq('forgetting the store really forgets it', setXdLoad(), null);
+
+    // ── the bookmarklet itself ──
+    sec('setXdBookmarklet');
+    const bm = setXdBookmarklet(['ptt', 'ADVANC', 'PTT', '', 'LVMH01']);
+    ok('it is a bookmarklet', bm.indexOf('javascript:') === 0);
+    ok('the portfolio is baked in, upper-cased and de-duplicated',
+       bm.indexOf('["PTT","ADVANC","LVMH01"]') > 0);
+    ok('it knows the calendar endpoint', bm.indexOf('/api/set/stock-calendar/') > 0);
+    ok('it knows the per-symbol history endpoint', bm.indexOf('/corporate-action/historical') > 0);
+    ok('it returns through the fragment this app reads', bm.indexOf('#' + SETXD_HASH) > 0);
+    ok('it sends people to SET when run anywhere else', bm.indexOf('set.or.th') > 0);
+    ok('a stray newline would break the bookmark URL', bm.indexOf('\n') < 0);
+    ok('an empty portfolio still produces a usable bookmarklet',
+       setXdBookmarklet([]).indexOf('javascript:') === 0);
+
+    // ── precedence: the tiers must not blend ──
+    sec('XD tier precedence');
+    {
+      const tvRow = { dividend_ex_date_upcoming: Date.parse('2026-11-11T12:00:00Z') / 1000,
+                      dividend_amount_upcoming: 9,
+                      dividend_payment_date_upcoming: Date.parse('2026-11-30T12:00:00Z') / 1000 };
+      const both = await fetchXdFor('TISCO-P', tvRow, st);
+      eq('SET outranks TradingView when both have announced', both.src, 'set');
+      eq('…so the exchange\'s own date is the one shown', both.xd, '2026-09-07');
+      const tvOnly = await fetchXdFor('NOSUCH', tvRow, st);
+      eq('TradingView still wins where SET is silent', tvOnly.src, 'tv');
+      eq('…with its date', tvOnly.xd, '2026-11-11');
+      const setEst = await fetchXdFor('PTT', null, st);
+      eq('with nothing announced, SET history beats a network call', setEst.src, 'set-est');
+      eq('…and no request went out for it', setEst.xd, '2026-10-01');
+    }
+
+    eq('a source with no badge is silent, not "undefined"', xdSrcBadge(null), '');
+    ok('a SET row is labelled SET', xdSrcBadge('set').indexOf('SET') > 0);
+    ok('a TradingView row says so', xdSrcBadge('tv').indexOf('TradingView') > 0);
+
+    S.setxd = prevStore;
+    try { localStorage.removeItem(SETXD_KEY); } catch (e) {}
+  }
+
     window.fetch = realFetch;
   } catch (e) {
     fail++;

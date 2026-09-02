@@ -253,6 +253,17 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 .xd-c{background:rgba(34,197,94,.15);color:var(--green)}
 .xd-e{background:rgba(234,179,8,.15);color:var(--yellow)}
 .xd-n{background:var(--bg2);color:var(--tx3)}
+.xd-s{background:rgba(59,130,246,.15);color:var(--c1)}
+.sx-step{border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:var(--bg2)}
+.sx-step-n{font-size:11px;font-weight:700;color:var(--c1);letter-spacing:.5px;margin-bottom:6px}
+.sx-p{font-size:12px;color:var(--tx3);line-height:1.7;margin:0 0 8px}
+.sx-code{width:100%;font-family:var(--mono);font-size:10px;line-height:1.35;height:70px;
+  background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--tx3);
+  padding:8px 10px;resize:vertical;white-space:pre;overflow:auto}
+.sx-warn{border:1px solid rgba(234,179,8,.4);background:rgba(234,179,8,.08);color:var(--yellow);
+  border-radius:10px;padding:8px 11px;font-size:11.5px;line-height:1.6;margin-bottom:10px}
+.sx-ok{border:1px solid rgba(34,197,94,.35);background:rgba(34,197,94,.08);color:var(--green);
+  border-radius:10px;padding:8px 11px;font-size:11.5px;line-height:1.6;margin-bottom:10px}
 .xd-soon td{background:rgba(34,197,94,.07)}
 .xd-d{font-weight:800;white-space:nowrap}
 .xd-note{font-size:10.5px;color:var(--tx3);margin-top:3px;line-height:1.45}
@@ -1015,12 +1026,29 @@ HANA   | 2000 | 38 | 35.75"></textarea>
     <div class="mb">
       <div class="xd-head">
         <button class="btn btn-p btn-sm" onclick="updateXD()">🔄 ดึงข้อมูล XD</button>
+        <button class="btn btn-s btn-sm" onclick="openSetXd()">📅 SET</button>
         <span class="rpt-meta" id="xdMeta" style="margin:0"></span>
       </div>
+      <div id="xdSetBanner"></div>
       <div id="xdSettingsBox"></div>
       <div id="xdContent"><div class="rpt-empty">Loading…</div></div>
       <div id="divBook"></div>
     </div>
+  </div>
+</div>
+
+<!-- ══ SET X-CALENDAR IMPORT ═══════════════════════════════════════════════
+     set.or.th cannot be read by this page: no CORS header, and Imperva 403s
+     every proxy. The bookmarklet runs ON set.or.th, where the API is
+     same-origin, and returns here with the data in the URL. ══════════════ -->
+<div class="mbg center hidden" id="setXdModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">
+      <div class="mt-t">📅 อัปเดต XD จาก SET</div>
+      <button class="btn btn-g btn-sm" onclick="closeM('setXdModal')">✕</button>
+    </div>
+    <div class="mb" id="setXdBody"></div>
   </div>
 </div>
 
@@ -4660,22 +4688,41 @@ async function fetchXdTV(tickers, today) {
 
 // tvRow: undefined = "go ask TradingView yourself"; a row or null = "already
 // asked, here is the answer" — so a batch caller never re-queries per ticker.
-async function fetchXdFor(ticker, tvRow) {
+// Four tiers, hardest evidence first, and the tiers never blend: every row
+// carries the `src` that produced it so the table can say where it came from.
+//   set      SET announced it — the exchange's own record
+//   tv       TradingView announced it — matches SET on every date checked
+//   set-est  projected from SET's own history (a DR's baht history included)
+//   yahoo-est projected from Yahoo's history, the last resort
+async function fetchXdFor(ticker, tvRow, setStore) {
   const info = xdSymbolFor(ticker);
   const out = { sym: info.sym, isDR: info.isDR, native: false, dps: null, xd: null,
                 pay: null, conf: 'none', basis: null, note: '', src: null };
   const today = xdToday();
+  const store = setStore !== undefined ? setStore : setXdLoad();
 
-  // 1 — announced upcoming ex-date, straight from TradingView.
+  // 1 — announced by SET itself. Also the only tier that covers a preferred
+  // share: TISCO-P and TCAP-P are on no TradingView symbol form.
+  const sx = store ? xdFromSetRow(ticker, store, today) : null;
+  if (sx) return sx;
+
+  // 2 — announced upcoming ex-date, straight from TradingView.
   // (Yahoo's v10/quoteSummary used to fill this slot and now answers null for
   // every symbol — which is why every row had degraded to a guess.)
   const tv = tvRow !== undefined ? xdFromTvRow(ticker, tvRow, today)
                                  : ((await fetchXdTV([ticker], today)) || {})[ticker];
   if (tv) return tv;
 
-  // 2 — nothing announced → project from this stock's own history.
-  // Yahoo's chart events are the only free source with a full ex-date
-  // history, so this tier stays on Yahoo (via the proxy chain).
+  // 3 — nothing announced → project from SET's own history when the
+  // bookmarklet has brought it. For a DR this is the only history that exists
+  // in baht per unit, so it is also the only way a DR row can carry money.
+  const se = store ? xdEstimateFromSet(ticker, store, today) : null;
+  if (se && se.xd) return se;
+
+  // 4 — otherwise Yahoo's chart events, the only free source with a full
+  // ex-date history for a plain Thai stock. Its amounts for a DR are the
+  // UNDERLYING's, in the wrong currency and the wrong ratio, so they are
+  // dropped rather than shown approximately.
   out.src = 'yahoo-est';
   {
     const ch = await xdFetchJSON('https://query1.finance.yahoo.com/v8/finance/chart/' +
@@ -4728,26 +4775,268 @@ function xdLoadCache() {
   return S.xd;
 }
 
+// ═══════════════════════════════════════════════════════════════
+// SET X-CALENDAR — the announcement, straight from the exchange
+// This tier is NOT here to correct TradingView. Checked against a saved
+// set.or.th calendar for Sep 2026, TV matched every announced ex-date,
+// 105 of 105, and every amount to float rounding. It is here for the two
+// things TV genuinely cannot give:
+//   · preferred shares — TISCO-P and TCAP-P are on no TV symbol form
+//   · a Thai DR's own dividend HISTORY in baht — Yahoo carries only the
+//     underlying, in euros or dollars, which is why the DR rows have
+//     always shown a date and no money figure
+// The app cannot fetch set.or.th itself. The API sends no CORS header at
+// all, and Imperva answers 403 to curl, to every public proxy, to curl
+// replaying Chrome's own cookies, and to Chrome navigating straight at the
+// URL. The one thing that works is an in-page fetch from a real browser
+// already sitting on set.or.th — which is what the bookmarklet is. It runs
+// there, collects the JSON, and hands it back through the URL fragment.
+// Stored in localStorage only, like the XD cache: this never goes near the
+// registry, whose schema the cloud routine shares.
+// ═══════════════════════════════════════════════════════════════
+const SETXD_KEY = 'lt_setxd_v1';
+const SETXD_HASH = 'setxd=';
+const SETXD_VER = 1;
+// SET's calendar reaches barely a month past today — Oct through Dec 2026
+// held nine announcements in total — so a saved copy goes stale fast.
+const SETXD_STALE_DAYS = 14;
+const SETXD_MONTHS = 4;
+const SETXD_HIST_MAX = 14;        // ~7 years for a twice-yearly payer
+const SET_CAL_URL = 'https://www.set.or.th/th/market/stock-calendar/x-calendar';
+
+function setXdKey(t) { return String(t || '').trim().toUpperCase(); }
+
+// A date we will sort and compare as a string has to BE a date, or a typo
+// silently sorts to the front of the table.
+function setXdDate(v) {
+  const s = String(v == null ? '' : v).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(s + 'T00:00:00Z');
+  return (!isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s) ? s : null;
+}
+
+function setXdNum(v) {
+  const n = typeof v === 'string' ? Number(v) : v;
+  return (typeof n === 'number' && isFinite(n) && n > 0) ? n : null;
+}
+
+// Accepts the bookmarklet's payload as an object or as pasted text, and
+// returns the shape the rest of the app reads — or null, never a half-built
+// store. Rows that fail validation are dropped, not repaired.
+function setXdParse(raw) {
+  let p = raw;
+  if (typeof p === 'string') {
+    const s = p.trim();
+    if (!s) return null;
+    try { p = JSON.parse(s); } catch (e) { return null; }
+  }
+  if (!p || typeof p !== 'object' || +p.v !== SETXD_VER) return null;
+  const cal = {}, hist = {};
+  let nCal = 0, nHist = 0;
+  (Array.isArray(p.cal) ? p.cal : []).forEach(function (r) {
+    if (!Array.isArray(r)) return;
+    const tk = setXdKey(r[0]), xd = setXdDate(r[1]);
+    if (!tk || !xd) return;
+    (cal[tk] = cal[tk] || []).push({ xd: xd, dps: setXdNum(r[2]), pay: setXdDate(r[3]) });
+    nCal++;
+  });
+  const hsrc = (p.hist && typeof p.hist === 'object') ? p.hist : {};
+  Object.keys(hsrc).forEach(function (k) {
+    const tk = setXdKey(k);
+    if (!tk || !Array.isArray(hsrc[k])) return;
+    const rows = [];
+    hsrc[k].forEach(function (r) {
+      if (!Array.isArray(r)) return;
+      const d = setXdDate(r[0]);
+      if (d) rows.push({ date: d, amount: setXdNum(r[1]) });
+    });
+    if (!rows.length) return;
+    rows.sort(function (a, b) { return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0); });
+    hist[tk] = rows.slice(-SETXD_HIST_MAX);
+    nHist += rows.length;
+  });
+  if (!nCal && !nHist) return null;
+  Object.keys(cal).forEach(function (k) {
+    cal[k].sort(function (a, b) { return a.xd < b.xd ? -1 : (a.xd > b.xd ? 1 : 0); });
+  });
+  return {
+    fetched_at: (typeof p.at === 'string' && p.at) ? p.at : new Date().toISOString(),
+    cal: cal, hist: hist, nCal: nCal, nHist: nHist
+  };
+}
+
+function setXdLoad() {
+  if (S.setxd !== undefined) return S.setxd;
+  let store = null;
+  try {
+    const raw = localStorage.getItem(SETXD_KEY);
+    if (raw) store = setXdParse(JSON.parse(raw));
+  } catch (e) { /* ignore a corrupt store */ }
+  S.setxd = store;
+  return store;
+}
+
+// Written back in the SAME compact shape the bookmarklet sends, so the store
+// on disk and the payload on the wire can never drift apart.
+function setXdSave(store) {
+  S.setxd = store || null;
+  try {
+    if (!store) { localStorage.removeItem(SETXD_KEY); return; }
+    const cal = [];
+    Object.keys(store.cal || {}).forEach(function (tk) {
+      store.cal[tk].forEach(function (r) { cal.push([tk, r.xd, r.dps, r.pay]); });
+    });
+    const hist = {};
+    Object.keys(store.hist || {}).forEach(function (tk) {
+      hist[tk] = store.hist[tk].map(function (r) { return [r.date, r.amount]; });
+    });
+    localStorage.setItem(SETXD_KEY, JSON.stringify({
+      v: SETXD_VER, at: store.fetched_at, cal: cal, hist: hist
+    }));
+  } catch (e) { /* quota */ }
+}
+
+// The next announced ex-date at or after today. SET lists more than one round
+// for a stock when both are announced (STM03 carried 22 Sep and 15 Dec), and
+// the near one is the one the table is about.
+function setXdNext(store, ticker, today) {
+  const rows = store && store.cal && store.cal[setXdKey(ticker)];
+  if (!rows || !rows.length) return null;
+  const t = today || xdToday();
+  for (let i = 0; i < rows.length; i++) if (rows[i].xd >= t) return rows[i];
+  return null;
+}
+
+function setXdHist(store, ticker) {
+  const rows = store && store.hist && store.hist[setXdKey(ticker)];
+  return (rows && rows.length) ? rows : null;
+}
+
+function setXdAgeDays(store, today) {
+  if (!store || !store.fetched_at) return null;
+  const at = setXdDate(store.fetched_at);
+  if (!at) return null;
+  const d = xdDaysUntil(at, today);
+  return d == null ? null : -d;
+}
+
+function setXdIsStale(store, today) {
+  const age = setXdAgeDays(store, today);
+  return age == null || age > SETXD_STALE_DAYS;
+}
+
+// One announced SET row → an XD item. `native` is true because this figure is
+// the SET-LISTED instrument's own baht amount, DR included — the exchange is
+// publishing what the DR itself will pay per unit, not the underlying's.
+function xdFromSetRow(ticker, store, today) {
+  const n = setXdNext(store, ticker, today);
+  if (!n) return null;
+  const isDR = !!DR_UNDERLYING[ticker];
+  return {
+    sym: ticker, isDR: isDR, native: true, src: 'set',
+    dps: n.dps, xd: n.xd, pay: (n.pay && n.pay >= n.xd) ? n.pay : null,
+    conf: 'confirmed', basis: null,
+    note: isDR ? 'ประกาศของ DR เอง (บาทต่อหน่วย)' : ''
+  };
+}
+
+// Project from SET's own history. Same slot algorithm as the Yahoo path — the
+// only difference is the source, and that a DR's amounts are already in baht
+// for the DR itself, so the estimate may carry money where the Yahoo path
+// must refuse to.
+function xdEstimateFromSet(ticker, store, today) {
+  const rows = setXdHist(store, ticker);
+  if (!rows || rows.length < 2) return null;
+  const proj = xdProjectNext(rows.map(function (r) { return r.date; }), today);
+  if (!proj) return null;
+  const inSlot = {};
+  (proj.slot || []).forEach(function (d) { inSlot[d] = 1; });
+  const same = rows.filter(function (r) { return inSlot[r.date]; });
+  const src = same.length ? same : rows;
+  const dps = xdSlotDps(src.map(function (r) { return r.amount; }));
+  return {
+    sym: ticker, isDR: !!DR_UNDERLYING[ticker], native: true, src: 'set-est',
+    dps: dps > 0 ? dps : null, xd: proj.date, pay: null,
+    conf: 'estimated', basis: proj.basis, note: ''
+  };
+}
+
+// The bookmarklet, with this app's URL and this portfolio's tickers baked in.
+// It runs on set.or.th, where the API is same-origin and the Imperva session
+// is already established, then jumps back here with the payload in the hash.
+function setXdBookmarklet(tickers) {
+  const app = location.href.split('#')[0].split('?')[0];
+  const list = (tickers || []).map(setXdKey).filter(Boolean);
+  const uniq = list.filter(function (t, i) { return list.indexOf(t) === i; });
+  const js = "javascript:(function(){var A=" + JSON.stringify(app) +
+    ",T=" + JSON.stringify(uniq) + ",N=" + SETXD_MONTHS + ",H=" + SETXD_HIST_MAX + ";" +
+    "if(location.hostname.indexOf('set.or.th')<0){location.href=" + JSON.stringify(SET_CAL_URL) + ";return;}" +
+    "var b=document.createElement('div');b.style.cssText='position:fixed;z-index:2147483647;left:50%;top:18px;transform:translateX(-50%);background:#111827;color:#fff;padding:12px 18px;border-radius:12px;font:600 14px system-ui;box-shadow:0 10px 30px rgba(0,0,0,.4)';" +
+    "b.textContent='กำลังดึงปฏิทิน XD จาก SET…';document.body.appendChild(b);" +
+    "function g(u){return fetch(u,{headers:{Accept:'application/json'}}).then(function(r){return r.ok?r.json():null}).catch(function(){return null})}" +
+    "function amt(c){var v=c.dividend!=null?c.dividend:(c.tentativeDividend!=null?Number(c.tentativeDividend):null);return(typeof v==='number'&&isFinite(v))?v:null}" +
+    "var d=new Date(),M=[],i;for(i=0;i<N;i++){var x=new Date(d.getFullYear(),d.getMonth()+i,1);M.push([x.getFullYear(),x.getMonth()+1])}" +
+    "Promise.all(M.map(function(m){return g('/api/set/stock-calendar/'+m[0]+'/'+m[1]+'/x-calendar?lang=th')})).then(function(js){" +
+    "var cal=[];js.forEach(function(j){(j||[]).forEach(function(dy){(dy.types||[]).forEach(function(t){(t.corporateActions||[]).forEach(function(c){" +
+    "if(c.caType!=='XD'||!c.xdate)return;cal.push([c.symbol,c.xdate.slice(0,10),amt(c),c.paymentDate?c.paymentDate.slice(0,10):null])})})})});" +
+    "var hist={},k=0;function nx(){if(k>=T.length)return Promise.resolve();var s=T[k++];" +
+    "b.textContent='ประวัติปันผล '+k+'/'+T.length+' — '+s;" +
+    "return g('/api/set/stock/'+encodeURIComponent(s)+'/corporate-action/historical?caType=XD&lang=th').then(function(j){" +
+    "if(Array.isArray(j)&&j.length){var rs=[];j.forEach(function(c){if(c.xdate)rs.push([c.xdate.slice(0,10),amt(c)])});" +
+    "rs.sort(function(a,b){return a[0]<b[0]?-1:1});if(rs.length)hist[s]=rs.slice(-H)}return nx()})}" +
+    "return nx().then(function(){var p={v:" + SETXD_VER + ",at:new Date().toISOString(),cal:cal,hist:hist};" +
+    "var s=JSON.stringify(p),q=encodeURIComponent(s);" +
+    "if(q.length>120000){p.hist={};s=JSON.stringify(p);q=encodeURIComponent(s)}" +
+    // Best effort, and it must never block the jump: if the app is installed
+    // to the Home Screen it has its own storage, so this link opens Safari
+    // instead and the payload has to be pasted across by hand.
+    "try{navigator.clipboard&&navigator.clipboard.writeText(s)}catch(e){}" +
+    "b.textContent='ส่งกลับแอพ… ('+cal.length+' รายการ)';location.href=A+'#" + SETXD_HASH + "'+q})" +
+    "}).catch(function(e){b.textContent='ดึงไม่สำเร็จ: '+e})})()";
+  return js;
+}
+
+// Read the payload the bookmarklet left in the address bar, then take it OUT
+// of the address bar — a reload must not re-import a stale payload, and the
+// hash is 16 KB of JSON nobody wants to see.
+function setXdTakeHash(href) {
+  const h = String(href == null ? location.href : href);
+  const i = h.indexOf('#');
+  if (i < 0) return null;
+  const frag = h.slice(i + 1);
+  const j = frag.indexOf(SETXD_HASH);
+  if (j < 0) return null;
+  let body = frag.slice(j + SETXD_HASH.length);
+  const amp = body.indexOf('&');
+  if (amp >= 0) body = body.slice(0, amp);
+  try { return setXdParse(decodeURIComponent(body)); } catch (e) { return null; }
+}
+
 async function updateXD() {
   if (!S.registry) return;
   const held = S.registry.stocks.filter(function (s) { return s.shares > 0; });
   if (!held.length) { toast('ยังไม่มีหุ้นที่กรอกจำนวน'); return; }
   showLoading('กำลังดึงวัน XD…');
   const today = xdToday();
-  // One TradingView call covers every announced XD in the portfolio; only the
-  // holdings with nothing announced still need a per-ticker history pull.
+  // The SET store is already on disk — nothing to fetch, so it costs nothing
+  // to consult first and it settles most rows before a single call goes out.
+  const setStore = setXdLoad();
+  // One TradingView call covers every announced XD the SET store did not; only
+  // the holdings with nothing announced still need a per-ticker history pull.
   setLoadMsg('ดึงประกาศ XD จาก TradingView…');
   const tickers = held.map(function (s) { return s.ticker; });
   const tvRows = await tvScan(tickers, TV_XD_COLS);
   const items = {};
   for (const s of held) {
+    const sx = setStore ? xdFromSetRow(s.ticker, setStore, today) : null;
+    if (sx) { items[s.ticker] = sx; continue; }
     const tv = tvRows ? xdFromTvRow(s.ticker, tvRows[s.ticker], today) : null;
     if (tv) { items[s.ticker] = tv; continue; }
     setLoadMsg('XD ' + s.ticker + '…');
     // null (not undefined) says "TV already answered, it has nothing" — with
     // undefined the fallback would re-ask TV once per holding, which is most
     // of them, since only a handful have an announcement pending at any time
-    try { items[s.ticker] = await fetchXdFor(s.ticker, tvRows ? (tvRows[s.ticker] || null) : undefined); }
+    try { items[s.ticker] = await fetchXdFor(s.ticker, tvRows ? (tvRows[s.ticker] || null) : undefined, setStore); }
     catch (e) { items[s.ticker] = { conf: 'none', note: 'ดึงข้อมูลไม่สำเร็จ' }; }
   }
   S.xd = { fetched_at: new Date().toISOString(), items: items };
@@ -4758,6 +5047,180 @@ async function updateXD() {
   renderStockRows();   // the row badges — and the XD sort order — come from this cache
   const n = buildXdRows(held, items).up.length;
   toast(n ? ('✅ พบ XD ที่กำลังจะถึง ' + n + ' ตัว') : 'ไม่พบวัน XD ที่กำลังจะถึง');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SET IMPORT SCREEN — install the bookmarklet, or paste the payload
+// Two ways in, one importer. The bookmarklet returns through the URL and
+// needs no copying at all; the paste box is what you fall back to when a
+// device makes bookmarklets awkward.
+// ═══════════════════════════════════════════════════════════════
+function setXdHeldTickers() {
+  const st = ((S.registry && S.registry.stocks) || []).filter(function (s) { return s.shares > 0; });
+  return st.map(function (s) { return setXdKey(s.ticker); }).filter(Boolean).sort();
+}
+
+function openSetXd(pending) {
+  S.setxdPending = pending || null;
+  S.setxdMsg = '';
+  document.getElementById('setXdModal').classList.remove('hidden');
+  renderSetXd();
+}
+
+function setXdSummary(store) {
+  const held = setXdHeldTickers();
+  const hit = held.filter(function (t) { return setXdNext(store, t, xdToday()); });
+  const hist = held.filter(function (t) { return setXdHist(store, t); });
+  return { nCal: store.nCal || 0, nHist: Object.keys(store.hist || {}).length,
+           held: held.length, hit: hit, histHeld: hist.length };
+}
+
+function renderSetXd() {
+  const box = document.getElementById('setXdBody');
+  if (!box) return;
+  const pend = S.setxdPending;
+  let h = '';
+
+  if (pend) {
+    // Arrived from the bookmarklet, or pasted — nothing is stored until the
+    // preview below is accepted, so a bad payload cannot quietly replace a
+    // good one.
+    const s = setXdSummary(pend);
+    h += '<div class="sx-ok">ได้รับข้อมูลจาก SET แล้ว — ยังไม่บันทึก กดยืนยันด้านล่าง</div>';
+    h += '<div class="md-card"><div class="md-card-t">สิ่งที่ได้มา</div>' +
+      '<div class="sx-p" style="margin:0">' +
+      'ประกาศ XD ทั้งตลาด <b style="color:var(--tx)">' + s.nCal + '</b> รายการ<br>' +
+      'ประวัติปันผลรายตัว <b style="color:var(--tx)">' + s.nHist + '</b> หุ้น<br>' +
+      // Landing straight from the bookmarklet can beat the registry here, and
+      // "ตรงกับพอร์ต 0/0" would read as a failure rather than as "not loaded yet".
+      (s.held
+        ? ('ตรงกับหุ้นในพอร์ต <b style="color:var(--tx)">' + s.hit.length + '</b> / ' + s.held + ' ตัว' +
+           (s.hit.length ? '<br><span style="color:var(--tx2)">' + escHtml(s.hit.join(', ')) + '</span>' : ''))
+        : 'ยังไม่ได้โหลดพอร์ต — บันทึกได้เลย แล้วค่อยเข้าสู่ระบบ') +
+      '<br>ดึงเมื่อ ' + escHtml(new Date(pend.fetched_at).toLocaleString('th-TH')) +
+      '</div></div>';
+    h += '<div style="display:flex;gap:8px">' +
+      '<button class="btn btn-g" style="flex:1;justify-content:center" onclick="setXdCancelPending()">ยกเลิก</button>' +
+      '<button class="btn btn-p" style="flex:1;justify-content:center" onclick="setXdConfirmPending()">💾 บันทึกข้อมูล SET</button>' +
+      '</div>';
+    box.innerHTML = h;
+    return;
+  }
+
+  const store = setXdLoad();
+  if (store) {
+    const s = setXdSummary(store);
+    const age = setXdAgeDays(store);
+    const stale = setXdIsStale(store);
+    h += '<div class="' + (stale ? 'sx-warn' : 'sx-ok') + '">' +
+      (stale ? '⚠️ ข้อมูล SET เก่าแล้ว' : '✅ มีข้อมูล SET อยู่') +
+      ' — ดึงเมื่อ ' + escHtml(new Date(store.fetched_at).toLocaleDateString('th-TH')) +
+      (age != null ? ' (' + (age === 0 ? 'วันนี้' : age + ' วันก่อน') + ')' : '') +
+      '<br>ประกาศ ' + s.nCal + ' รายการ · ประวัติ ' + s.nHist + ' หุ้น · ตรงกับพอร์ต ' + s.hit.length + '/' + s.held + ' ตัว' +
+      (stale ? '<br>SET ประกาศล่วงหน้าแค่ประมาณเดือนเดียว — ควรดึงใหม่' : '') +
+      '</div>';
+  } else {
+    h += '<div class="sx-p">TradingView ตรงกับ SET ทุกวัน XD ที่ประกาศแล้ว (ตรวจ 105 รายการ ไม่ต่างสักตัว) ' +
+      'ข้อมูลจาก SET เพิ่มมาสองอย่างที่ TradingView ไม่มีเลยคือ <b style="color:var(--tx2)">หุ้นบุริมสิทธิ (-P)</b> ' +
+      'และ <b style="color:var(--tx2)">ประวัติปันผลของ DR เป็นบาทต่อหน่วย</b> ซึ่งเป็นเหตุผลที่แถว DR เคยมีแต่วันที่ ไม่มีตัวเงิน</div>';
+  }
+
+  const bm = setXdBookmarklet(setXdHeldTickers());
+  h += '<div class="sx-step">' +
+    '<div class="sx-step-n">ขั้นที่ 1 · ติดตั้งครั้งเดียว</div>' +
+    '<p class="sx-p">คัดลอกโค้ดข้างล่าง แล้วสร้าง bookmark ใหม่ 1 อัน ตั้งชื่อว่า <b style="color:var(--tx2)">XD → พอร์ต</b> ' +
+    'แล้ว<b style="color:var(--tx2)">วางโค้ดนี้ลงในช่อง URL ของ bookmark</b> (ไม่ใช่ช่องค้นหา)<br>' +
+    'บน iPhone: bookmark หน้าไหนก็ได้ก่อน แล้วกด แก้ไข → ลบที่อยู่เดิม → วางโค้ดนี้แทน<br>' +
+    'มีหุ้นในพอร์ต ' + setXdHeldTickers().length + ' ตัวฝังอยู่ในโค้ดแล้ว — ' +
+    '<b style="color:var(--tx2)">ซื้อหุ้นตัวใหม่แล้วให้กลับมาคัดลอกใหม่</b></p>' +
+    '<textarea class="sx-code" id="setXdBm" readonly onclick="this.select()">' + escHtml(bm) + '</textarea>' +
+    '<button class="btn btn-s btn-sm" style="width:100%;justify-content:center;margin-top:8px" onclick="setXdCopyBookmarklet()">📋 คัดลอกโค้ด bookmarklet</button>' +
+    '</div>';
+
+  h += '<div class="sx-step">' +
+    '<div class="sx-step-n">ขั้นที่ 2 · ทุกครั้งที่อยากอัปเดต</div>' +
+    '<p class="sx-p">เปิดหน้าปฏิทินของ SET แล้วกด bookmark ที่ตั้งไว้ ' +
+    'มันจะดึงปฏิทิน ' + SETXD_MONTHS + ' เดือนกับประวัติปันผลของหุ้นในพอร์ต แล้วพากลับมาที่หน้านี้เอง ' +
+    'ไม่ต้อง copy ไม่ต้อง paste<br>' +
+    '<b style="color:var(--tx2)">ถ้าติดตั้งแอพไว้ที่หน้าโฮมของ iPhone</b> ลิงก์จะพากลับมาที่ Safari ไม่ใช่ตัวแอพ ' +
+    '(คนละที่เก็บข้อมูล) — bookmarklet คัดลอกข้อมูลไว้ให้แล้ว ให้เปิดแอพจากหน้าโฮมแล้ววางในช่องสำรองข้างล่าง</p>' +
+    '<a class="btn btn-p btn-sm" style="width:100%;justify-content:center;box-sizing:border-box" target="_blank" rel="noopener" href="' +
+      escHtml(SET_CAL_URL) + '">🔗 เปิดหน้าปฏิทินหลักทรัพย์ SET</a>' +
+    '</div>';
+
+  h += '<div class="sx-step">' +
+    '<div class="sx-step-n">สำรอง · วางข้อมูลเอง</div>' +
+    '<p class="sx-p">ถ้าเครื่องไหน bookmarklet เด้งกลับไม่ได้ ให้วางข้อความที่ได้จาก bookmarklet ลงช่องนี้</p>' +
+    '<textarea class="form-input" id="setXdPaste" rows="4" style="font-family:var(--mono);font-size:11px" placeholder=\'{"v":1,"at":"…","cal":[…]}\'></textarea>' +
+    '<div id="setXdMsg" style="font-size:11.5px;margin-top:6px;min-height:14px;color:var(--tx3)">' + escHtml(S.setxdMsg || '') + '</div>' +
+    '<button class="btn btn-s btn-sm" style="width:100%;justify-content:center;margin-top:6px" onclick="setXdPasteApply()">⬆️ อ่านข้อมูลที่วาง</button>' +
+    '</div>';
+
+  if (store) {
+    h += '<button class="btn btn-g btn-sm" style="width:100%;justify-content:center" onclick="setXdForget()">🗑 ลบข้อมูล SET ที่เก็บไว้</button>';
+  }
+  box.innerHTML = h;
+}
+
+function setXdCopyBookmarklet() {
+  const el = document.getElementById('setXdBm');
+  if (!el) return;
+  const text = el.value;
+  const done = function () { toast('✅ คัดลอกแล้ว — ไปสร้าง bookmark แล้ววางในช่อง URL'); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, function () { el.select(); toast('กด Cmd/Ctrl+C เพื่อคัดลอก'); });
+  } else { el.select(); toast('กด Cmd/Ctrl+C เพื่อคัดลอก'); }
+}
+
+function setXdPasteApply() {
+  const el = document.getElementById('setXdPaste');
+  const store = setXdParse(el ? el.value : '');
+  if (!store) {
+    S.setxdMsg = '❌ อ่านไม่ออก — ต้องเป็นข้อความที่ bookmarklet สร้างให้ทั้งก้อน';
+    const m = document.getElementById('setXdMsg');
+    if (m) m.textContent = S.setxdMsg;
+    return;
+  }
+  openSetXd(store);
+}
+
+function setXdCancelPending() {
+  S.setxdPending = null;
+  renderSetXd();
+}
+
+function setXdConfirmPending() {
+  const pend = S.setxdPending;
+  if (!pend) return;
+  setXdSave(pend);
+  S.setxdPending = null;
+  const s = setXdSummary(pend);
+  renderSetXd();
+  closeM('setXdModal');
+  toast('✅ บันทึกข้อมูล SET แล้ว — ตรงกับพอร์ต ' + s.hit.length + ' ตัว');
+  // The stored rows only reach the table through a rebuild, and the row
+  // badges and the XD sort order read the same cache.
+  if (S.registry) updateXD();
+  else renderXD();
+}
+
+function setXdForget() {
+  setXdSave(null);
+  renderSetXd();
+  renderXD();
+  renderStockRows();
+  toast('ลบข้อมูล SET แล้ว — กลับไปใช้ TradingView อย่างเดียว');
+}
+
+// Called once at start-up. A payload in the address bar is a user action that
+// happened on another page, so it opens the preview rather than saving itself.
+function setXdCheckHash() {
+  const store = setXdTakeHash();
+  if (!store) return false;
+  try { history.replaceState(null, '', location.href.split('#')[0]); }
+  catch (e) { location.hash = ''; }
+  openSetXd(store);
+  return true;
 }
 
 function openXD() {
@@ -5270,6 +5733,17 @@ function xdConfBadge(c) {
   return '<span class="xd-b xd-n">ไม่พบ</span>';
 }
 
+// Where this row came from. The tiers must never blend into one number, so
+// every row says which source produced it — SET's own record, TradingView's
+// announcement, or a projection off one of the two histories.
+function xdSrcBadge(src) {
+  if (src === 'set') return '<span class="xd-b xd-s">SET</span>';
+  if (src === 'set-est') return '<span class="xd-b xd-s">อิงประวัติ SET</span>';
+  if (src === 'tv') return '<span class="xd-b xd-n">TradingView</span>';
+  if (src === 'yahoo-est') return '<span class="xd-b xd-n">อิงประวัติ Yahoo</span>';
+  return '';
+}
+
 function xdDaysLabel(d) {
   if (d === 0) return 'วันนี้';
   if (d === 1) return 'พรุ่งนี้';
@@ -5285,6 +5759,23 @@ function renderXD() {
     meta.textContent = (S.xd && S.xd.fetched_at)
       ? 'ดึงล่าสุด ' + new Date(S.xd.fetched_at).toLocaleString('th-TH')
       : '';
+  }
+  const ban = document.getElementById('xdSetBanner');
+  if (ban) {
+    const store = setXdLoad();
+    // SET's calendar reaches barely a month ahead, so a copy that has gone
+    // quiet is a copy that is missing announcements, not one that is merely old.
+    if (!store) {
+      ban.innerHTML = '<div class="sx-p" style="margin-bottom:10px">ยังไม่ได้ดึงข้อมูลจาก SET — ' +
+        'กด <b style="color:var(--tx2)">📅 SET</b> เพื่อเพิ่มหุ้นบุริมสิทธิ (-P) และตัวเงินปันผลของ DR</div>';
+    } else if (setXdIsStale(store)) {
+      const age = setXdAgeDays(store);
+      ban.innerHTML = '<div class="sx-warn">⚠️ ข้อมูล SET ดึงไว้' +
+        (age != null ? ' ' + age + ' วันก่อน' : 'นานแล้ว') +
+        ' — SET ประกาศล่วงหน้าแค่ประมาณเดือนเดียว กด <b>📅 SET</b> เพื่อดึงใหม่</div>';
+    } else {
+      ban.innerHTML = '';
+    }
   }
   const setEl = document.getElementById('xdSettingsBox');
   if (setEl) setEl.innerHTML = xdSettingsHtml();
@@ -5319,7 +5810,7 @@ function renderXD() {
       const canCalc = sc.state !== 'nodata';
       h += '<tr' + soon + '>' +
         '<td><strong>' + escHtml(x.ticker) + '</strong>' +
-          '<div class="xd-pills">' + xdConfBadge(x.conf) + xdScrPill(sc) + '</div>' +
+          '<div class="xd-pills">' + xdConfBadge(x.conf) + xdSrcBadge(x.src) + xdScrPill(sc) + '</div>' +
           (note ? '<div class="xd-note">' + note + '</div>' : '') + '</td>' +
         '<td style="text-align:right">' + (x.dps != null ? x.dps.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '<span style="color:var(--tx3)">—</span>') + '</td>' +
         '<td style="text-align:right" class="' + (sc.state === 'go' ? 'xd-cash' : '') + '">' +
@@ -5358,10 +5849,14 @@ function renderXD() {
     h += '</ul>';
   }
   h += '<div class="xd-warn">' +
-    '<strong>ยืนยันแล้ว</strong> = TradingView มีวัน XD · บาท/หุ้น · วันจ่าย ที่ประกาศกับ SET แล้ว · ' +
+    '<strong>ยืนยันแล้ว</strong> = ประกาศกับ SET แล้ว มีวัน XD · บาท/หุ้น · วันจ่าย ครบ · ' +
     '<strong>คาดการณ์</strong> = ยังไม่ประกาศ คำนวณจากรอบปีก่อนของหุ้นตัวนั้นเอง — อย่าใช้ตัดสินใจซื้อขาย ให้ตรวจที่ SET อีกครั้ง<br>' +
-    'DR (LVMH01 / MSFT80 / XIAOMI80 / ASML01): ถ้า “ยืนยันแล้ว” = ประกาศของตัว DR เอง เป็นบาทต่อหน่วย คำนวณเงินที่จะได้รับให้ได้ · ' +
-    'ถ้าเป็น “คาดการณ์” = อิงวัน ex-dividend ของ<em>หุ้นแม่</em> ผู้ออก DR กำหนดวันและจำนวนต่อหน่วยเอง จึงไม่คำนวณเป็นบาทให้' +
+    'ป้ายที่สองบอกว่าข้อมูลแถวนั้นมาจากไหน: <strong>SET</strong> = จากปฏิทินของตลาดหลักทรัพย์เอง (กด 📅 SET เพื่ออัปเดต) · ' +
+    '<strong>TradingView</strong> = ประกาศที่ TradingView ดึงมา · <strong>อิงประวัติ SET</strong> / ' +
+    '<strong>อิงประวัติ Yahoo</strong> = ยังไม่ประกาศ เดาจากประวัติของแหล่งนั้น<br>' +
+    'DR (LVMH01 / MSFT80 / XIAOMI80 / ASML01): ตัวเลขบาทต่อหน่วยเป็นของ DR เอง จะมีก็ต่อเมื่อมาจาก SET — ' +
+    'ทั้งประกาศและประวัติของ SET เป็นบาทต่อหน่วยของ DR ทั้งคู่ · ถ้าเดาจาก Yahoo จะได้แต่วันที่ของ<em>หุ้นแม่</em> ' +
+    'เงินปันผลเป็นสกุลต่างประเทศและคนละอัตราส่วน จึงไม่คำนวณเป็นบาทให้' +
     '</div>' +
     '<div class="xd-warn">' +
     '<strong>คุ้มไหม</strong> เทียบปันผลรอบนี้กับค่าคอมไป-กลับ: ขายก่อน XD จะเริ่มมีเหตุผลก็ต่อเมื่อ ' +
@@ -7240,6 +7735,10 @@ document.querySelectorAll('.mbg').forEach(mbg => {
 // ═══════════════════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', () => {
   loadLS();
+  // The bookmarklet lands here with its payload in the fragment. It has to be
+  // read before anything else touches the URL, and it works signed out —
+  // the SET store lives in localStorage and never goes near Drive.
+  setXdCheckHash();
   if (S.clientId) {
     showSignIn();
   } else {
@@ -7255,7 +7754,7 @@ window.addEventListener('DOMContentLoaded', () => {
      และคอยเช็คว่ามีรุ่นใหม่บนเซิร์ฟเวอร์ไหม → ขึ้นปุ่มให้โหลดใหม่
      บรรทัด window.APP_BUILD ถูกเขียนทับอัตโนมัติตอน deploy โดย
      ~/dev/tools/buildstamp/stamp.sh — อย่าแก้เลขด้วยมือ                       -->
-<script>/*BUILDSTAMP*/window.APP_BUILD={app:"portfolio",v:3,date:"2026-09-01",hash:"fcbfb72",lang:"th"};/*BUILDSTAMP-END*/</script>
+<script>/*BUILDSTAMP*/window.APP_BUILD={app:"portfolio",v:4,date:"2026-09-02",hash:"7380de9",lang:"th"};/*BUILDSTAMP-END*/</script>
 <style>
 .bstamp{font:500 11.5px/1.55 system-ui,-apple-system,"Sarabun",sans-serif;letter-spacing:.2px;
   opacity:.42;cursor:pointer;-webkit-user-select:none;user-select:none;display:inline-block;
