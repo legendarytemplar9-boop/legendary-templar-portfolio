@@ -400,11 +400,20 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 .md-charts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
 @media(max-width:720px){.md-charts{grid-template-columns:1fr}.md-value{font-size:28px}}
 .md-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:14px}
-/* ── View tabs (หุ้น / Net Worth) ── */
-.vtabs{display:flex;gap:8px;max-width:1200px;margin:14px auto 0;padding:0 16px}
+/* ── View tabs (หุ้น / Net Worth / one per asset category / หนี้สิน) ── */
+.vtabs{display:flex;gap:8px;max-width:1200px;margin:14px auto 0;padding:0 16px;overflow-x:auto;scrollbar-width:none;position:relative}
+.vtabs::-webkit-scrollbar{display:none}
+.vtabs.fade-r{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 56px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 56px),transparent)}
 .vtabs.hidden{display:none}
-.vtab{flex:0 0 auto;padding:9px 18px;border-radius:22px;font-size:14px;font-weight:700;background:var(--bg2);border:1px solid var(--border);color:var(--tx2);cursor:pointer;transition:.15s;font-family:var(--fn)}
+.vtab{flex:0 0 auto;white-space:nowrap;padding:9px 18px;border-radius:22px;font-size:14px;font-weight:700;background:var(--bg2);border:1px solid var(--border);color:var(--tx2);cursor:pointer;transition:.15s;font-family:var(--fn)}
 .vtab.active{background:var(--c1d);border-color:rgba(0,229,204,.4);color:var(--c1)}
+.vtab.liab.active{background:var(--redd);border-color:rgba(255,107,107,.45);color:var(--red)}
+.vtab.new{animation:vtabNew 1.8s ease-out 1}
+@keyframes vtabNew{0%,55%{border-color:var(--yellow);box-shadow:0 0 0 3px var(--yellowd)}100%{box-shadow:0 0 0 0 transparent}}
+@media(prefers-reduced-motion:reduce){.vtab.new{animation:none}}
+@media(max-width:520px){.vtab{padding:8px 13px;font-size:13px}}
+.md-charts.one{grid-template-columns:1fr}
+.kind-list{margin-top:4px}
 /* ── Net worth rows ── */
 .nw-row{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:8px}
 .nw-row-l{min-width:0;flex:1 1 auto}
@@ -587,8 +596,8 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
   </div>
 </div>
 
-<!-- VIEW TABS (หุ้น / Net Worth) -->
-<div class="vtabs hidden" id="viewTabs">
+<!-- VIEW TABS (หุ้น / Net Worth + one per asset category, rebuilt by renderViewTabs) -->
+<div class="vtabs hidden" id="viewTabs" onscroll="vtabsFade(this)">
   <button class="vtab active" id="vtabStocks" data-view="stocks" onclick="switchView(this.dataset.view)">⚔️ หุ้น</button>
   <button class="vtab" id="vtabNw" data-view="networth" onclick="switchView(this.dataset.view)">🏦 Net Worth</button>
 </div>
@@ -610,6 +619,30 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
 <div class="main hidden" id="nwView">
   <div class="md-wrap" id="nwDash"></div>
   <div id="nwLists" data-groups="nw"></div>
+</div>
+
+<!-- ASSET CATEGORY VIEW (one tab per category + หนี้สิน) -->
+<div class="main hidden" id="kindView">
+  <div class="md-wrap" id="kindDash"></div>
+</div>
+
+<!-- RENAME CATEGORY MODAL (from a category tab) -->
+<div class="mbg center hidden" id="catRenameModal">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">
+      <div class="mt-t">✏️ เปลี่ยนชื่อหมวด</div>
+      <button class="btn btn-g btn-sm" onclick="closeM('catRenameModal')">✕</button>
+    </div>
+    <div class="mb">
+      <div style="font-size:13px;color:var(--tx2);margin-bottom:12px" id="catRenameHint">—</div>
+      <div class="form-group">
+        <label class="form-label" for="catRenameInput">ชื่อหมวดใหม่</label>
+        <input class="form-input" id="catRenameInput" list="asCatList" placeholder="เช่น Crypto, เงินฝาก, ทอง">
+      </div>
+      <button class="btn btn-p" id="catRenameSave" style="width:100%;justify-content:center" onclick="saveCatRename()">💾 บันทึก</button>
+    </div>
+  </div>
 </div>
 
 <!-- ASSET MODAL (add/edit asset or liability) -->
@@ -1113,6 +1146,8 @@ let S = {
   nwSort: { key: 'value', dir: 'desc' },
   plRange: 'all',      // time range on the หุ้น value chart
   nwRange: 'all',      // …and on the Net Worth chart
+  kindRange: 'all',    // …and on every asset-category tab's chart
+  newTab: null,        // a category tab created a moment ago (flashes once)
   stClosed: {},        // stock groups the user collapsed (they start expanded)
   stGroup: 'sector',   // how the stock list is grouped: sector|status|held|none
   stRowOpen: {},       // stock rows whose detail band is open (they start closed)
@@ -1155,6 +1190,7 @@ function saveLS() {
       nwSort: S.nwSort,
       plRange: S.plRange,
       nwRange: S.nwRange,
+      kindRange: S.kindRange,
       stClosed: S.stClosed,
       stGroup: S.stGroup,
       stShowClosed: S.stShowClosed,
@@ -1184,6 +1220,7 @@ function loadLS() {
     if (d.nwSort && d.nwSort.key) S.nwSort = { key: d.nwSort.key, dir: d.nwSort.dir === 'asc' ? 'asc' : 'desc' };
     if (d.plRange && CHART_RANGES.some(r => r.key === d.plRange)) S.plRange = d.plRange;
     if (d.nwRange && CHART_RANGES.some(r => r.key === d.nwRange)) S.nwRange = d.nwRange;
+    if (d.kindRange && CHART_RANGES.some(r => r.key === d.kindRange)) S.kindRange = d.kindRange;
     if (d.stClosed && typeof d.stClosed === 'object') S.stClosed = d.stClosed;
     if (d.stGroup && ST_GROUPS.some(g => g.key === d.stGroup)) S.stGroup = d.stGroup;
     if (typeof d.stShowClosed === 'boolean') S.stShowClosed = d.stShowClosed;
@@ -1740,7 +1777,8 @@ function recordNwSnapshot() {
     stocks: Math.round(t.stocksValue),
     assets: Math.round(t.assets),
     liabilities: Math.round(t.liab),
-    usdthb: +fxRate.usdthb.toFixed(2)
+    usdthb: +fxRate.usdthb.toFixed(2),
+    cats: nwCatTotals(S.assetReg.assets)   // per category, for the category tabs' graphs
   };
   const arr = S.assetReg.snapshots;
   const last = arr[arr.length - 1];
@@ -1770,7 +1808,7 @@ async function nwUpdateAll() {
     }
     recordNwSnapshot();
     hideLoading();
-    renderNetWorth();
+    renderAssetViews();
     if (held.length) await persistRegistryKB();
     await saveAssetReg();
     const fails = [...stockFail, ...cryptoFail];
@@ -1782,12 +1820,21 @@ async function nwUpdateAll() {
 }
 
 // ── View switching ──
+// Views: 'stocks' · 'networth' · 'cat:<category key>' · 'liab'.
+function viewExists(v) {
+  return v === 'stocks' || v === 'networth' || kindTabs().some(t => t.view === v);
+}
+
 function applyView() {
-  const onStocks = S.view !== 'networth';
+  // A category tab whose last item was deleted (or renamed away) has nothing
+  // left to show — fall back to Net Worth rather than an empty page.
+  if (!viewExists(S.view)) S.view = 'networth';
+  const onStocks = S.view === 'stocks';
+  const onNw = S.view === 'networth';
   document.getElementById('dashboard').classList.toggle('hidden', !onStocks);
-  document.getElementById('nwView').classList.toggle('hidden', onStocks);
-  document.getElementById('vtabStocks').classList.toggle('active', onStocks);
-  document.getElementById('vtabNw').classList.toggle('active', !onStocks);
+  document.getElementById('nwView').classList.toggle('hidden', !onNw);
+  document.getElementById('kindView').classList.toggle('hidden', onStocks || onNw);
+  renderViewTabs();
   document.getElementById('btnAddStock').classList.toggle('hidden', !onStocks);
   document.getElementById('btnPastePort').classList.toggle('hidden', !onStocks);
   document.getElementById('btnPrices').classList.toggle('hidden', !onStocks);
@@ -1801,8 +1848,43 @@ function applyView() {
 function switchView(v) {
   S.view = v;
   applyView();
-  if (v === 'networth') { try { renderNetWorth(); } catch(e) { console.warn('renderNetWorth:', e); } }
+  if (S.view === 'networth') { try { renderNetWorth(); } catch(e) { console.warn('renderNetWorth:', e); } }
+  else if (S.view !== 'stocks') { try { renderKindView(); } catch(e) { console.warn('renderKindView:', e); } }
 }
+
+// After any change to the assets: the tab bar (a category may have appeared
+// or emptied out) and whichever asset page is open.
+function renderAssetViews() {
+  if (viewExists(S.view)) renderViewTabs(); else applyView();
+  if (S.view === 'networth') renderNetWorth();
+  else if (S.view !== 'stocks') renderKindView();
+}
+
+// หุ้น · Net Worth · every asset category (biggest first) · หนี้สิน.
+function renderViewTabs() {
+  const bar = document.getElementById('viewTabs');
+  if (!bar) return;
+  const tabs = [
+    { view: 'stocks', icon: '⚔️', name: 'หุ้น', id: 'vtabStocks' },
+    { view: 'networth', icon: '🏦', name: 'Net Worth', id: 'vtabNw' }
+  ].concat(kindTabs());
+  bar.innerHTML = tabs.map(t =>
+    `<button class="vtab${t.liab ? ' liab' : ''}${S.view === t.view ? ' active' : ''}${S.newTab === t.view ? ' new' : ''}"${t.id ? ` id="${t.id}"` : ''} data-view="${escHtml(t.view)}" onclick="switchView(this.dataset.view)">${t.icon} ${escHtml(t.name)}</button>`
+  ).join('');
+  S.newTab = null;
+  // keep the open tab in sight when the row is wider than the screen
+  const on = bar.querySelector('.vtab.active');
+  if (on && (on.offsetLeft < bar.scrollLeft || on.offsetLeft + on.offsetWidth > bar.scrollLeft + bar.clientWidth)) {
+    bar.scrollLeft = Math.max(0, on.offsetLeft - 16);
+  }
+  vtabsFade(bar);
+}
+
+// Fade the right edge only while there are more tabs off-screen.
+function vtabsFade(bar) {
+  bar.classList.toggle('fade-r', bar.scrollLeft + bar.clientWidth < bar.scrollWidth - 2);
+}
+window.addEventListener('resize', () => { const b = document.getElementById('viewTabs'); if (b) vtabsFade(b); });
 
 // ── Render ──
 const NW_CAT_SUGGESTIONS = ['Crypto', 'Cash / เงินฝาก', 'Gold / ทอง', 'Fund / กองทุน', 'Property / อสังหาฯ', 'Insurance / ประกัน', 'Loan / สินเชื่อ', 'อื่นๆ'];
@@ -1875,30 +1957,72 @@ function nwBuildGroups(t, assets, liabs) {
   return groups;
 }
 
-// assets → [{cat, list, sum}], ordered by `sort` (default: biggest value first).
+// Category names are typed by hand, so "Crypto" and "crypto " are the same
+// category: grouped under this key, shown with the spelling used most.
+function nwCatName(cat) { return String(cat || '').trim().replace(/\s+/g, ' ') || 'อื่นๆ'; }
+function nwCatKey(cat) { return nwCatName(cat).toLowerCase(); }
+
+// assets → [{cat, key, list, sum}], ordered by `sort` (default: biggest value first).
 // The same key orders the items inside each category, so one chip moves both.
 function nwByCat(assets, sort) {
   const key = (sort && sort.key) || 'value';
   const mul = (sort && sort.dir === 'asc') ? 1 : -1;
   const nm = a => String(a.name || '');
-  const by = {};
+  const by = {}, order = [];
   (assets || []).forEach(a => {
-    const c = a.cat || 'อื่นๆ';
-    (by[c] = by[c] || []).push(a);
+    const k = nwCatKey(a.cat);
+    if (!by[k]) { by[k] = { list: [], names: {} }; order.push(k); }
+    by[k].list.push(a);
+    const shown = nwCatName(a.cat);
+    by[k].names[shown] = (by[k].names[shown] || 0) + 1;
   });
-  return Object.keys(by).map(c => ({
-    cat: c,
-    list: by[c].slice().sort((a, b) => {
-      if (key === 'name') return mul * nm(a).localeCompare(nm(b), 'th');
-      const d = assetValueTHB(a) - assetValueTHB(b);
-      return d ? mul * d : nm(a).localeCompare(nm(b), 'th');
-    }),
-    sum: by[c].reduce((acc, a) => acc + assetValueTHB(a), 0)
-  })).sort((a, b) => {
+  return order.map(k => {
+    const names = by[k].names;
+    return {
+      // most-used spelling wins; on a tie the first one met stays
+      cat: Object.keys(names).reduce((best, n) => names[n] > names[best] ? n : best),
+      key: k,
+      list: by[k].list.slice().sort((a, b) => {
+        if (key === 'name') return mul * nm(a).localeCompare(nm(b), 'th');
+        const d = assetValueTHB(a) - assetValueTHB(b);
+        return d ? mul * d : nm(a).localeCompare(nm(b), 'th');
+      }),
+      sum: by[k].list.reduce((acc, a) => acc + assetValueTHB(a), 0)
+    };
+  }).sort((a, b) => {
     if (key === 'name') return mul * a.cat.localeCompare(b.cat, 'th');
     const d = key === 'count' ? a.list.length - b.list.length : a.sum - b.sum;
     return d ? mul * d : a.cat.localeCompare(b.cat, 'th');
   });
+}
+
+// {category key: baht}, stored on each daily snapshot so every category tab
+// has a graph of its own.
+function nwCatTotals(assets) {
+  const out = {};
+  nwByCat((assets || []).filter(a => a.kind !== 'liability')).forEach(c => { out[c.key] = Math.round(c.sum); });
+  return out;
+}
+
+// ── Asset-category tabs ─────────────────────────────────────────────────
+// Every category typed into Net Worth gets a tab after หุ้น and Net Worth,
+// biggest first; all debts share one 💳 หนี้สิน tab at the end. Derived from
+// the assets every time, so a new category shows up on its own and an
+// emptied one disappears.
+function kindTabs() {
+  const items = S.assetReg?.assets || [];
+  const tabs = nwByCat(items.filter(a => a.kind !== 'liability'), { key: 'value', dir: 'desc' }).map(c => ({
+    view: 'cat:' + c.key, key: c.key, icon: nwCatIcon(c.cat), name: c.cat, list: c.list, sum: c.sum
+  }));
+  const liabs = items.filter(a => a.kind === 'liability');
+  if (liabs.length) {
+    tabs.push({
+      view: 'liab', liab: true, icon: '💳', name: 'หนี้สิน',
+      list: liabs.slice().sort((a, b) => assetValueTHB(b) - assetValueTHB(a)),
+      sum: liabs.reduce((acc, a) => acc + assetValueTHB(a), 0)
+    });
+  }
+  return tabs;
 }
 
 function nwPct(v, base) { return base > 0 ? (v / base * 100) : 0; }
@@ -2332,6 +2456,188 @@ function renderNwAllocChart(t, assets) {
   });
 }
 
+// ── One asset category's page (its tab) ─────────────────────────────────
+// Same bones as Net Worth: hero → value over time → share of each item → rows.
+function renderKindView() {
+  const dash = document.getElementById('kindDash');
+  if (!dash || !S.assetReg) return;
+  fxInit();
+  const tab = kindTabs().find(t => t.view === S.view);
+  if (!tab) { dash.innerHTML = ''; return; }
+  const t = netWorthTotals();
+  const pct = nwPct(tab.sum, t.stocksValue + t.assets);
+  const day = kindDayStats(tab.list);
+  const parts = kindAllocParts(tab);
+  const nm = escHtml(tab.name);
+
+  dash.innerHTML = `
+  <div class="md-hero">
+    <div>
+      <div class="md-label">${tab.icon} ${nm}</div>
+      <div class="md-value"${tab.liab ? ' style="color:var(--red)"' : ''}>${tab.liab ? '−' : ''}${fmtBaht(tab.sum)}</div>
+      <div class="md-sub" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        <span class="nw-chip">${pct.toFixed(1)}% ${tab.liab ? 'เทียบทรัพย์สินรวม' : 'ของทรัพย์สินรวม'}</span>
+        <span class="nw-chip">${tab.list.length} รายการ</span>
+        ${day.has ? `<span class="nw-chip" style="color:${day.chg >= 0 ? 'var(--green)' : 'var(--red)'}" title="เฉพาะรายการที่ดึงราคาอัตโนมัติ">📈 วันนี้ ${day.chg >= 0 ? '+' : '−'}${fmtBaht(Math.abs(day.chg))}</span>` : ''}
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn btn-p btn-sm" onclick="nwUpdateAll()">💰 อัพเดตทั้งหมด</button>
+      <button class="btn btn-s btn-sm" id="kindAddBtn" data-cat="${tab.liab ? '' : nm}" data-kind="${tab.liab ? 'liability' : 'asset'}" onclick="openAddAsset(this.dataset)">${tab.liab ? '+ เพิ่มหนี้สิน' : '+ เพิ่มใน ' + nm}</button>
+      ${tab.liab ? '' : '<button class="btn btn-g btn-sm" id="kindRenameBtn" onclick="openRenameCat()">✏️ เปลี่ยนชื่อหมวด</button>'}
+    </div>
+  </div>
+  <div class="md-charts${parts.length < 2 ? ' one' : ''}">
+    <div class="md-card">
+      <div class="md-card-head"><div class="md-card-t">${tab.liab ? '📉 หนี้คงเหลือตามเวลา' : '📈 ' + nm + ' ตามเวลา'}</div><div class="sort-bar" id="kindRangeBar"></div></div>
+      <div class="md-canvas-wrap"><canvas id="kindValueChart"></canvas></div>
+      <div class="md-note" id="kindChartNote"></div>
+    </div>
+    ${parts.length >= 2 ? `<div class="md-card"><div class="md-card-t">🍩 สัดส่วนใน ${nm}</div><div class="md-canvas-wrap"><canvas id="kindAllocChart"></canvas></div><div class="dn-legend" id="kindAllocLegend"></div></div>` : ''}
+  </div>
+  <div class="kind-list">${tab.list.map(a => nwRowHtml(a)).join('')}</div>`;
+
+  renderRangeBar('kind');
+  renderKindValueChart();
+  // One item would be a single 100% ring that says nothing.
+  if (parts.length >= 2) {
+    renderDonut(document.getElementById('kindAllocChart'), document.getElementById('kindAllocLegend'), parts, {
+      onPick: 'kindAllocPick',
+      center: { label: tab.liab ? 'รวมหนี้สิน' : 'รวม', value: fmtBaht(parts.reduce((a, p) => a + p.v, 0)) }
+    });
+  }
+}
+
+// Today's move of the auto-priced items (the only ones with a previous close).
+function kindDayStats(list) {
+  let chg = 0, n = 0;
+  (list || []).forEach(a => {
+    const p = +a.fetched_price || 0, prev = +a.prev_close || 0;
+    if (a.price_mode !== 'auto' || !(p > 0) || !(prev > 0)) return;
+    chg += (p - prev) * (+a.qty || 0) * (a.price_cur === 'USD' ? fxRate.usdthb : 1);
+    n++;
+  });
+  return { chg, has: n > 0 };
+}
+
+function kindAllocParts(tab) {
+  return tab.list
+    .map(a => ({ label: a.name || '—', icon: nwAssetIcon(a), v: assetValueTHB(a), act: String(a.id) }))
+    .filter(p => p.v > 0)
+    .sort((a, b) => b.v - a.v);
+}
+
+function kindAllocPick(id) { openEditAsset(id); }
+
+// A category's own series out of the daily snapshots → [{date, v}].
+// Snapshots taken before categories were recorded carry no `cats`; they are
+// skipped, never read as ฿0 — a line starting at zero would invent a jump.
+// Debts use `liabilities`, which every snapshot has always carried.
+function kindHistory(tab, snaps) {
+  return (snaps || []).filter(s => s && s.date && (tab.liab ? s.liabilities != null : (s.cats && s.cats[tab.key] != null)))
+    .map(s => ({ date: s.date, v: tab.liab ? (+s.liabilities || 0) : (+s.cats[tab.key] || 0) }));
+}
+
+// Caption under the graph. For debt, going down is the good direction.
+function kindNoteHtml(hist, liab) {
+  const d = rangeDelta(hist, 'v');
+  if (!d) return '';
+  const good = liab ? d.chg <= 0 : d.chg >= 0;
+  const sg = d.chg >= 0 ? '+' : '−';
+  const label = (CHART_RANGES.find(r => r.key === S.kindRange) || {}).label || '';
+  return `<b style="color:${good ? 'var(--green)' : 'var(--red)'}">${sg}${fmtBaht(Math.abs(d.chg))} (${sg}${Math.abs(d.pct).toFixed(2)}%)</b> ใน${label} · ${hist[0].date} → ${hist[hist.length - 1].date}`;
+}
+
+// Axis labels that still read for a ฿900 category and a ฿12M one.
+function fmtAxisBaht(v) {
+  const a = Math.abs(v);
+  if (a >= 1e6) return '฿' + (v / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'M';
+  if (a >= 1e3) return '฿' + (v / 1e3).toFixed(0) + 'k';
+  return '฿' + Math.round(v);
+}
+
+function renderKindValueChart() {
+  const canvas = document.getElementById('kindValueChart');
+  if (!canvas) return;
+  const tab = kindTabs().find(t => t.view === S.view);
+  const all = tab ? kindHistory(tab, S.assetReg?.snapshots) : [];
+  const hist = filterByRange(all, S.kindRange).slice(-400);
+  const note = document.getElementById('kindChartNote');
+  if (!tab || hist.length < 2) {
+    if (note) note.textContent = (all.length >= 2
+      ? `ช่วงนี้มีข้อมูล ${hist.length} จุด — เลือกช่วงที่กว้างขึ้นเพื่อดูเส้นกราฟ`
+      : all.length === 1
+        ? 'มีข้อมูลของหมวดนี้แล้ว 1 วัน — เส้นกราฟจะขึ้นเมื่อมีวันที่ 2'
+        : 'ยังไม่มีข้อมูลย้อนหลังของหมวดนี้') +
+      (all.length >= 2 ? '' : ' · บันทึกวันละ 1 จุด ตอนกด "💰 อัพเดตทั้งหมด" หรือเพิ่ม/แก้ไข/ลบรายการ');
+    if (canvas._chart) { canvas._chart.destroy(); canvas._chart = null; }
+    return;
+  }
+  if (note) note.innerHTML = kindNoteHtml(hist, tab.liab);
+  const color = tab.liab ? '#ff6b6b' : '#00e5cc';
+  ensureChartJs(() => {
+    if (canvas._chart) canvas._chart.destroy();
+    canvas._chart = new Chart(canvas, {
+      type: 'line',
+      data: { labels: hist.map(h => h.date.slice(5)), datasets: [
+        { label: tab.name, data: hist.map(h => h.v), borderColor: color, borderWidth: 2, fill: true, backgroundColor: color + '22', pointRadius: hist.length <= 31 ? 2 : 0, tension: 0.25 }
+      ]},
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => fmtBaht(c.raw) } } },
+        scales: {
+          x: { ticks: { color: '#445566', font: { size: 10 }, maxTicksLimit: 6 }, grid: { display: false } },
+          y: { ticks: { color: '#445566', font: { size: 10 }, callback: v => fmtAxisBaht(v) }, grid: { color: '#1a1f24' } }
+        }
+      }
+    });
+  });
+}
+
+// ── Rename a whole category (from its tab) ──────────────────────────────
+function openRenameCat() {
+  const tab = kindTabs().find(t => t.view === S.view);
+  if (!tab || tab.liab) return;
+  document.getElementById('catRenameInput').value = tab.name;
+  document.getElementById('catRenameHint').textContent =
+    `ทุกรายการในหมวด "${tab.name}" (${tab.list.length} รายการ) จะใช้ชื่อใหม่ และกราฟย้อนหลังของหมวดย้ายตามไปด้วย — ถ้าตั้งชื่อตรงกับหมวดที่มีอยู่แล้ว สองหมวดจะรวมเป็นแท็บเดียว`;
+  fillCatDatalist();
+  document.getElementById('catRenameModal').classList.remove('hidden');
+}
+
+async function saveCatRename() {
+  const tab = kindTabs().find(t => t.view === S.view);
+  const name = nwCatName(document.getElementById('catRenameInput').value);
+  if (!tab || tab.liab) { closeM('catRenameModal'); return; }
+  if (!document.getElementById('catRenameInput').value.trim()) { toast('⚠️ ใส่ชื่อหมวดก่อน'); return; }
+  const r = nwRenameCat(tab.key, name);
+  closeM('catRenameModal');
+  S.view = 'cat:' + r.key;
+  applyView();
+  renderKindView();
+  toast(`✅ เปลี่ยนชื่อหมวดเป็น "${name}" แล้ว (${r.n} รายการ)`);
+  await saveAssetReg();
+}
+
+// Every asset in the category takes the new name, and its history in the
+// snapshots moves with it, so a rename never cuts the graph. Renaming onto an
+// existing category merges the two — their daily totals add up.
+function nwRenameCat(oldKey, name) {
+  const newKey = nwCatKey(name);
+  let n = 0;
+  (S.assetReg?.assets || []).forEach(a => {
+    if (a.kind !== 'liability' && nwCatKey(a.cat) === oldKey) { a.cat = name; n++; }
+  });
+  if (newKey !== oldKey) {
+    (S.assetReg?.snapshots || []).forEach(s => {
+      if (!s.cats || s.cats[oldKey] == null) return;
+      s.cats[newKey] = (+s.cats[newKey] || 0) + (+s.cats[oldKey] || 0);
+      delete s.cats[oldKey];
+    });
+  }
+  return { key: newKey, n };
+}
+
 // The stock's own page of the book: what it has banked and paid out so far.
 function tradeDetailHtml(stock) {
   const tk = String(stock.ticker).toUpperCase();
@@ -2661,11 +2967,15 @@ function fillCatDatalist() {
   dl.innerHTML = all.map(c => `<option value="${escHtml(c)}"></option>`).join('');
 }
 
-function openAddAsset() {
+// opts (optional): {cat, kind} — the "+ เพิ่มใน …" button on a category tab
+// opens the form with that tab's category already filled in.
+function openAddAsset(opts) {
+  opts = opts || {};
   editAssetId = null;
-  document.getElementById('assetModalTitle').textContent = '+ เพิ่มทรัพย์สิน / หนี้สิน';
-  document.getElementById('asKind').value = 'asset';
-  document.getElementById('asCat').value = '';
+  const isL = opts.kind === 'liability';
+  document.getElementById('assetModalTitle').textContent = isL ? '+ เพิ่มหนี้สิน' : opts.cat ? '+ เพิ่มใน ' + opts.cat : '+ เพิ่มทรัพย์สิน / หนี้สิน';
+  document.getElementById('asKind').value = isL ? 'liability' : 'asset';
+  document.getElementById('asCat').value = opts.cat || '';
   document.getElementById('asName').value = '';
   document.getElementById('asPriceMode').value = 'manual';
   document.getElementById('asTicker').value = '';
@@ -2751,6 +3061,7 @@ async function saveAsset() {
   const qty = parseFloat(document.getElementById('asQty').value) || 0;
   if (qty <= 0) { toast('⚠️ ใส่จำนวนมากกว่า 0'); return; }
   const kind = document.getElementById('asKind').value === 'liability' ? 'liability' : 'asset';
+  const tabsBefore = kindTabs().map(t => t.view);
   const obj = {
     kind,
     cat: document.getElementById('asCat').value.trim() || (kind === 'liability' ? 'หนี้สิน' : 'อื่นๆ'),
@@ -2777,9 +3088,14 @@ async function saveAsset() {
     if (p != null && target) { target.fetched_price = p; target.price_updated = new Date().toISOString(); }
   }
   recordNwSnapshot();
-  renderNetWorth();
+  // A category nobody had before gets its tab now — open it, so the user sees
+  // where the item went.
+  const tab = kindTabs().find(t => t.view === (kind === 'liability' ? 'liab' : 'cat:' + nwCatKey(obj.cat)));
+  const isNewTab = !!tab && tabsBefore.indexOf(tab.view) === -1;
+  if (isNewTab) { S.view = tab.view; S.newTab = tab.view; applyView(); }
+  renderAssetViews();
   await saveAssetReg();
-  toast('✅ บันทึกแล้ว');
+  toast(isNewTab ? `✅ บันทึกแล้ว · สร้างแท็บ ${tab.icon} ${tab.name}` : '✅ บันทึกแล้ว');
 }
 
 function deleteAssetById(el) {
@@ -2789,7 +3105,7 @@ function deleteAssetById(el) {
   if (!confirm(`ลบ "${a.name}" ออกจาก Net Worth?`)) return;
   S.assetReg.assets = S.assetReg.assets.filter(x => String(x.id) !== String(id));
   recordNwSnapshot();
-  renderNetWorth();
+  renderAssetViews();
   saveAssetReg();
 }
 
@@ -2806,7 +3122,7 @@ async function saveFxOverride() {
   S.assetReg.settings.usdthb_override = v;
   closeM('fxModal');
   await fetchFxRate();
-  renderNetWorth();
+  renderAssetViews();
   saveAssetReg();
   toast(v > 0 ? `💱 ล็อคอัตรา $1 = ฿${v}` : '💱 กลับไปใช้อัตราอัตโนมัติ');
 }
@@ -5947,16 +6263,17 @@ function rangeDelta(hist, field) {
 }
 
 function setChartRange(which, key) {
-  if (which === 'nw') { S.nwRange = key; } else { S.plRange = key; }
+  if (which === 'nw') { S.nwRange = key; } else if (which === 'kind') { S.kindRange = key; } else { S.plRange = key; }
   saveLS();
   if (which === 'nw') { renderRangeBar('nw'); renderNwValueChart(); }
+  else if (which === 'kind') { renderRangeBar('kind'); renderKindValueChart(); }
   else { renderRangeBar('pl'); renderValueChart(); }
 }
 
 function renderRangeBar(which) {
-  const bar = document.getElementById(which === 'nw' ? 'nwRangeBar' : 'plRangeBar');
+  const bar = document.getElementById(which + 'RangeBar');   // nwRangeBar · plRangeBar · kindRangeBar
   if (!bar) return;
-  const cur = which === 'nw' ? S.nwRange : S.plRange;
+  const cur = which === 'nw' ? S.nwRange : which === 'kind' ? S.kindRange : S.plRange;
   bar.innerHTML = CHART_RANGES.map(r =>
     `<button class="sort-chip${cur === r.key ? ' on' : ''}" data-k="${r.key}" data-w="${which}" onclick="setChartRange(this.dataset.w, this.dataset.k)">${r.label}</button>`
   ).join('');
@@ -6577,8 +6894,10 @@ function renderDashboard() {
   // Portfolio summary
   renderSummary();
 
-  // Keep Net Worth tab in sync when data refreshes while it's open
-  try { if (S.view === 'networth') renderNetWorth(); } catch(e) { console.warn('renderNetWorth:', e); }
+  // Keep the tab bar and any open asset page in sync when data refreshes.
+  // (Not applyView: this also runs behind the sign-in screen.)
+  try { renderViewTabs(); } catch(e) { console.warn('renderViewTabs:', e); }
+  try { if (S.view === 'networth') renderNetWorth(); else if (S.view !== 'stocks') renderKindView(); } catch(e) { console.warn('renderNetWorth:', e); }
 
   // Sync timestamp
   if (S.lastSync) {
@@ -7648,6 +7967,7 @@ function showSetup() {
   document.getElementById('signInWrap').classList.add('hidden');
   document.getElementById('dashboard').classList.add('hidden');
   document.getElementById('nwView').classList.add('hidden');
+  document.getElementById('kindView').classList.add('hidden');
   document.getElementById('viewTabs').classList.add('hidden');
   document.getElementById('btnSync').classList.add('hidden');
   document.getElementById('btnReports').classList.add('hidden');
@@ -7662,6 +7982,7 @@ function showSignIn() {
   document.getElementById('signInWrap').style.display = 'flex';
   document.getElementById('dashboard').classList.add('hidden');
   document.getElementById('nwView').classList.add('hidden');
+  document.getElementById('kindView').classList.add('hidden');
   document.getElementById('viewTabs').classList.add('hidden');
   document.getElementById('btnSync').classList.add('hidden');
   document.getElementById('btnReports').classList.add('hidden');
@@ -7754,7 +8075,7 @@ window.addEventListener('DOMContentLoaded', () => {
      และคอยเช็คว่ามีรุ่นใหม่บนเซิร์ฟเวอร์ไหม → ขึ้นปุ่มให้โหลดใหม่
      บรรทัด window.APP_BUILD ถูกเขียนทับอัตโนมัติตอน deploy โดย
      ~/dev/tools/buildstamp/stamp.sh — อย่าแก้เลขด้วยมือ                       -->
-<script>/*BUILDSTAMP*/window.APP_BUILD={app:"portfolio",v:4,date:"2026-09-02",hash:"7380de9",lang:"th"};/*BUILDSTAMP-END*/</script>
+<script>/*BUILDSTAMP*/window.APP_BUILD={app:"portfolio",v:5,date:"2026-09-13",hash:"84cc778",lang:"th"};/*BUILDSTAMP-END*/</script>
 <style>
 .bstamp{font:500 11.5px/1.55 system-ui,-apple-system,"Sarabun",sans-serif;letter-spacing:.2px;
   opacity:.42;cursor:pointer;-webkit-user-select:none;user-select:none;display:inline-block;

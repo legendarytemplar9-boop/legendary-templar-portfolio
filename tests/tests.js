@@ -1486,6 +1486,209 @@
     document.getElementById('nwDash').innerHTML = '';
   }
 
+  // ══════════════════ asset-category tabs ══════════════════
+  sec('asset-category tabs — category keys');
+  eq('same key whatever the case', nwCatKey('Crypto'), nwCatKey('crypto'));
+  eq('stray spaces do not make a new category', nwCatKey('  Crypto   '), 'crypto');
+  eq('inner runs of spaces collapse', nwCatKey('Cash  /  เงินฝาก'), 'cash / เงินฝาก');
+  eq('blank category is อื่นๆ', nwCatKey(''), 'อื่นๆ');
+  {
+    const A = [
+      { id: 'v1', cat: 'Crypto', qty: 1, manual_price: 100, price_mode: 'manual' },
+      { id: 'v2', cat: 'crypto ', qty: 1, manual_price: 100, price_mode: 'manual' },
+      { id: 'v3', cat: 'Crypto', qty: 1, manual_price: 100, price_mode: 'manual' }
+    ];
+    const g = nwByCat(A);
+    eq('spelling variants group together', g.length, 1);
+    eq('…under the spelling used most', g[0].cat, 'Crypto');
+    eq('…with every item', g[0].list.length, 3);
+    eq('…and a key', g[0].key, 'crypto');
+    eq('a tie keeps the first spelling met', nwByCat([A[1], A[0]])[0].cat, 'crypto');
+  }
+
+  sec('asset-category tabs — tab bar, page, snapshot');
+  {
+    const prevReg = S.registry, prevAsset = S.assetReg, prevView = S.view, prevOffline = S.offline;
+    const prevRange = S.kindRange, prevConfirm = window.confirm;
+    S.offline = true;   // saves stay on this machine
+    S.registry = { stocks: [{ ticker: 'CPF', shares: 1000, avg_cost: 20, current_price: 25, thesis_status: '🟢' }] };
+    S.assetReg = {
+      version: 1, settings: { usdthb_override: 35 },
+      snapshots: [
+        { date: '2026-01-01', net: 1, stocks: 1, assets: 1, liabilities: 30000, usdthb: 35 },   // before cats existed
+        { date: '2026-02-01', net: 1, stocks: 1, assets: 1, liabilities: 25000, usdthb: 35, cats: { crypto: 20000, 'cash / เงินฝาก': 70000 } },
+        { date: '2026-03-01', net: 1, stocks: 1, assets: 1, liabilities: 20000, usdthb: 35, cats: { crypto: 35000, 'cash / เงินฝาก': 75000 } }
+      ],
+      assets: [
+        { id: 'k1', kind: 'asset', cat: 'Crypto', name: 'Bitcoin', ticker: 'BTC', price_mode: 'auto', fetched_price: 100, prev_close: 90, qty: 10, price_cur: 'USD' },
+        { id: 'k2', kind: 'asset', cat: 'Cash / เงินฝาก', name: 'บัญชีออมทรัพย์', price_mode: 'manual', manual_price: 50000, qty: 1, price_cur: 'THB' },
+        { id: 'k3', kind: 'asset', cat: 'Cash / เงินฝาก', name: 'ฝากประจำ', price_mode: 'manual', manual_price: 25000, qty: 1, price_cur: 'THB' },
+        { id: 'k4', kind: 'asset', cat: 'Gold', name: 'ทองคำแท่ง', price_mode: 'manual', manual_price: 10000, qty: 1, price_cur: 'THB' },
+        { id: 'k5', kind: 'liability', cat: 'Loan / สินเชื่อ', name: 'สินเชื่อบ้าน', price_mode: 'manual', manual_price: 15000, qty: 1, price_cur: 'THB' },
+        { id: 'k6', kind: 'liability', cat: 'บัตรเครดิต', name: 'บัตร KTC', price_mode: 'manual', manual_price: 5000, qty: 1, price_cur: 'THB' }
+      ]
+    };
+    fxInit();
+
+    eq('one tab per category, biggest first, debts last',
+       kindTabs().map(t => t.view), ['cat:cash / เงินฝาก', 'cat:crypto', 'cat:gold', 'liab']);
+    eq('tab names are the category names', kindTabs().map(t => t.name), ['Cash / เงินฝาก', 'Crypto', 'Gold', 'หนี้สิน']);
+    eq('tabs carry the category icon', kindTabs().map(t => t.icon), ['💵', '🪙', '🥇', '💳']);
+    eq('all debts share one tab, biggest first', kindTabs()[3].list.map(a => a.id), ['k5', 'k6']);
+
+    S.view = 'stocks';
+    applyView();
+    const bar = document.getElementById('viewTabs');
+    const tabBtns = () => [...bar.querySelectorAll('.vtab')];
+    eq('header row = หุ้น, Net Worth, then every category',
+       tabBtns().map(b => b.dataset.view), ['stocks', 'networth', 'cat:cash / เงินฝาก', 'cat:crypto', 'cat:gold', 'liab']);
+    ok('header labels show icon and name', tabBtns()[3].textContent === '🪙 Crypto', tabBtns()[3].textContent);
+    ok('หุ้น is the active tab', tabBtns()[0].classList.contains('active') && !tabBtns()[3].classList.contains('active'));
+    ok('the debt tab is marked', tabBtns()[5].classList.contains('liab'));
+
+    // ── tap a category tab ──
+    tabBtns()[3].click();
+    eq('tapping a tab opens that category', S.view, 'cat:crypto');
+    ok('its page shows, the others hide',
+       !document.getElementById('kindView').classList.contains('hidden') &&
+       document.getElementById('dashboard').classList.contains('hidden') &&
+       document.getElementById('nwView').classList.contains('hidden'));
+    ok('the tapped tab is now active', tabBtns()[3].classList.contains('active'));
+    let kd = document.getElementById('kindDash');
+    ok('hero shows the category total', kd.querySelector('.md-value').textContent === '฿35,000', kd.querySelector('.md-value').textContent);
+    // 35,000 of (25,000 stocks + 120,000 assets)
+    ok('hero shows share of total assets', kd.innerHTML.indexOf('24.1% ของทรัพย์สินรวม') !== -1);
+    ok('hero shows today\'s move of auto-priced items', kd.innerHTML.indexOf('วันนี้ +฿3,500') !== -1);
+    eq('rows list the items of this category only', [...kd.querySelectorAll('.kind-list .nw-row-nm')].map(e => e.textContent), ['Bitcoin']);
+    ok('one item → no donut, graph takes the full width',
+       !document.getElementById('kindAllocChart') && kd.querySelector('.md-charts').classList.contains('one'));
+
+    eq('history: snapshots without cats are skipped', kindHistory(kindTabs()[1], S.assetReg.snapshots), [{ date: '2026-02-01', v: 20000 }, { date: '2026-03-01', v: 35000 }]);
+    eq('history of a category with no record yet is empty', kindHistory(kindTabs()[2], S.assetReg.snapshots), []);
+    eq('debt history reaches back before cats existed', kindHistory(kindTabs()[3], S.assetReg.snapshots).map(h => h.v), [30000, 25000, 20000]);
+    S.kindRange = 'all';
+    renderKindValueChart();
+    ok('graph caption gives the change over the range', document.getElementById('kindChartNote').innerHTML.indexOf('+฿15,000') !== -1,
+       document.getElementById('kindChartNote').innerHTML);
+
+    // range chips are real buttons on this page
+    const chip = document.querySelector('#kindRangeBar [data-k="1m"]');
+    ok('range chips render on the category page', !!chip);
+    chip.click();
+    eq('tapping a range chip sets the category range', S.kindRange, '1m');
+    ok('…and it is remembered', JSON.parse(localStorage.getItem(LS_KEY)).kindRange === '1m');
+    ok('an empty range explains itself, never a blank box', document.getElementById('kindChartNote').textContent.indexOf('ช่วงนี้มีข้อมูล 0 จุด') !== -1,
+       document.getElementById('kindChartNote').textContent);
+    S.kindRange = 'all';
+
+    // ── a category with two items has a donut ──
+    switchView('cat:cash / เงินฝาก');
+    kd = document.getElementById('kindDash');
+    ok('two items → donut of each item', !!document.getElementById('kindAllocChart'));
+    ok('donut legend names each item with value', document.getElementById('kindAllocLegend').innerHTML.indexOf('บัญชีออมทรัพย์') !== -1 &&
+       document.getElementById('kindAllocLegend').innerHTML.indexOf('฿50,000') !== -1);
+    ok('legend entries open the item', document.querySelector('#kindAllocLegend .dn-li').getAttribute('onclick').indexOf('kindAllocPick') === 0);
+    ok('no graph data yet says when it will start', (() => {
+      switchView('cat:gold');
+      return document.getElementById('kindChartNote').textContent.indexOf('อัพเดตทั้งหมด') !== -1;
+    })());
+
+    // ── debt tab ──
+    switchView('liab');
+    kd = document.getElementById('kindDash');
+    ok('debt total is negative and red', kd.querySelector('.md-value').textContent === '−฿20,000' && kd.querySelector('.md-value').getAttribute('style').indexOf('red') !== -1);
+    ok('debt tab has no rename button', !document.getElementById('kindRenameBtn'));
+    ok('a shrinking debt reads as good news', kindNoteHtml([{ date: 'a', v: 100 }, { date: 'b', v: 80 }], true).indexOf('var(--green)') !== -1);
+    ok('a growing category reads as good news', kindNoteHtml([{ date: 'a', v: 80 }, { date: 'b', v: 100 }], false).indexOf('var(--green)') !== -1);
+    ok('a growing debt does not', kindNoteHtml([{ date: 'a', v: 80 }, { date: 'b', v: 100 }], true).indexOf('var(--red)') !== -1);
+    document.getElementById('kindAddBtn').click();
+    eq('+ เพิ่มหนี้สิน opens the form as a debt', document.getElementById('asKind').value, 'liability');
+    closeM('assetModal');
+
+    eq('axis: small', fmtAxisBaht(900), '฿900');
+    eq('axis: thousands', fmtAxisBaht(35000), '฿35k');
+    eq('axis: millions', fmtAxisBaht(2400000), '฿2.4M');
+
+    // ── snapshot now records each category ──
+    const snapBefore = S.assetReg.snapshots.length;
+    recordNwSnapshot();
+    const snap = S.assetReg.snapshots[S.assetReg.snapshots.length - 1];
+    eq('snapshot records a total per category', snap.cats, { 'cash / เงินฝาก': 75000, crypto: 35000, gold: 10000 });
+    eq('snapshot still records debts as before', snap.liabilities, 20000);
+    recordNwSnapshot();
+    eq('still one snapshot per day', S.assetReg.snapshots.length, snapBefore + 1);
+    eq('nwCatTotals leaves debts out', Object.keys(nwCatTotals(S.assetReg.assets)).sort(), ['cash / เงินฝาก', 'crypto', 'gold']);
+
+    // ── + เพิ่มใน … fills the category; a new category makes a new tab ──
+    switchView('cat:crypto');
+    document.getElementById('kindAddBtn').click();
+    eq('+ เพิ่มใน fills in the category', document.getElementById('asCat').value, 'Crypto');
+    eq('…as an asset', document.getElementById('asKind').value, 'asset');
+    ok('…and says so in the title', document.getElementById('assetModalTitle').textContent === '+ เพิ่มใน Crypto');
+    document.getElementById('asCat').value = 'หุ้นกู้';
+    document.getElementById('asName').value = 'หุ้นกู้ CPALL';
+    document.getElementById('asQty').value = '200';
+    document.getElementById('asPrice').value = '1000';
+    await saveAsset();
+    eq('saving a new category opens its new tab', S.view, 'cat:หุ้นกู้');
+    ok('the new tab is in the header', tabBtns().some(b => b.dataset.view === 'cat:หุ้นกู้' && b.textContent === '📜 หุ้นกู้'));
+    ok('…ordered by value (200k is the biggest category)', tabBtns()[2].dataset.view === 'cat:หุ้นกู้');
+    eq('the save recorded the new category in today\'s snapshot', S.assetReg.snapshots[S.assetReg.snapshots.length - 1].cats['หุ้นกู้'], 200000);
+    ok('the toast names the new tab', (document.getElementById('toast') || document.body).textContent.indexOf('สร้างแท็บ') !== -1);
+
+    // ── same category, other spelling → no new tab ──
+    openAddAsset({ cat: 'Crypto' });
+    document.getElementById('asCat').value = ' crypto';
+    document.getElementById('asName').value = 'ETH';
+    document.getElementById('asQty').value = '1';
+    document.getElementById('asPrice').value = '500';
+    await saveAsset();
+    eq('a spelling variant joins its category, no new tab', kindTabs().filter(t => t.key === 'crypto').length, 1);
+    eq('…and does not switch tabs', S.view, 'cat:หุ้นกู้');
+
+    // ── rename a category ──
+    switchView('cat:crypto');
+    document.getElementById('kindRenameBtn').click();
+    eq('rename form starts with the current name', document.getElementById('catRenameInput').value, 'Crypto');
+    document.getElementById('catRenameInput').value = 'คริปโต';
+    await saveCatRename();
+    eq('rename moves to the renamed tab', S.view, 'cat:คริปโต');
+    ok('every item takes the new name', S.assetReg.assets.filter(a => nwCatKey(a.cat) === 'คริปโต').length === 2 &&
+       !S.assetReg.assets.some(a => nwCatKey(a.cat) === 'crypto'));
+    eq('its graph history moves with it', kindHistory(kindTabs().find(t => t.key === 'คริปโต'), S.assetReg.snapshots).slice(0, 2).map(h => h.v), [20000, 35000]);
+    ok('no history is left under the old name', !S.assetReg.snapshots.some(s => s.cats && s.cats.crypto != null));
+    // renaming onto an existing category merges both, history included
+    const r = nwRenameCat('gold', 'Cash / เงินฝาก');
+    eq('merge reports the key it landed on', r.key, 'cash / เงินฝาก');
+    ok('merged items share one tab', kindTabs().find(t => t.key === 'cash / เงินฝาก').list.length === 3);
+    eq('merged history adds the two totals', S.assetReg.snapshots[S.assetReg.snapshots.length - 1].cats['cash / เงินฝาก'], 85000);
+
+    // ── delete the last item of a category → its tab goes, Net Worth opens ──
+    window.confirm = () => true;
+    switchView('cat:หุ้นกู้');
+    const bond = S.assetReg.assets.find(a => a.name === 'หุ้นกู้ CPALL');
+    deleteAssetById({ dataset: { id: bond.id } });
+    ok('an emptied category loses its tab', !tabBtns().some(b => b.dataset.view === 'cat:หุ้นกู้'));
+    eq('…and Net Worth opens instead of a blank page', S.view, 'networth');
+    ok('…visibly', !document.getElementById('nwView').classList.contains('hidden') && document.getElementById('kindView').classList.contains('hidden'));
+
+    // ── a data refresh keeps the header up to date ──
+    S.view = 'stocks';
+    applyView();
+    S.assetReg.assets.push({ id: 'k9', kind: 'asset', cat: 'Fund / กองทุน', name: 'RMF', price_mode: 'manual', manual_price: 1, qty: 1, price_cur: 'THB' });
+    renderDashboard();
+    ok('renderDashboard rebuilds the tab bar', tabBtns().some(b => b.dataset.view === 'cat:fund / กองทุน'));
+
+    window.confirm = prevConfirm;
+    S.registry = prevReg; S.assetReg = prevAsset; S.offline = prevOffline; S.kindRange = prevRange;
+    S.view = prevView || 'stocks';
+    applyView();
+    document.getElementById('kindDash').innerHTML = '';
+    document.getElementById('nwLists').innerHTML = '';
+    document.getElementById('nwDash').innerHTML = '';
+    saveLS();
+  }
+
   // ══════════════════ stock list: grouping / expand / collapse ══════════════════
   sec('stSectorIcon');
   eq('bank', stSectorIcon('Banking'), '🏦');
@@ -3058,6 +3261,11 @@
     // ── precedence: the tiers must not blend ──
     sec('XD tier precedence');
     {
+      // The SET row above is dated 2026-09-07. Read against the real clock it
+      // stopped being "upcoming" on 09-08 and TradingView won by default — so
+      // pin today to the date the fixture was written for.
+      const realToday = window.xdToday;
+      window.xdToday = () => '2026-09-02';
       const tvRow = { dividend_ex_date_upcoming: Date.parse('2026-11-11T12:00:00Z') / 1000,
                       dividend_amount_upcoming: 9,
                       dividend_payment_date_upcoming: Date.parse('2026-11-30T12:00:00Z') / 1000 };
@@ -3070,6 +3278,7 @@
       const setEst = await fetchXdFor('PTT', null, st);
       eq('with nothing announced, SET history beats a network call', setEst.src, 'set-est');
       eq('…and no request went out for it', setEst.xd, '2026-10-01');
+      window.xdToday = realToday;
     }
 
     eq('a source with no badge is silent, not "undefined"', xdSrcBadge(null), '');
