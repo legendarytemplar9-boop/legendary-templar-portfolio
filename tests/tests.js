@@ -2403,8 +2403,51 @@
     eq('…and the stock stops following the book', book2.pos_source, 'manual-override');
     eq('…while the trades themselves are untouched', S.tradeLog.trades.length, 1);
     S.pasteOverwrite = false;
+    syncPositionsFromTrades();   // what every reload does
+    eq('a pasted override survives the next reload', [book2.shares, book2.avg_cost], [999, 99]);
+    eq('…and an overridden stock is not offered an opening balance', stocksNeedingOpening().map(s => s.ticker), ['HAND']);
 
     S.tradeLog = prevLog; S.registry = prevReg; S.kb = prevKb; S.offline = prevOff; S.pasteParsed = prevParsed;
+  }
+
+  sec('✏️ edit of a book-driven position survives a reload');
+  {
+    const prevLog = S.tradeLog, prevReg = S.registry, prevKb = S.kb, prevOff = S.offline;
+    S.offline = true;
+    S.kb = { score_history: {}, catalyst_log: {}, guidance_tracker: {}, evidence_clips: [], value_history: [] };
+    S.registry = { portfolio_name: 'T', stocks: [] };
+    S.tradeLog = { version: 1, trades: [
+      { id: '1', date: '2026-08-12', ticker: 'CPN', type: 'buy', qty: 1000, price: 52.59, fee: 0 },
+      { id: '2', date: '2026-08-12', ticker: 'PTT', type: 'buy', qty: 8800, price: 32.52, fee: 0 }
+    ] };
+    syncPositionsFromTrades();
+    const saveBtn = document.querySelector('#editDetailsModal .btn-p');
+
+    openEditDetails('CPN');
+    ok('the modal says the book owns the numbers', document.getElementById('edPosNote').textContent.indexOf('สมุด') !== -1);
+    document.getElementById('edShares').value = '1800';
+    document.getElementById('edAvgCost').value = '57.65';
+    saveBtn.click();
+    const cpn = () => S.registry.stocks.find(s => s.ticker === 'CPN');
+    eq('the edit is applied', [cpn().shares, cpn().avg_cost], [1800, 57.65]);
+    eq('…and the stock stops following the book', cpn().pos_source, 'manual-override');
+    syncPositionsFromTrades();   // what every reload does
+    eq('the edit survives the next reload', [cpn().shares, cpn().avg_cost], [1800, 57.65]);
+
+    openEditDetails('PTT');
+    document.getElementById('edCompany').value = 'PTT Plc';
+    saveBtn.click();
+    const ptt = S.registry.stocks.find(s => s.ticker === 'PTT');
+    eq('saving without touching the numbers keeps the book in charge', ptt.pos_source, 'trades');
+
+    openEditDetails('CPN');
+    ok('an overridden stock offers the way back', !!document.querySelector('#edPosNote a'));
+    document.querySelector('#edPosNote a').click();
+    eq('↩︎ puts the book numbers back in the form', [document.getElementById('edShares').value, document.getElementById('edAvgCost').value], ['1000', '52.59']);
+    saveBtn.click();
+    eq('…and saving hands the stock back to the book', [cpn().shares, cpn().avg_cost, cpn().pos_source], [1000, 52.59, 'trades']);
+
+    S.tradeLog = prevLog; S.registry = prevReg; S.kb = prevKb; S.offline = prevOff;
   }
 
   sec('trade log screen');

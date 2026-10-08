@@ -826,6 +826,7 @@ textarea.form-input{resize:vertical;min-height:80px;line-height:1.5}
           <input class="form-input" id="edShares" type="number" min="0" step="1" placeholder="0">
         </div>
       </div>
+      <div id="edPosNote" class="hidden" style="font-size:12px;color:var(--tx2);margin:-4px 0 12px;line-height:1.5"></div>
       <div class="form-group">
         <label class="form-label">Thesis Breakers (คั่นด้วย Enter)</label>
         <textarea class="form-input" id="edBreakers" rows="4" placeholder="หนึ่งบรรทัดต่อหนึ่งเงื่อนไข…"></textarea>
@@ -4319,6 +4320,9 @@ function syncPositionsFromTrades() {
   owned.forEach(tk => {
     const pos = positionFromTrades(tk);
     const stock = ensureStock(tk, pos.last || today, 'สร้างจากสมุดซื้อขาย');
+    // Numbers the user typed over the book (✏️ or 📋 วางพอร์ต with ทับ) stay put —
+    // otherwise every reload quietly puts the book's figures back.
+    if (stock.pos_source === 'manual-override') return;
     stock.shares = +pos.qty.toFixed(6);
     stock.avg_cost = +pos.avgCost.toFixed(4);
     stock.realized_pl = +pos.realized.toFixed(2);
@@ -4352,7 +4356,10 @@ function closedPositions() {
 
 // Stocks holding a position that the log doesn't know about yet.
 function stocksNeedingOpening() {
-  return (S.registry?.stocks || []).filter(s => !fromTrades(s) && s.shares > 0 && s.avg_cost > 0);
+  const traded = tickersWithTrades();
+  // A typed-over stock already has trades — an opening buy would count them twice.
+  return (S.registry?.stocks || []).filter(s => !fromTrades(s) && s.shares > 0 && s.avg_cost > 0 &&
+    !(s.pos_source === 'manual-override' && traded.indexOf(String(s.ticker).toUpperCase()) !== -1));
 }
 
 // "ยอดยกมา": one buy that reproduces the position already on file.
@@ -7442,6 +7449,7 @@ function openEditDetails(ticker) {
   document.getElementById('edSector').value = stock.sector === '—' ? '' : (stock.sector || '');
   document.getElementById('edAvgCost').value = stock.avg_cost || '';
   document.getElementById('edShares').value = stock.shares || '';
+  renderEdPosNote(stock);
   document.getElementById('edBreakers').value = (stock.thesis_breakers || []).join('\n');
   document.getElementById('editDetailsModal').classList.remove('hidden');
 }
@@ -7469,8 +7477,14 @@ async function saveStockDetails() {
 
   stock.company = document.getElementById('edCompany').value.trim() || stock.company;
   stock.sector = document.getElementById('edSector').value.trim() || '—';
-  stock.avg_cost = parseFloat(document.getElementById('edAvgCost').value) || 0;
-  stock.shares = parseInt(document.getElementById('edShares').value) || 0;
+  const newCost = parseFloat(document.getElementById('edAvgCost').value) || 0;
+  const newShares = parseInt(document.getElementById('edShares').value) || 0;
+  // Typing over a book-driven position: the typed numbers win from now on.
+  if (fromTrades(stock) && (newCost !== (stock.avg_cost || 0) || newShares !== (stock.shares || 0))) {
+    stock.pos_source = 'manual-override';
+  }
+  stock.avg_cost = newCost;
+  stock.shares = newShares;
   const breakersRaw = document.getElementById('edBreakers').value.trim();
   stock.thesis_breakers = breakersRaw ? breakersRaw.split('\n').map(l => l.trim()).filter(Boolean) : [];
   closeM('editDetailsModal');
@@ -7479,6 +7493,32 @@ async function saveStockDetails() {
   // KB keys move with the ticker, so persist both files when the ticker changed.
   if (tickerChanged) await persistRegistryKB();
   else await saveRegistry();
+}
+
+// Tells the user who owns shares/avg cost in the ✏️ modal: the trade book or them.
+function renderEdPosNote(stock) {
+  const el = document.getElementById('edPosNote');
+  if (!el) return;
+  if (fromTrades(stock)) {
+    el.innerHTML = '🔒 จำนวน/ต้นทุนคำนวณจากสมุดซื้อขาย — ถ้าแก้ตัวเลขตรงนี้ จะใช้ตัวเลขที่พิมพ์แทน (สมุดจะไม่ทับอีก)';
+  } else if (stock.pos_source === 'manual-override' &&
+             tickersWithTrades().indexOf(String(stock.ticker).toUpperCase()) !== -1) {
+    el.innerHTML = '✋ ใช้ตัวเลขที่พิมพ์เอง (สมุดซื้อขายไม่ทับ) · ' +
+      '<a href="#" onclick="edUseBook();return false" style="color:var(--c1)">↩︎ กลับไปใช้ยอดจากสมุด</a>';
+  } else { el.classList.add('hidden'); el.innerHTML = ''; return; }
+  el.classList.remove('hidden');
+}
+
+// Hand the position back to the trade book and show its numbers in the form.
+function edUseBook() {
+  const stock = S.registry?.stocks?.find(s => s.ticker === S.editData?.detailTicker);
+  if (!stock) return;
+  stock.pos_source = 'trades';
+  syncPositionsFromTrades();
+  document.getElementById('edAvgCost').value = stock.avg_cost || '';
+  document.getElementById('edShares').value = stock.shares || '';
+  renderEdPosNote(stock);
+  toast('↩︎ ใช้ยอดจากสมุดแล้ว — กด Save เพื่อบันทึก');
 }
 
 // Rename a ticker key everywhere it is used as an index (KB maps + evidence).
