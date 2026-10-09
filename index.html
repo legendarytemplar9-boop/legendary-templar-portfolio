@@ -8115,7 +8115,7 @@ window.addEventListener('DOMContentLoaded', () => {
      และคอยเช็คว่ามีรุ่นใหม่บนเซิร์ฟเวอร์ไหม → ขึ้นปุ่มให้โหลดใหม่
      บรรทัด window.APP_BUILD ถูกเขียนทับอัตโนมัติตอน deploy โดย
      ~/dev/tools/buildstamp/stamp.sh — อย่าแก้เลขด้วยมือ                       -->
-<script>/*BUILDSTAMP*/window.APP_BUILD={app:"portfolio",v:5,date:"2026-09-13",hash:"84cc778",lang:"th"};/*BUILDSTAMP-END*/</script>
+<script>/*BUILDSTAMP*/window.APP_BUILD={app:"portfolio",v:6,date:"2026-10-09",hash:"57d1716",lang:"th"};/*BUILDSTAMP-END*/</script>
 <style>
 .bstamp{font:500 11.5px/1.55 system-ui,-apple-system,"Sarabun",sans-serif;letter-spacing:.2px;
   opacity:.42;cursor:pointer;-webkit-user-select:none;user-select:none;display:inline-block;
@@ -8230,5 +8230,204 @@ window.addEventListener('DOMContentLoaded', () => {
 })();
 </script>
 <!-- ══ end build stamp ══ -->
+<!-- iostiles:start -->
+<style id="iostiles-css">
+/* iostiles — raised iOS-style icon tiles (same look as Q3 Tracker / OT Tracker) */
+.ios{--s:32px;--a:#7cb5ff;--b:#2f7cf6;--c:#1859c9;--glow:rgba(47,124,246,.5);
+  width:var(--s);height:var(--s);min-width:var(--s);flex:none;position:relative;display:inline-grid;place-items:center;
+  border-radius:22.5%;corner-shape:squircle;vertical-align:middle;line-height:0;box-sizing:border-box;
+  background:linear-gradient(180deg,var(--a) 0%,var(--b) 52%,var(--c) 100%);
+  box-shadow:inset 0 1.5px 0 rgba(255,255,255,.55),inset 0 -2.5px 5px rgba(0,0,0,.22),0 1px 1.5px rgba(0,0,0,.28),0 8px 16px -7px var(--glow)}
+.ios::before{content:"";position:absolute;inset:0 0 48% 0;border-radius:22.5% 22.5% 45% 45%/22.5% 22.5% 18% 18%;
+  background:linear-gradient(180deg,rgba(255,255,255,.38),rgba(255,255,255,0));pointer-events:none}
+.ios svg{width:calc(var(--s)*.78);height:calc(var(--s)*.78);position:relative;overflow:visible;filter:drop-shadow(0 1.2px 0 rgba(0,0,0,.30)) drop-shadow(0 2px 3px rgba(0,0,0,.16))}
+.ios.xs{--s:20px;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -1.5px 3px rgba(0,0,0,.2),0 1px 1px rgba(0,0,0,.25)}
+.ios.xs svg{filter:drop-shadow(0 .8px 0 rgba(0,0,0,.3))}
+.ios.sm{--s:26px}.ios.md{--s:36px}.ios.lg{--s:46px}.ios.xl{--s:56px}
+.ios.blue  {--a:#7cb5ff;--b:#2f7cf6;--c:#1859c9;--glow:rgba(47,124,246,.5)}
+.ios.amber {--a:#ffd36a;--b:#ff9f0a;--c:#dc7400;--glow:rgba(255,159,10,.5)}
+.ios.flame {--a:#ff9466;--b:#ff5a1f;--c:#d23a05;--glow:rgba(255,90,31,.55)}
+.ios.green {--a:#79e8a3;--b:#2fc06a;--c:#1b9450;--glow:rgba(47,192,106,.5)}
+.ios.teal  {--a:#6ce9ee;--b:#12b6c3;--c:#0b8994;--glow:rgba(18,182,195,.5)}
+.ios.sky   {--a:#9fdcff;--b:#43aef5;--c:#1c86d1;--glow:rgba(67,174,245,.5)}
+.ios.indigo{--a:#a3a1ff;--b:#5e5ce6;--c:#3f3dc2;--glow:rgba(94,92,230,.5)}
+.ios.purple{--a:#d9a6ff;--b:#a855f7;--c:#7e22ce;--glow:rgba(168,85,247,.5)}
+.ios.pink  {--a:#ff9cc8;--b:#f0468f;--c:#c4246a;--glow:rgba(240,70,143,.5)}
+.ios.graph {--a:#b9c1cc;--b:#7d8897;--c:#586372;--glow:rgba(88,99,114,.45)}
+.ios.ink   {--a:#6f7a76;--b:#3a4541;--c:#202825;--glow:rgba(32,40,37,.45)}
+.ios.red   {--a:#ff8a83;--b:#ff3b30;--c:#cf231a;--glow:rgba(255,59,48,.5)}
+.iot-host{display:inline-flex;align-items:center;gap:.55em}
+.iot-host.iot-col{flex-direction:column;gap:3px}
+.iot-host > .ios{margin:0}
+.iot-dim:not(.active):not(.on):not(.sel):not([aria-selected="true"]):not([aria-current="true"]) > .ios{filter:saturate(.55) brightness(1.04);opacity:.72}
+.iot-dim.active > .ios,.iot-dim.on > .ios,.iot-dim.sel > .ios,.iot-dim[aria-selected="true"] > .ios,.iot-dim[aria-current="true"] > .ios{transform:translateY(-1px) scale(1.06)}
+.iot-hide{display:none!important}
+@media (prefers-reduced-motion:no-preference){.iot-dim > .ios{transition:transform .18s ease,opacity .18s ease,filter .18s ease}}
+@media print{.ios{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+/* portfolio */
+.nav-left > span:first-child:has(.ios){font-size:0!important;line-height:0}
+#navRight > .btn.iot-host{gap:6px}
+#viewTabs > .vtab.iot-host{gap:7px}
+.mt-t.iot-host{gap:10px}
+.md-card-t.iot-host,.md-label.iot-host{gap:7px}
+.sec-title.iot-host{display:flex;gap:7px}
+.nw-grp-ic:has(.ios),.nw-row-ic:has(.ios){font-size:0;width:auto;line-height:0}
+.setup-card > div:first-child:has(.ios){display:flex;justify-content:center;font-size:0!important}
+/* tiles widen the header buttons: the brand keeps its width, the button strip scrolls (it already did) */
+.nav-left{flex:none}
+.nav-logo{white-space:nowrap}
+#navRight > .btn.iot-host{padding-left:7px}
+@media (max-width:480px){.nav-tag{display:none}}
+@media (max-width:430px){.nav-left > div:has(.nav-logo){display:none}}
+</style>
+<script id="iostiles-js">
+window.__IOT_GLYPHS={"bank":"<path fill=\"url(#iotgw)\" d=\"M32 4 5 18v6h54v-6z\"/><g fill=\"url(#iotgw)\"><rect x=\"10\" y=\"28\" width=\"8\" height=\"19\" rx=\"1.5\"/><rect x=\"22\" y=\"28\" width=\"8\" height=\"19\" rx=\"1.5\"/><rect x=\"34\" y=\"28\" width=\"8\" height=\"19\" rx=\"1.5\"/><rect x=\"46\" y=\"28\" width=\"8\" height=\"19\" rx=\"1.5\"/></g><rect x=\"5\" y=\"51\" width=\"54\" height=\"8\" rx=\"2.5\" fill=\"url(#iotgw)\"/>","bell":"<path fill=\"url(#iotgw)\" d=\"M32 5a4 4 0 0 1 4 4v1.6A16.5 16.5 0 0 1 48.5 26.7V39l6.5 7.5V50H9v-3.5l6.5-7.5V26.7A16.5 16.5 0 0 1 28 10.6V9a4 4 0 0 1 4-4z\"/><path fill=\"url(#iotgw)\" d=\"M25 53h14a7 7 0 0 1-14 0z\"/>","bolt":"<path fill=\"url(#iotgw)\" d=\"M37.5 5 13 36.5h16.5L25.5 59 51 26.5H34.5z\"/>","book":"<path fill=\"url(#iotgw)\" d=\"M30.5 14C23.5 9 14.5 8 5 9v41c9.5-1 18.5 0 25.5 5z\"/><path fill=\"url(#iotgw)\" fill-opacity=\".82\" d=\"M33.5 14c7-5 16-6 25.5-5v41c-9.5-1-18.5 0-25.5 5z\"/>","box":"<rect x=\"5\" y=\"8\" width=\"54\" height=\"14\" rx=\"3\" fill=\"url(#iotgw)\"/><path fill=\"url(#iotgw)\" d=\"M9 25h46v28a4 4 0 0 1-4 4H13a4 4 0 0 1-4-4z\"/><rect x=\"24\" y=\"32\" width=\"16\" height=\"5.5\" rx=\"2.75\" fill=\"#000\" fill-opacity=\".22\"/>","bulb":"<path fill=\"url(#iotgw)\" d=\"M32 4a19 19 0 0 1 11 34.5V44H21v-5.5A19 19 0 0 1 32 4z\"/><rect x=\"22\" y=\"47\" width=\"20\" height=\"5\" rx=\"2.5\" fill=\"url(#iotgw)\"/><rect x=\"25.5\" y=\"54.5\" width=\"13\" height=\"5\" rx=\"2.5\" fill=\"url(#iotgw)\"/><path fill=\"none\" stroke=\"#000\" stroke-opacity=\".2\" stroke-width=\"3.5\" stroke-linecap=\"round\" d=\"M26 23a7 7 0 0 1 6-6\"/>","calendar":"<path fill=\"url(#iotgw)\" fill-rule=\"evenodd\" d=\"M12 11h40a5 5 0 0 1 5 5v37a5 5 0 0 1-5 5H12a5 5 0 0 1-5-5V16a5 5 0 0 1 5-5zm-1 15v27h42V26z\"/><rect x=\"18\" y=\"5\" width=\"6\" height=\"12\" rx=\"3\" fill=\"url(#iotgw)\"/><rect x=\"40\" y=\"5\" width=\"6\" height=\"12\" rx=\"3\" fill=\"url(#iotgw)\"/><g fill=\"url(#iotgw)\"><rect x=\"16\" y=\"32\" width=\"8\" height=\"7\" rx=\"2\"/><rect x=\"28\" y=\"32\" width=\"8\" height=\"7\" rx=\"2\"/><rect x=\"40\" y=\"32\" width=\"8\" height=\"7\" rx=\"2\"/><rect x=\"16\" y=\"43\" width=\"8\" height=\"7\" rx=\"2\"/><rect x=\"28\" y=\"43\" width=\"8\" height=\"7\" rx=\"2\"/></g>","car":"<path fill=\"url(#iotgw)\" fill-rule=\"evenodd\" d=\"M7 41v-7.5l6.4-12.6A6 6 0 0 1 18.8 17.5h26.4a6 6 0 0 1 5.4 3.4L57 33.5V41a3 3 0 0 1-3 3H10a3 3 0 0 1-3-3zM19 22.5h26l4.6 9.5H14.4z\"/><circle cx=\"18\" cy=\"44\" r=\"6.5\" fill=\"url(#iotgw)\"/><circle cx=\"46\" cy=\"44\" r=\"6.5\" fill=\"url(#iotgw)\"/><circle cx=\"18\" cy=\"44\" r=\"2.5\" fill=\"#000\" fill-opacity=\".22\"/><circle cx=\"46\" cy=\"44\" r=\"2.5\" fill=\"#000\" fill-opacity=\".22\"/>","chart":"<rect x=\"9\" y=\"34\" width=\"11\" height=\"21\" rx=\"3\" fill=\"url(#iotgw)\"/><rect x=\"26.5\" y=\"22\" width=\"11\" height=\"33\" rx=\"3\" fill=\"url(#iotgw)\"/><rect x=\"44\" y=\"9\" width=\"11\" height=\"46\" rx=\"3\" fill=\"url(#iotgw)\"/>","chat":"<path fill=\"url(#iotgw)\" d=\"M10 7h44a4 4 0 0 1 4 4v29a4 4 0 0 1-4 4H27L14 57V44h-4a4 4 0 0 1-4-4V11a4 4 0 0 1 4-4z\"/><g fill=\"#000\" fill-opacity=\".22\"><circle cx=\"21\" cy=\"26\" r=\"4\"/><circle cx=\"32\" cy=\"26\" r=\"4\"/><circle cx=\"43\" cy=\"26\" r=\"4\"/></g>","check":"<path fill=\"url(#iotgw)\" fill-rule=\"evenodd\" d=\"M32 6a26 26 0 1 1 0 52 26 26 0 0 1 0-52zm12.6 14.4L27.8 37.2l-8.4-8.4-4.9 4.9 13.3 13.3 21.7-21.7z\"/>","clipboard":"<path fill=\"url(#iotgw)\" d=\"M14 9h9v3a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V9h9a4 4 0 0 1 4 4v42a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4V13a4 4 0 0 1 4-4z\"/><rect x=\"25\" y=\"4\" width=\"14\" height=\"8\" rx=\"3\" fill=\"url(#iotgw)\"/><path fill=\"none\" stroke=\"#000\" stroke-opacity=\".26\" stroke-width=\"4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"m18 30 3.5 3.5 6.5-6.5M33 31h13M18 45l3.5 3.5 6.5-6.5M33 46h13\"/>","clock":"<circle cx=\"32\" cy=\"32\" r=\"26\" fill=\"url(#iotgw)\"/><path fill=\"none\" stroke=\"#000\" stroke-opacity=\".3\" stroke-width=\"5.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M32 16v17l11 7\"/>","coins":"<ellipse cx=\"32\" cy=\"15\" rx=\"20\" ry=\"7.5\" fill=\"url(#iotgw)\"/><path fill=\"url(#iotgw)\" fill-opacity=\".9\" d=\"M12 20c0 4.1 9 7.5 20 7.5S52 24.1 52 20v8c0 4.1-9 7.5-20 7.5S12 32.1 12 28z\"/><path fill=\"url(#iotgw)\" fill-opacity=\".8\" d=\"M12 33c0 4.1 9 7.5 20 7.5S52 37.1 52 33v8c0 4.1-9 7.5-20 7.5S12 45.1 12 41z\"/><path fill=\"url(#iotgw)\" fill-opacity=\".7\" d=\"M12 46c0 4.1 9 7.5 20 7.5S52 50.1 52 46v4c0 4.1-9 7.5-20 7.5S12 54.1 12 50z\"/>","doc":"<path fill=\"url(#iotgw)\" fill-rule=\"evenodd\" d=\"M15 5h24l12 12v38a4 4 0 0 1-4 4H15a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4zm3 22v5h28v-5zm0 10v5h28v-5zm0 10v5h18v-5z\"/><path fill=\"#000\" fill-opacity=\".18\" d=\"M39 5v8a4 4 0 0 0 4 4h8z\"/>","download":"<path fill=\"url(#iotgw)\" d=\"M27.5 7h9v22h9.5L32 44 18 29h9.5z\"/><path fill=\"url(#iotgw)\" d=\"M8 41h7v9h34v-9h7v12a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4z\"/>","eye":"<path fill=\"url(#iotgw)\" fill-rule=\"evenodd\" d=\"M32 13C18 13 8 24 3 32c5 8 15 19 29 19s24-11 29-19c-5-8-15-19-29-19zm0 8a11 11 0 1 1 0 22 11 11 0 0 1 0-22z\"/><circle cx=\"32\" cy=\"32\" r=\"5\" fill=\"url(#iotgw)\"/>","flame":"<path fill=\"url(#iotgw)\" d=\"M34 3c2 11 16 16 16 33a18 18 0 0 1-36 0c0-9 4.5-13.5 8-17 0 6.5 3 10 6.5 10-3.5-10 0-19 5.5-26z\"/>","home":"<path fill=\"url(#iotgw)\" d=\"M32 6 4 30.5l4 4.5 5-4.2V55a3 3 0 0 0 3 3h11V42h10v16h11a3 3 0 0 0 3-3V30.8l5 4.2 4-4.5z\"/>","info":"<path fill=\"url(#iotgw)\" fill-rule=\"evenodd\" d=\"M32 6a26 26 0 1 1 0 52 26 26 0 0 1 0-52zM28.5 27h7v20h-7zM32 15.5a4.3 4.3 0 1 0 0 8.6 4.3 4.3 0 0 0 0-8.6z\"/>","link":"<g fill=\"none\" stroke=\"url(#iotgw)\" stroke-width=\"7\" transform=\"rotate(-45 32 32)\"><rect x=\"5\" y=\"22\" width=\"29\" height=\"20\" rx=\"10\"/><rect x=\"30\" y=\"22\" width=\"29\" height=\"20\" rx=\"10\"/></g>","list":"<circle cx=\"13\" cy=\"17\" r=\"5\" fill=\"url(#iotgw)\"/><circle cx=\"13\" cy=\"32\" r=\"5\" fill=\"url(#iotgw)\"/><circle cx=\"13\" cy=\"47\" r=\"5\" fill=\"url(#iotgw)\"/><rect x=\"23\" y=\"13.5\" width=\"32\" height=\"7\" rx=\"3.5\" fill=\"url(#iotgw)\"/><rect x=\"23\" y=\"28.5\" width=\"32\" height=\"7\" rx=\"3.5\" fill=\"url(#iotgw)\"/><rect x=\"23\" y=\"43.5\" width=\"24\" height=\"7\" rx=\"3.5\" fill=\"url(#iotgw)\"/>","logout":"<path fill=\"url(#iotgw)\" d=\"M9 7h26v12h-7v-5H16v36h12v-5h7v12H9z\"/><path fill=\"url(#iotgw)\" d=\"M39 19l16 13-16 13v-9H24v-8h15z\"/>","note":"<path fill=\"url(#iotgw)\" d=\"M11 6h42a4 4 0 0 1 4 4v30L39 58H11a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4z\"/><path fill=\"#000\" fill-opacity=\".22\" d=\"M39 58V44a4 4 0 0 1 4-4h14z\"/><path fill=\"none\" stroke=\"#000\" stroke-opacity=\".2\" stroke-width=\"4\" stroke-linecap=\"round\" d=\"M16 18h32M16 27h32M16 36h18\"/>","palette":"<path fill=\"url(#iotgw)\" fill-rule=\"evenodd\" d=\"M32 6C17 6 6 17 6 31s11 27 25 27c4 0 6-2.5 6-5.5 0-3.5-3-4.5-3-7.5 0-2.5 2-4 5-4h6c7.5 0 13-5 13-12C58 16 46.5 6 32 6zm-14 20a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zm9-10a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9zm14 0a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9z\"/>","pencil":"<path fill=\"url(#iotgw)\" d=\"M44.2 7.8a5.5 5.5 0 0 1 7.8 0l4.2 4.2a5.5 5.5 0 0 1 0 7.8L23 53 8 56l3-15z\"/><path fill=\"#000\" fill-opacity=\".2\" d=\"m37.5 14.5 12 12-3 3-12-12z\"/><path fill=\"#000\" fill-opacity=\".14\" d=\"M11 41 8 56l15-3z\"/>","percent":"<circle cx=\"18\" cy=\"18\" r=\"9\" fill=\"none\" stroke=\"url(#iotgw)\" stroke-width=\"6\"/><circle cx=\"46\" cy=\"46\" r=\"9\" fill=\"none\" stroke=\"url(#iotgw)\" stroke-width=\"6\"/><path stroke=\"url(#iotgw)\" stroke-width=\"7\" stroke-linecap=\"round\" d=\"M50 12 14 52\"/>","pie":"<path fill=\"url(#iotgw)\" d=\"M29 9.2A23 23 0 1 0 54.8 35H29z\"/><path fill=\"url(#iotgw)\" fill-opacity=\".75\" d=\"M35 5a23 23 0 0 1 24 24H35z\"/>","plus":"<rect x=\"27\" y=\"9\" width=\"10\" height=\"46\" rx=\"5\" fill=\"url(#iotgw)\"/><rect x=\"9\" y=\"27\" width=\"46\" height=\"10\" rx=\"5\" fill=\"url(#iotgw)\"/>","refresh":"<path fill=\"none\" stroke=\"url(#iotgw)\" stroke-width=\"6.5\" stroke-linecap=\"round\" d=\"M50 26A19.5 19.5 0 0 0 15.5 20M14 38a19.5 19.5 0 0 0 34.5 6\"/><path fill=\"url(#iotgw)\" d=\"M8 9.5 9.5 28l17-8z\"/><path fill=\"url(#iotgw)\" d=\"M56 54.5 54.5 36l-17 8z\"/>","search":"<circle cx=\"27\" cy=\"27\" r=\"16\" fill=\"none\" stroke=\"url(#iotgw)\" stroke-width=\"7\"/><path stroke=\"url(#iotgw)\" stroke-width=\"9\" stroke-linecap=\"round\" d=\"m40 40 14 14\"/>","shield":"<path fill=\"url(#iotgw)\" d=\"M32 6 11 14v14.5C11 42 20 52 32 57c12-5 21-15 21-28.5V14z\"/><path fill=\"none\" stroke=\"#000\" stroke-opacity=\".28\" stroke-width=\"5.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"m22.5 31.5 7 7 13-13\"/>","star":"<path fill=\"url(#iotgw)\" stroke=\"url(#iotgw)\" stroke-width=\"3\" stroke-linejoin=\"round\" d=\"M32.0 6.0L38.8 23.7L57.7 24.7L42.9 36.6L47.9 54.8L32.0 44.5L16.1 54.8L21.1 36.6L6.3 24.7L25.2 23.7z\"/>","target":"<circle cx=\"32\" cy=\"32\" r=\"26\" fill=\"url(#iotgw)\"/><circle cx=\"32\" cy=\"32\" r=\"17\" fill=\"#000\" fill-opacity=\".22\"/><circle cx=\"32\" cy=\"32\" r=\"11\" fill=\"url(#iotgw)\"/><circle cx=\"32\" cy=\"32\" r=\"5\" fill=\"#000\" fill-opacity=\".22\"/>","trash":"<rect x=\"8\" y=\"12\" width=\"48\" height=\"7\" rx=\"3\" fill=\"url(#iotgw)\"/><path fill=\"url(#iotgw)\" d=\"M24 13V8a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v5h-5v-3h-6v3z\"/><path fill=\"url(#iotgw)\" d=\"M13 22h38l-2.8 32.3A4 4 0 0 1 44.2 58H19.8a4 4 0 0 1-4-3.7z\"/><g fill=\"#000\" fill-opacity=\".22\"><rect x=\"22\" y=\"28\" width=\"4.5\" height=\"23\" rx=\"2\"/><rect x=\"29.75\" y=\"28\" width=\"4.5\" height=\"23\" rx=\"2\"/><rect x=\"37.5\" y=\"28\" width=\"4.5\" height=\"23\" rx=\"2\"/></g>","trend":"<path fill=\"none\" stroke=\"url(#iotgw)\" stroke-width=\"7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M7 48l15-15 10 9 18-19\"/><path fill=\"url(#iotgw)\" d=\"M39 11h19v19z\"/>","upload":"<path fill=\"url(#iotgw)\" d=\"M27.5 44h9V22h9.5L32 7 18 22h9.5z\"/><path fill=\"url(#iotgw)\" d=\"M8 41h7v9h34v-9h7v12a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4z\"/>","wallet":"<path fill=\"url(#iotgw)\" fill-rule=\"evenodd\" d=\"M12 12h34a4 4 0 0 1 4 4v5H14a2.5 2.5 0 0 0 0 5h40a4 4 0 0 1 4 4v20a4 4 0 0 1-4 4H12a6 6 0 0 1-6-6V18a6 6 0 0 1 6-6zm33 26a4 4 0 1 0 0 8 4 4 0 0 0 0-8z\"/>","warn":"<path fill=\"url(#iotgw)\" fill-rule=\"evenodd\" d=\"M28.5 9.5a4 4 0 0 1 7 0l23 40A4 4 0 0 1 55 55.5H9a4 4 0 0 1-3.5-6zM29.2 23.5h5.6l-.9 16h-3.8zM32 43a3.2 3.2 0 1 0 0 6.4A3.2 3.2 0 0 0 32 43z\"/>"};
+// emoji the app already uses as icons → raised tiles
+window.IOT_EMOJI = {
+  '⚔': ['trend', 'amber'], '🏦': ['bank', 'indigo'], '💳': ['wallet', 'red'], '🪙': ['coins', 'amber'],
+  '💵': ['coins', 'green'], '💰': ['coins', 'amber'], '🥇': ['star', 'amber'], '🥈': ['star', 'graph'],
+  '📊': ['chart', 'blue'], '📜': ['doc', 'graph'], '🏠': ['home', 'teal'], '🛡': ['shield', 'green'],
+  '🚗': ['car', 'sky'], '💼': ['box', 'amber'], '⌚': ['clock', 'graph'], '🎨': ['palette', 'pink'],
+  '💎': ['star', 'purple'], '🧮': ['percent', 'indigo'], '📒': ['book', 'blue'], '📈': ['trend', 'green'],
+  '📉': ['chart', 'red'], '🔔': ['bell', 'red'], '📋': ['clipboard', 'teal'], '📥': ['download', 'teal'],
+  '📤': ['upload', 'blue'], '⟳': ['refresh', 'blue'], '🎯': ['target', 'red'], '📅': ['calendar', 'red'],
+  '💱': ['percent', 'teal'], '🍩': ['pie', 'indigo'], '✏': ['pencil', 'blue'], '🗑': ['trash', 'red'],
+  '👀': ['eye', 'graph'], '✅': ['check', 'green'], '📝': ['note', 'graph'], '🔍': ['search', 'teal'],
+  '⚠': ['warn', 'red'], '💡': ['bulb', 'amber'], '🔗': ['link', 'teal'], '⚡': ['bolt', 'flame']
+};
+window.IOT_RULES = [
+  { sel: '.nav-left > span:first-child', bare: true, replace: true, size: 'sm', glyph: 'shield', color: 'amber' },
+  { sel: '#navRight > .btn', size: 'xs', emap: IOT_EMOJI, map: [
+    [/add stock/i, 'plus', 'green'], [/sign out/i, 'logout', 'graph'] ] },
+  { sel: '#viewTabs > .vtab', size: 'xs', dim: true, emap: IOT_EMOJI },
+  { sel: '.mt-t', size: 'sm', emap: IOT_EMOJI, map: [
+    [/add new stock|เพิ่มทรัพย์สิน/i, 'plus', 'green'], [/edit score/i, 'target', 'indigo'], [/edit details/i, 'pencil', 'blue'] ] },
+  { sel: '.md-card-t, .md-label', size: 'xs', emap: IOT_EMOJI },
+  { sel: '.sec-title', size: 'xs', emap: IOT_EMOJI, map: [
+    [/breaker/i, 'warn', 'red'], [/^thesis$/i, 'bulb', 'amber'], [/catalyst/i, 'bolt', 'flame'], [/^notes/i, 'note', 'graph'],
+    [/score history/i, 'chart', 'indigo'], [/guidance/i, 'clipboard', 'teal'], [/evidence/i, 'link', 'teal'],
+    [/ถามต่อ/, 'chat', 'amber'], [/สมุด/, 'book', 'blue'], [/รายการในเดือน/, 'list', 'graph'], [/คะแนน/, 'target', 'indigo'] ] },
+  { sel: '.nw-grp-ic, .nw-row-ic', bare: true, replace: true, size: 'sm', emap: IOT_EMOJI },
+  { sel: '.setup-card > div:first-child', bare: true, replace: true, size: 'xl', emap: IOT_EMOJI }
+];
+/* iostiles runtime — window.IOT_RULES is set by the app block below.
+   Rule: {sel, map:[[regex, glyph, colour], ...], size, cls, col, dim, hide, text, keep, glyph, color}
+   - sel   : CSS selector of the elements that get a tile (prepended as first child)
+   - map   : first regex matching the element's text wins (no map → glyph/color fixed)
+   - emap  : {emoji: [glyph, colour]} — the label's leading emoji picks the tile (checked before map)
+   - text  : optional child selector that receives the tile (default: the element itself)
+   - from  : optional child selector whose text picks the icon ('&' = the element itself; default: the tile's host)
+   - hide  : child selector to hide (an old emoji span) once a tile is in place
+   - keep  : true = don't strip the leading emoji from the label
+   - replace: true = the element only holds an emoji; swap it for the tile
+   - col   : stack tile above the label (bottom tab bars)
+   - dim   : dim inactive siblings (tab bars: .active/.on/.sel)            */
+(function(){
+  if (window.IOT) return;
+  var GL = window.__IOT_GLYPHS || {}, sprite = false;
+  function ensureSprite(){
+    if (sprite || !document.body) return; sprite = true;
+    var s = '';
+    for (var k in GL) s += '<symbol id="iot-' + k + '" viewBox="0 0 64 64">' + GL[k] + '</symbol>';
+    var d = document.createElement('div');
+    d.setAttribute('aria-hidden','true'); d.id = 'iot-sprite';
+    d.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none';
+    d.innerHTML = '<svg width="0" height="0"><defs><linearGradient id="iotgw" gradientUnits="userSpaceOnUse" x1="0" y1="4" x2="0" y2="60"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#e3e9f1"/></linearGradient>' + s + '</defs></svg>';
+    document.body.insertBefore(d, document.body.firstChild);
+  }
+  function tile(g, c, size, cls){
+    ensureSprite();
+    if (!GL[g]) g = 'info';
+    return '<span class="ios ' + (c||'blue') + (size ? ' ' + size : '') + (cls ? ' ' + cls : '') +
+      '" aria-hidden="true" data-g="' + g + '"><svg><use href="#iot-' + g + '"/></svg></span>';
+  }
+  var LEAD = /^[\s！-／ -⯿⸀-⹿　-〿️‍⃣\uD83C-􏰀-\uDFFF•·\-–—|:+]+/;
+  function labelOf(el){
+    return (el.textContent || '').replace(LEAD, '').replace(/\s+/g, ' ').trim();
+  }
+  function stripLead(el){
+    // remove the leading emoji/symbol from the first non-empty text node
+    var w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    var n;
+    while ((n = w.nextNode())) {
+      if (n.parentNode && n.parentNode.closest && n.parentNode.closest('.ios')) continue;
+      if (!/\S/.test(n.nodeValue)) continue;
+      var v = n.nodeValue, nv = v.replace(LEAD, '');
+      if (nv !== v && /[\p{L}\p{N}]/u.test(nv)) n.nodeValue = nv;
+      return;
+    }
+  }
+  function leadEmoji(el){
+    var m = (el.textContent || '').replace(/^\s+/, '').match(LEAD);
+    return m ? m[0].replace(/[\s\uFE0F\u200D]/g, '') : '';
+  }
+  function pick(rule, label, emo){
+    var E = rule.emap;
+    if (E && emo) {
+      if (E[emo]) return E[emo];
+      for (var k in E) if (emo.indexOf(k) === 0) return E[k];
+    }
+    if (!rule.map) return rule.glyph ? [rule.glyph, rule.color] : null;
+    for (var i = 0; i < rule.map.length; i++) {
+      var m = rule.map[i];
+      if (m[0].test(label)) return [m[1], m[2]];
+    }
+    return rule.fallback || null;
+  }
+  function decorate(root){
+    var R = window.IOT_RULES || [];
+    root = root || document;
+    for (var r = 0; r < R.length; r++) {
+      var rule = R[r], els;
+      try { els = root.querySelectorAll(rule.sel); } catch (e) { continue; }
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        var host = rule.text ? el.querySelector(rule.text) : el;
+        if (!host) continue;
+        var have = host.querySelector(':scope > .ios[data-g]');
+        var src = rule.from === '&' ? el : rule.from ? el.querySelector(rule.from) : host;
+        var label = src ? labelOf(src) : '';
+        if (have && rule.replace) continue;
+        if (have && src && have.getAttribute('data-l') === label) {
+          // the app rewrote the text with its emoji again: strip it, keep the tile
+          if (!rule.keep && leadEmoji(host)) stripLead(host);
+          continue;
+        }
+        var emo = rule.emap && src ? (leadEmoji(src) || (have && have.getAttribute('data-e')) || '') : '';
+        var hit = (label || emo) ? pick(rule, label, emo) : (rule.map || rule.emap ? null : [rule.glyph, rule.color]);
+        var key = hit ? hit[0] + '/' + hit[1] : '';
+        if (have && have.getAttribute('data-k') === key) {
+          have.setAttribute('data-l', label);
+          if (!rule.keep && !rule.replace && leadEmoji(host)) stripLead(host);
+          continue;
+        }
+        if (have) have.remove();
+        if (!hit) { host.classList.remove('iot-host'); continue; }
+        if (rule.hide) { var hs = el.querySelectorAll(rule.hide); for (var h = 0; h < hs.length; h++) hs[h].classList.add('iot-hide'); }
+        if (rule.replace) host.textContent = ''; else if (!rule.keep) stripLead(host);
+        host.insertAdjacentHTML('afterbegin', tile(hit[0], hit[1], rule.size, rule.cls));
+        host.firstElementChild.setAttribute('data-k', key);
+        host.firstElementChild.setAttribute('data-l', labelOf(src || host));
+        if (emo) host.firstElementChild.setAttribute('data-e', emo);
+        if (!rule.bare) host.classList.add('iot-host');
+        if (rule.col) host.classList.add('iot-col');
+        if (rule.dim) el.classList.add('iot-dim');
+      }
+    }
+  }
+  var queued = false;
+  function schedule(){
+    if (queued) return; queued = true;
+    (window.requestAnimationFrame || setTimeout)(function(){ queued = false; try { decorate(document); } catch (e) { console.warn('iostiles', e); } });
+  }
+  function start(){
+    ensureSprite(); decorate(document);
+    try { new MutationObserver(schedule).observe(document.body, {childList:true, subtree:true, characterData:true}); } catch (e) {}
+  }
+  window.IOT = {tile: tile, decorate: decorate, refresh: schedule};
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();
+</script>
+<!-- iostiles:end -->
 </body>
 </html>
